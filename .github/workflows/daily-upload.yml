@@ -3,7 +3,7 @@ name: Daily YouTube Shorts Upload
 on:
   schedule:
     - cron: '0 0 * * *'  # 매일 UTC 0시 = 한국시간 오전 9시
-  workflow_dispatch:  # 수동 실행 가능
+  workflow_dispatch:
 
 jobs:
   upload:
@@ -36,6 +36,21 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
       
+      - name: Load history files
+        run: |
+          if [ -f downloaded_history.txt ]; then
+            echo "✅ 영상 히스토리 로드됨"
+          else
+            touch downloaded_history.txt
+            echo "📝 새 영상 히스토리 파일 생성"
+          fi
+          if [ -f music_history.txt ]; then
+            echo "✅ 음악 히스토리 로드됨"
+          else
+            touch music_history.txt
+            echo "📝 새 음악 히스토리 파일 생성"
+          fi
+      
       - name: Run automation
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
@@ -48,6 +63,14 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
           python src/main.py
+      
+      - name: Save history files
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add downloaded_history.txt music_history.txt
+          git diff --staged --quiet || git commit -m "Update download history [skip ci]"
+          git push
       
       - name: Upload logs
         if: always()
