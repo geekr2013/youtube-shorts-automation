@@ -3,7 +3,10 @@ name: Daily YouTube Shorts Upload
 on:
   schedule:
     - cron: '0 0 * * *'  # 매일 UTC 0시 = 한국시간 오전 9시
-  workflow_dispatch:
+  workflow_dispatch:  # 수동 실행 가능
+
+permissions:
+  contents: write  # 히스토리 파일 자동 커밋 권한
 
 jobs:
   upload:
@@ -12,6 +15,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Set up Python
         uses: actions/setup-python@v4
