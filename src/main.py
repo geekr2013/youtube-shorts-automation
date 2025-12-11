@@ -10,7 +10,7 @@ def check_env_variables():
     """필수 환경변수 확인"""
     required_vars = [
         'PEXELS_API_KEY',
-        'PIXABAY_API_KEY',  # 추가
+        'PIXABAY_API_KEY',
         'GEMINI_API_KEY',
         'SENDER_EMAIL',
         'RECEIVER_EMAIL',
@@ -35,8 +35,11 @@ def main():
     # 환경변수 확인
     check_env_variables()
     
-    # 초기화
-    video_collector = VideoCollector(os.getenv('PEXELS_API_KEY'))
+    # 초기화 (Pixabay API 추가)
+    video_collector = VideoCollector(
+        pexels_api_key=os.getenv('PEXELS_API_KEY'),
+        pixabay_api_key=os.getenv('PIXABAY_API_KEY')  # 추가
+    )
     music_collector = MusicCollector(os.getenv('PIXABAY_API_KEY'))
     content_processor = GeminiContentProcessor(os.getenv('GEMINI_API_KEY'))
     youtube_uploader = YouTubeUploader()
@@ -46,8 +49,8 @@ def main():
     )
     
     try:
-        # 1단계: Pexels에서 동영상 수집
-        print("📥 STEP 1: Pexels에서 동영상 다운로드 중...\n")
+        # 1단계: 다양한 키워드로 동영상 수집
+        print("📥 STEP 1: 다양한 키워드로 동영상 다운로드 중...\n")
         videos = video_collector.collect_videos(count=3)
         
         if not videos:
@@ -61,6 +64,8 @@ def main():
         for i, video_info in enumerate(videos, 1):
             print("="*70)
             print(f"🎥 영상 {i}/{len(videos)} 처리 중...")
+            print(f"   키워드: {video_info['keyword']}")
+            print(f"   출처: {video_info['source']}")
             print("="*70 + "\n")
             
             video_path = video_info['path']
@@ -70,7 +75,7 @@ def main():
             title = content_processor.generate_title(video_info)
             description = content_processor.generate_description(video_info, title)
             
-            # 2-2: 배경음악 다운로드
+            # 2-2: 배경음악 다운로드 (중복 방지)
             music_path = music_collector.get_random_music(
                 duration=int(video_info['duration'])
             )
@@ -96,12 +101,14 @@ def main():
                     'title': title,
                     'video_id': video_id,
                     'url': f"https://youtube.com/shorts/{video_id}",
+                    'keyword': video_info['keyword'],
                     'status': 'success'
                 })
                 print(f"✅ 업로드 성공: https://youtube.com/shorts/{video_id}\n")
             else:
                 upload_results.append({
                     'title': title,
+                    'keyword': video_info['keyword'],
                     'status': 'failed'
                 })
                 print(f"❌ 업로드 실패\n")
