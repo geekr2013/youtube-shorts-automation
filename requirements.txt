@@ -1,28 +1,15 @@
-# HTTP 요청 라이브러리
 requests==2.31.0
-
-# Google Gemini API
 google-generativeai==0.8.3
-
-# Text-to-Speech
 gTTS==2.5.0
-
-# 동영상 편집
 moviepy==1.0.3
-
-# YouTube API
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 google-api-python-client==2.126.0
-
-# 이미지 처리 (MoviePy 의존성)
 imageio==2.34.0
 imageio-ffmpeg==0.4.9
-
-# 기타 필수 라이브러리
 Pillow==10.3.0
 numpy==1.26.4
-decorator==5.1.1
+decorator==4.4.2
 proglog==0.1.10
 tqdm==4.66.2
