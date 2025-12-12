@@ -1,63 +1,70 @@
-name: Daily Gag Concert Upload
+name: Daily GagConcert Upload
 
 on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  upload:
+  upload-shorts:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    
-    permissions:
-      contents: write  # ✅ Git push 권한 추가
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        persist-credentials: true  # ✅ 인증 정보 유지
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
-
-    - name: Install FFmpeg
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
-
-    - name: Install Korean fonts
-      run: |
-        sudo apt-get install -y fonts-nanum fonts-nanum-coding fonts-nanum-extra
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Run main script
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-        YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-        RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
-        GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
-      run: |
-        python src/main.py
-
-    - name: Commit updated history
-      if: always()  # ✅ 항상 실행 (실패해도 이력 저장)
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add downloaded_history.txt
-        if git diff --staged --quiet; then
-          echo "변경사항 없음"
-        else
-          git commit -m "Update download history [skip ci]"
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: true
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'  # 3.12 대신 3.11 사용 (호환성)
+      
+      - name: Install FFmpeg and Korean fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-nanum fonts-nanum-extra
+          fc-cache -fv
+          fc-list | grep -i nanum
+          echo "✅ 폰트 설치 완료"
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip wheel setuptools
+          # MoviePy v1.0.3 먼저 설치 (안정성 확보)
+          pip install moviepy==1.0.3
+          pip install imageio==2.31.1 imageio-ffmpeg==0.4.9
+          # 나머지 dependencies
+          pip install -r requirements.txt
+      
+      - name: Verify MoviePy installation
+        run: |
+          python -c "from moviepy.editor import VideoFileClip; print('✅ MoviePy import successful')"
+          python -c "import sys; print('Python version:', sys.version)"
+      
+      - name: Check fonts directory
+        run: |
+          ls -la fonts/ || echo "⚠️ Fonts directory not found"
+          test -f fonts/SeoulAlrim-ExtraBold.otf && echo "✅ 서울알림 폰트 확인됨" || echo "⚠️ 서울알림 폰트 없음"
+      
+      - name: Run Python script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+        run: |
+          python src/main.py
+      
+      - name: Commit updated history
+        if: always()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add downloaded_history.txt
+          git diff --staged --quiet || git commit -m "Update download history [skip ci]"
           git push
-        fi
