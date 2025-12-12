@@ -3,10 +3,10 @@ name: Daily YouTube Shorts Upload
 on:
   schedule:
     - cron: '0 0 * * *'  # 매일 UTC 0시 = 한국시간 오전 9시
-  workflow_dispatch:  # 수동 실행 가능
+  workflow_dispatch:
 
 permissions:
-  contents: write  # 히스토리 파일 자동 커밋 권한
+  contents: write
 
 jobs:
   upload:
@@ -31,17 +31,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
       
-      - name: Install FFmpeg
+      - name: Install FFmpeg and Korean fonts
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg fonts-nanum fonts-nanum-coding
       
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: Load history files
+      - name: Load history file
         run: |
           if [ -f downloaded_history.txt ]; then
             echo "✅ 영상 히스토리 로드됨"
@@ -49,17 +49,9 @@ jobs:
             touch downloaded_history.txt
             echo "📝 새 영상 히스토리 파일 생성"
           fi
-          if [ -f music_history.txt ]; then
-            echo "✅ 음악 히스토리 로드됨"
-          else
-            touch music_history.txt
-            echo "📝 새 음악 히스토리 파일 생성"
-          fi
       
       - name: Run automation
         env:
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
@@ -69,11 +61,11 @@ jobs:
         run: |
           python src/main.py
       
-      - name: Save history files
+      - name: Save history file
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
-          git add downloaded_history.txt music_history.txt
+          git add downloaded_history.txt
           git diff --staged --quiet || git commit -m "Update download history [skip ci]"
           git push
       
