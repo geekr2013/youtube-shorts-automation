@@ -3,7 +3,18 @@ import re
 from pathlib import Path
 from typing import Dict, Optional
 import google.generativeai as genai
-from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+
+# MoviePy 임포트 (버전 호환성 처리)
+try:
+    from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+except ImportError:
+    try:
+        from moviepy import VideoFileClip, TextClip, CompositeVideoClip
+    except ImportError:
+        print("⚠️ MoviePy 임포트 실패. 대체 방법을 사용합니다.")
+        VideoFileClip = None
+        TextClip = None
+        CompositeVideoClip = None
 
 class ContentProcessorGemini:
     def __init__(self, api_key: str):
@@ -13,6 +24,11 @@ class ContentProcessorGemini:
         
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # MoviePy 사용 가능 여부 확인
+        self.moviepy_available = VideoFileClip is not None
+        if not self.moviepy_available:
+            print("⚠️ MoviePy를 사용할 수 없습니다. 자막 추가가 비활성화됩니다.")
         
         # 폰트 경로 설정
         self.font_path = Path(__file__).parent.parent / "fonts" / "SeoulAlrim-ExtraBold.otf"
@@ -83,6 +99,12 @@ DESCRIPTION: (100자 이내, 해시태그 3-5개 포함, SEO 최적화)
         output_path: Optional[str] = None
     ) -> str:
         """영상에 자막 추가 (서울알림 폰트 사용)"""
+        
+        # MoviePy 사용 불가능하면 원본 반환
+        if not self.moviepy_available:
+            print(f"⚠️ MoviePy를 사용할 수 없어 자막을 추가하지 않습니다.")
+            return video_path
+        
         print(f"\n🎬 자막 추가 중...")
         print(f"   자막 내용: {subtitle_text}")
         
