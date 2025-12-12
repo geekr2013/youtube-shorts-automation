@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import List, Dict
 import json
 import re
+import time
+import feedparser
 
 class VideoCollector:
     def __init__(self, download_dir: str = "downloads"):
@@ -23,63 +25,53 @@ class VideoCollector:
         with open(self.history_file, 'a', encoding='utf-8') as f:
             f.write(f"{video_id}\n")
     
-    def get_shorts_video_ids(self, channel_url: str, max_videos: int = 10) -> List[str]:
-        """Shorts 탭에서 영상 ID 추출 (yt-dlp 내부 파서 활용)"""
-        print(f"🔍 Shorts 탭에서 영상 ID 추출 중...")
+    def get_videos_from_rss(self, channel_id: str, max_entries: int = 50) -> List[str]:
+        """RSS 피드에서 최신 영상 ID 추출"""
+        print(f"📡 RSS 피드에서 영상 ID 수집 중...")
         
-        ydl_opts = {
-            'quiet': True,
-            'extract_flat': 'in_playlist',  # 플레이리스트 항목만 추출
-            'skip_download': True,
-            'no_warnings': True,
-            'ignoreerrors': True,
-        }
-        
+        rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
         video_ids = []
         
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # Shorts 탭 URL 변형 시도
-                shorts_urls = [
-                    channel_url,  # 기본 /shorts
-                    channel_url.replace('/shorts', '/streams'),  # 대체 시도
-                ]
-                
-                for url in shorts_urls:
-                    try:
-                        print(f"  시도 중: {url}")
-                        result = ydl.extract_info(url, download=False)
-                        
-                        if result and 'entries' in result:
-                            entries = list(result['entries'])
-                            print(f"  ✅ {len(entries)}개 항목 발견")
-                            
-                            for entry in entries[:max_videos]:
-                                if entry and 'id' in entry:
-                                    video_ids.append(entry['id'])
-                            
-                            if video_ids:
-                                break  # 성공하면 중단
-                    except Exception as e:
-                        print(f"  ⚠️ 실패: {e}")
-                        continue
-                        
+            feed = feedparser.parse(rss_url)
+            
+            if not feed.entries:
+                print(f"⚠️ RSS 피드가 비어 있습니다.")
+                return []
+            
+            print(f"✅ RSS에서 {len(feed.entries)}개 항목 발견")
+            
+            for entry in feed.entries[:max_entries]:
+                # YouTube RSS 형식: yt:video:VIDEO_ID
+                video_id = entry.id.split(':')[-1] if hasattr(entry, 'id') else None
+                if video_id:
+                    video_ids.append(video_id)
+            
+            print(f"📋 추출된 영상 ID: {len(video_ids)}개")
+            
         except Exception as e:
-            print(f"❌ ID 추출 실패: {e}")
+            print(f"❌ RSS 피드 파싱 실패: {e}")
         
         return video_ids
     
     def collect_gagconcert_shorts(self, max_videos: int = 3) -> List[Dict]:
-        """개그콘서트 쇼츠 수집 - 검색 기반 접근"""
+        """개그콘서트 쇼츠 수집 - RSS 기반 접근"""
         print(f"\n📥 개그콘서트 쇼츠 수집 시작... (최대 {max_videos}개)")
         
         downloaded_ids = self.load_history()
         print(f"📋 기존 다운로드 이력: {len(downloaded_ids)}개")
         
-        # ✅ 전략 변경: YouTube 검색으로 Shorts 찾기
-        search_query = "개그콘서트 #shorts"
+        # KBS 개그콘서트 채널 ID
         channel_id = "UCzT7nHtzVqwiarTH8sqHaJA"
         
+        # ✅ 1단계: RSS에서 최신 영상 ID 수집
+        video_ids = self.get_videos_from_rss(channel_id, max_entries=30)
+        
+        if not video_ids:
+            print("❌ RSS에서 영상을 찾을 수 없습니다.")
+            return []
+        
+        # ✅ 2단계: 각 영상의 메타데이터 확인 및 Shorts 필터링
         ydl_opts = {
             'format': 'best[ext=mp4][height<=1080]/best[ext=mp4]/best',
             'outtmpl': str(self.download_dir / '%(id)s.%(ext)s'),
@@ -88,78 +80,63 @@ class VideoCollector:
             'ignoreerrors': True,
             'writeinfojson': True,
             'skip_download': False,
-            'match_filter': lambda info: (
-                info.get('duration', 0) <= 60 and 
-                info.get('duration', 0) > 0 and
-                info.get('channel_id') == channel_id  # KBS 개그콘서트 채널만
-            ),
+            'socket_timeout': 30,
+            'retries': 3,
         }
         
         collected_videos = []
+        downloaded_count = 0
         
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # YouTube 검색 URL
-                search_url = f"ytsearch{max_videos * 3}:{search_query}"
-                print(f"🔍 YouTube 검색: {search_query}")
-                
-                # 검색 실행
-                search_result = ydl.extract_info(search_url, download=False)
-                
-                if not search_result or 'entries' not in search_result:
-                    print("❌ 검색 결과가 없습니다.")
-                    return []
-                
-                entries = [e for e in search_result['entries'] if e is not None]
-                print(f"✅ 검색 결과: {len(entries)}개 발견")
-                
-                downloaded_count = 0
-                
-                for entry in entries:
+                for idx, video_id in enumerate(video_ids, 1):
                     if downloaded_count >= max_videos:
                         break
                     
-                    video_id = entry.get('id')
-                    duration = entry.get('duration', 0)
-                    channel_id_check = entry.get('channel_id', '')
-                    
-                    if not video_id:
-                        continue
-                    
-                    # KBS 개그콘서트 채널 확인
-                    if channel_id_check != channel_id:
-                        print(f"⏭️ 다른 채널: {entry.get('channel', '')} ({video_id})")
-                        continue
-                    
-                    # 60초 이하만 처리
-                    if duration > 60 or duration == 0:
-                        print(f"⏭️ Shorts 아님 (길이: {duration}초): {video_id}")
-                        continue
+                    print(f"\n[{idx}/{len(video_ids)}] 확인 중: {video_id}")
                     
                     # 이미 다운로드한 영상 스킵
                     if video_id in downloaded_ids:
-                        print(f"⏭️ 이미 다운로드됨: {video_id}")
+                        print(f"⏭️ 이미 다운로드됨")
                         continue
                     
                     try:
                         video_url = f"https://www.youtube.com/watch?v={video_id}"
-                        print(f"\n📥 [{downloaded_count + 1}/{max_videos}] 다운로드: {video_id} ({duration}초)")
                         
-                        # 개별 영상 다운로드
-                        video_info = ydl.extract_info(video_url, download=True)
+                        # 영상 메타데이터만 먼저 가져오기
+                        info = ydl.extract_info(video_url, download=False)
+                        
+                        if not info:
+                            print(f"⚠️ 메타데이터 없음")
+                            continue
+                        
+                        duration = info.get('duration', 0)
+                        title = info.get('title', '')
+                        
+                        print(f"  📹 제목: {title[:50]}...")
+                        print(f"  ⏱️ 길이: {duration}초")
+                        
+                        # Shorts 필터링 (60초 이하만)
+                        if duration > 60 or duration == 0:
+                            print(f"  ⏭️ Shorts 아님 (길이: {duration}초)")
+                            continue
+                        
+                        # ✅ 실제 다운로드
+                        print(f"  📥 다운로드 시작...")
+                        ydl.download([video_url])
                         
                         video_path = self.download_dir / f"{video_id}.mp4"
                         
                         if not video_path.exists():
-                            print(f"⚠️ 파일이 생성되지 않음: {video_path}")
+                            print(f"  ⚠️ 파일 생성 실패")
                             continue
                         
                         video_data = {
                             'id': video_id,
                             'path': str(video_path),
-                            'title': video_info.get('title', '개그콘서트'),
-                            'description': video_info.get('description', ''),
-                            'duration': video_info.get('duration', 0),
+                            'title': title,
+                            'description': info.get('description', ''),
+                            'duration': duration,
                             'original_url': video_url
                         }
                         
@@ -167,15 +144,19 @@ class VideoCollector:
                         self.save_history(video_id)
                         downloaded_count += 1
                         
-                        print(f"✅ 다운로드 완료: {video_data['title'][:40]}...")
+                        print(f"  ✅ 다운로드 완료!")
+                        
+                        # 서버 부하 방지를 위한 대기
+                        time.sleep(2)
                         
                     except Exception as e:
-                        print(f"⚠️ 영상 다운로드 실패 ({video_id}): {e}")
+                        print(f"  ⚠️ 영상 처리 실패: {e}")
                         continue
                 
         except Exception as e:
-            print(f"❌ 검색 실패: {e}")
-            return []
+            print(f"❌ 수집 중 오류 발생: {e}")
+            import traceback
+            traceback.print_exc()
         
         print(f"\n✅ 총 {len(collected_videos)}개 영상 수집 완료")
         return collected_videos
