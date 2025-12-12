@@ -23,7 +23,7 @@ class VideoCollector:
             f.write(f"{video_id}\n")
     
     def collect_gagconcert_shorts(self, max_videos: int = 3) -> List[Dict]:
-        """개그콘서트 쇼츠 수집"""
+        """개그콘서트 쇼츠 수집 - 직접 다운로드 방식"""
         print(f"\n📥 개그콘서트 쇼츠 수집 시작... (최대 {max_videos}개)")
         
         downloaded_ids = self.load_history()
@@ -31,84 +31,85 @@ class VideoCollector:
         
         channel_url = "https://www.youtube.com/@KBS_Gagconcert/shorts"
         
-        # 1단계: 플레이리스트 정보 수집
-        ydl_opts_info = {
-            'quiet': True,
-            'extract_flat': True,
-            'playlistend': 10,  # 최신 10개 확인
-        }
-        
-        video_urls = []
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
-                print(f"🔍 채널 확인 중: {channel_url}")
-                playlist_info = ydl.extract_info(channel_url, download=False)
-                
-                if not playlist_info or 'entries' not in playlist_info:
-                    print("❌ 채널에서 영상을 찾을 수 없습니다.")
-                    return []
-                
-                entries = playlist_info['entries']
-                print(f"✅ 총 {len(entries)}개 영상 발견")
-                
-                # 새로운 영상만 필터링
-                for entry in entries:
-                    if entry and 'id' in entry:
-                        video_id = entry['id']
-                        if video_id not in downloaded_ids:
-                            video_urls.append(f"https://www.youtube.com/watch?v={video_id}")
-                            print(f"  ➕ 새 영상 발견: {video_id}")
-                            if len(video_urls) >= max_videos:
-                                break
-                
-                if not video_urls:
-                    print("⚠️ 새로운 영상이 없습니다. (모두 다운로드 완료)")
-                    return []
-                
-        except Exception as e:
-            print(f"❌ 플레이리스트 정보 수집 실패: {e}")
-            return []
-        
-        # 2단계: 실제 영상 다운로드
-        ydl_opts_download = {
+        # 직접 다운로드 시도 (플레이리스트에서 최신 영상만)
+        ydl_opts = {
             'format': 'best[ext=mp4][height<=1080]/best[ext=mp4]/best',
             'outtmpl': str(self.download_dir / '%(id)s.%(ext)s'),
             'quiet': False,
             'no_warnings': False,
-            'writeinfojson': True,  # 메타데이터 저장
+            'ignoreerrors': True,
+            'noplaylist': False,  # 플레이리스트 허용
+            'playlistend': 10,    # 최신 10개만 확인
+            'writeinfojson': True,
+            'skip_download': False,
         }
         
         collected_videos = []
         
-        with yt_dlp.YoutubeDL(ydl_opts_download) as ydl:
-            for idx, video_url in enumerate(video_urls, 1):
-                try:
-                    print(f"\n📥 [{idx}/{len(video_urls)}] 다운로드 중: {video_url}")
-                    info = ydl.extract_info(video_url, download=True)
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                print(f"🔍 채널에서 영상 다운로드 시작: {channel_url}")
+                
+                # 플레이리스트 정보 추출
+                info = ydl.extract_info(channel_url, download=False)
+                
+                if not info or 'entries' not in info:
+                    print("❌ 채널에서 영상을 찾을 수 없습니다.")
+                    return []
+                
+                entries = [e for e in info['entries'] if e is not None]
+                print(f"✅ 총 {len(entries)}개 영상 발견")
+                
+                downloaded_count = 0
+                
+                for entry in entries:
+                    if downloaded_count >= max_videos:
+                        break
                     
-                    video_id = info['id']
-                    video_path = self.download_dir / f"{video_id}.mp4"
-                    
-                    if not video_path.exists():
-                        print(f"⚠️ 다운로드 실패: {video_path}")
+                    video_id = entry.get('id')
+                    if not video_id:
                         continue
                     
-                    video_data = {
-                        'id': video_id,
-                        'path': str(video_path),
-                        'title': info.get('title', '개그콘서트'),
-                        'description': info.get('description', ''),
-                        'duration': info.get('duration', 0),
-                        'original_url': video_url
-                    }
+                    # 이미 다운로드한 영상 스킵
+                    if video_id in downloaded_ids:
+                        print(f"⏭️ 이미 다운로드됨: {video_id}")
+                        continue
                     
-                    collected_videos.append(video_data)
-                    self.save_history(video_id)
-                    print(f"✅ 다운로드 완료: {video_data['title'][:30]}...")
-                    
-                except Exception as e:
-                    print(f"⚠️ 영상 다운로드 실패: {e}")
-                    continue
+                    try:
+                        video_url = f"https://www.youtube.com/watch?v={video_id}"
+                        print(f"\n📥 [{downloaded_count + 1}/{max_videos}] 다운로드: {video_id}")
+                        
+                        # 개별 영상 다운로드
+                        video_info = ydl.extract_info(video_url, download=True)
+                        
+                        video_path = self.download_dir / f"{video_id}.mp4"
+                        
+                        if not video_path.exists():
+                            print(f"⚠️ 파일이 생성되지 않음: {video_path}")
+                            continue
+                        
+                        video_data = {
+                            'id': video_id,
+                            'path': str(video_path),
+                            'title': video_info.get('title', '개그콘서트'),
+                            'description': video_info.get('description', ''),
+                            'duration': video_info.get('duration', 0),
+                            'original_url': video_url
+                        }
+                        
+                        collected_videos.append(video_data)
+                        self.save_history(video_id)
+                        downloaded_count += 1
+                        
+                        print(f"✅ 다운로드 완료: {video_data['title'][:40]}...")
+                        
+                    except Exception as e:
+                        print(f"⚠️ 영상 다운로드 실패 ({video_id}): {e}")
+                        continue
+                
+        except Exception as e:
+            print(f"❌ 채널 접근 실패: {e}")
+            return []
         
         print(f"\n✅ 총 {len(collected_videos)}개 영상 수집 완료")
         return collected_videos
