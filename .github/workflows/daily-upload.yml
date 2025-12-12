@@ -41,10 +41,18 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
       
+      # ✅ 추가: 개그콘서트 채널 테스트
+      - name: Test Gag Concert Channel
+        run: |
+          echo "🔍 개그콘서트 채널 테스트 중..."
+          yt-dlp --flat-playlist --playlist-end 5 https://www.youtube.com/@KBS_Gagconcert/shorts || echo "⚠️ 채널 접근 실패"
+      
       - name: Load history file
         run: |
           if [ -f downloaded_history.txt ]; then
             echo "✅ 영상 히스토리 로드됨"
+            echo "📋 히스토리 파일 내용 (최대 10줄):"
+            head -10 downloaded_history.txt || echo "(비어있음)"
           else
             touch downloaded_history.txt
             echo "📝 새 영상 히스토리 파일 생성"
