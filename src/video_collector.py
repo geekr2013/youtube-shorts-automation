@@ -25,14 +25,13 @@ class VideoCollector:
         """개그콘서트 Shorts 최신 영상 수집"""
         print(f"🎬 개그콘서트 Shorts 채널에서 최신 영상 {count}개 수집 시작...")
         
-        # ✅ 수정: playlistend를 사용하여 최신 영상만 가져오기
         ydl_opts = {
             'format': 'best[height<=1920]',
             'noplaylist': False,
-            'playlistend': count * 3,  # 중복 방지를 위해 여유있게 가져오기
+            'playlistend': count * 3,  # 여유있게 가져오기
             'quiet': True,
             'no_warnings': True,
-            'ignoreerrors': True,  # 개별 영상 오류 무시
+            'ignoreerrors': True,
         }
         
         collected_videos = []
@@ -41,7 +40,6 @@ class VideoCollector:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 print("📋 채널에서 최신 Shorts 목록 추출 중...")
                 
-                # ✅ 수정: extract_flat 제거하고 직접 다운로드 시도
                 channel_info = ydl.extract_info(self.channel_url, download=False)
                 
                 if not channel_info or 'entries' not in channel_info:
@@ -72,6 +70,12 @@ class VideoCollector:
                 
                 if not new_videos:
                     print("⚠️ 새로운 영상이 없습니다. (모두 다운로드 완료)")
+                    # ✅ 디버깅: 히스토리 내용 출력
+                    print(f"📋 히스토리에 저장된 영상 수: {len(self.downloaded_ids)}")
+                    if len(self.downloaded_ids) > 0:
+                        print(f"📝 최근 히스토리 샘플 (최대 5개):")
+                        for vid_id in list(self.downloaded_ids)[:5]:
+                            print(f"   - {vid_id}")
                     return []
                 
                 print(f"✅ 새로운 영상 {len(new_videos)}개 발견")
