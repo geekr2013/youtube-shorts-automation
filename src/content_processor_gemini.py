@@ -1,105 +1,184 @@
-import google.generativeai as genai
 import os
-from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+import re
 from pathlib import Path
+from typing import Dict, Optional
+import google.generativeai as genai
+from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
 
 class ContentProcessorGemini:
-    def __init__(self):
-        api_key = os.getenv('GEMINI_API_KEY')
+    def __init__(self, api_key: str):
+        """Gemini API 초기화"""
         if not api_key:
-            raise ValueError("GEMINI_API_KEY 환경변수가 설정되지 않았습니다.")
+            raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
         
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
         
-    def generate_metadata(self, video_info: dict) -> dict:
-        """Gemini로 제목/설명 생성"""
+        # 폰트 경로 설정
+        self.font_path = Path(__file__).parent.parent / "fonts" / "SeoulAlrim-ExtraBold.otf"
+        
+        if not self.font_path.exists():
+            print(f"⚠️ 폰트 파일을 찾을 수 없습니다: {self.font_path}")
+            print(f"   기본 폰트로 대체됩니다.")
+            self.font_path = None
+    
+    def generate_metadata(self, video_path: str, original_title: str = "") -> Dict[str, str]:
+        """Gemini로 YouTube 메타데이터 생성"""
         print(f"\n🤖 Gemini로 메타데이터 생성 중...")
         
-        original_title = video_info.get('title', '개그콘서트')
-        
         prompt = f"""
-다음은 KBS '개그콘서트'의 쇼츠 영상입니다.
+당신은 YouTube Shorts 전문 마케터입니다.
+아래 개그콘서트 영상의 원제목을 바탕으로 YouTube에 최적화된 메타데이터를 생성해주세요.
 
-원본 제목: {original_title}
+원제목: {original_title}
 
-요청사항:
-1. YouTube 쇼츠에 적합한 한국어 제목 생성 (25자 이내, 이모지 포함)
-2. 간결한 한국어 설명 생성 (100자 이내)
+다음 형식으로 응답해주세요:
+TITLE: (25자 이내, 이모지 포함, 클릭을 유도하는 제목)
+DESCRIPTION: (100자 이내, 해시태그 3-5개 포함, SEO 최적화)
 
-응답 형식 (JSON):
-{{
-  "title": "제목",
-  "description": "설명"
-}}
+제약사항:
+- TITLE은 반드시 25자 이내
+- DESCRIPTION은 100자 이내
+- 원제목의 핵심 키워드 유지
+- 이모지 적극 활용
+- 해시태그 필수 포함 (#개그콘서트 #코미디 등)
 """
         
         try:
             response = self.model.generate_content(prompt)
-            text = response.text.strip()
+            text = response.text
             
-            # JSON 파싱
-            import json
-            if text.startswith('```json'):
-                text = text[7:]
-            if text.endswith('```'):
-                text = text[:-3]
+            # TITLE, DESCRIPTION 추출
+            title_match = re.search(r'TITLE:\s*(.+)', text)
+            desc_match = re.search(r'DESCRIPTION:\s*(.+)', text, re.DOTALL)
             
-            metadata = json.loads(text.strip())
-            print(f"✅ 제목: {metadata['title']}")
-            print(f"✅ 설명: {metadata['description'][:50]}...")
+            title = title_match.group(1).strip() if title_match else original_title[:25]
+            description = desc_match.group(1).strip() if desc_match else f"{original_title} #개그콘서트"
             
-            return metadata
+            # 길이 제한 강제
+            title = title[:25]
+            description = description[:100]
+            
+            print(f"✅ 생성된 제목: {title}")
+            print(f"✅ 생성된 설명: {description[:50]}...")
+            
+            return {
+                'title': title,
+                'description': description
+            }
             
         except Exception as e:
-            print(f"⚠️ Gemini 생성 실패: {e}, 기본값 사용")
+            print(f"⚠️ Gemini API 오류: {e}")
+            print(f"   기본 메타데이터를 사용합니다.")
+            
             return {
-                'title': f"🎭 {original_title[:20]}",
-                'description': "개그콘서트의 재미있는 순간들을 쇼츠로 만나보세요!"
+                'title': original_title[:25] if original_title else "개그콘서트 쇼츠 🎭",
+                'description': f"{original_title[:50]} #개그콘서트 #코미디 #KBS"
             }
     
-    def add_subtitles(self, video_path: str, video_info: dict, metadata: dict) -> str:
-        """한국어 자막 추가 (원본 오디오 유지)"""
-        print(f"\n🎨 자막 추가 중: {Path(video_path).name}")
+    def add_subtitle_to_video(
+        self, 
+        video_path: str, 
+        subtitle_text: str, 
+        output_path: Optional[str] = None
+    ) -> str:
+        """영상에 자막 추가 (서울알림 폰트 사용)"""
+        print(f"\n🎬 자막 추가 중...")
+        print(f"   자막 내용: {subtitle_text}")
         
-        output_path = str(Path(video_path).parent / f"processed_{Path(video_path).name}")
+        if not output_path:
+            video_name = Path(video_path).stem
+            output_path = str(Path(video_path).parent / f"{video_name}_subtitled.mp4")
         
         try:
+            # 원본 영상 로드
             video = VideoFileClip(video_path)
+            width, height = video.size
+            duration = video.duration
             
-            # 자막 텍스트 (제목 활용)
-            subtitle_text = metadata['title'].replace('🎭', '').strip()[:30]
+            print(f"   영상 크기: {width}x{height}")
+            print(f"   영상 길이: {duration:.1f}초")
             
-            # 자막 생성 (하단 중앙)
+            # 폰트 설정
+            if self.font_path and self.font_path.exists():
+                font_to_use = str(self.font_path)
+                print(f"   ✅ 서울알림 폰트 사용: {self.font_path.name}")
+            else:
+                font_to_use = "NanumGothic-Bold"
+                print(f"   ⚠️ 기본 폰트 사용: {font_to_use}")
+            
+            # 자막 텍스트 생성
             txt_clip = TextClip(
                 subtitle_text,
-                fontsize=40,
-                font='NanumGothic-Bold',
+                fontsize=int(height * 0.08),  # 화면 높이의 8%
+                font=font_to_use,
                 color='white',
-                bg_color='black',
-                size=(video.w - 40, None),
-                method='caption'
-            ).set_position(('center', video.h - 100)).set_duration(min(3, video.duration))
+                stroke_color='black',
+                stroke_width=3,
+                method='caption',
+                size=(int(width * 0.9), None)  # 화면 너비의 90%
+            )
             
-            # 자막 합성
+            # 자막 위치 설정 (하단에서 15% 위)
+            txt_clip = txt_clip.set_position(('center', height * 0.75))
+            txt_clip = txt_clip.set_duration(duration)
+            
+            # 영상과 자막 합성
             final_video = CompositeVideoClip([video, txt_clip])
             
-            # 원본 오디오 유지하며 저장
+            # 출력 (원본 오디오 유지)
             final_video.write_videofile(
                 output_path,
                 codec='libx264',
                 audio_codec='aac',
                 temp_audiofile='temp-audio.m4a',
                 remove_temp=True,
-                fps=video.fps
+                fps=video.fps,
+                preset='medium',
+                threads=4
             )
             
+            # 메모리 정리
             video.close()
+            txt_clip.close()
             final_video.close()
             
-            print(f"✅ 자막 추가 완료: {Path(output_path).name}")
+            print(f"✅ 자막 추가 완료: {output_path}")
             return output_path
             
         except Exception as e:
-            print(f"⚠️ 자막 추가 실패: {e}, 원본 반환")
+            print(f"❌ 자막 추가 실패: {e}")
+            print(f"   원본 영상을 사용합니다: {video_path}")
             return video_path
+    
+    def process_video(self, video_data: Dict) -> Dict:
+        """영상 전체 처리 (메타데이터 생성 + 자막 추가)"""
+        print(f"\n{'='*60}")
+        print(f"🎥 영상 처리 시작: {video_data.get('title', 'Unknown')[:40]}...")
+        print(f"{'='*60}")
+        
+        # 1. Gemini로 메타데이터 생성
+        metadata = self.generate_metadata(
+            video_data['path'],
+            video_data.get('title', '')
+        )
+        
+        # 2. 생성된 제목으로 자막 추가
+        processed_path = self.add_subtitle_to_video(
+            video_data['path'],
+            metadata['title']
+        )
+        
+        # 3. 결과 반환
+        result = video_data.copy()
+        result.update({
+            'processed_path': processed_path,
+            'youtube_title': metadata['title'],
+            'youtube_description': metadata['description']
+        })
+        
+        print(f"\n✅ 영상 처리 완료!")
+        print(f"   최종 제목: {result['youtube_title']}")
+        print(f"   자막 파일: {processed_path}")
+        
+        return result
