@@ -4,9 +4,6 @@ google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 google-generativeai==0.3.2
 moviepy==1.0.3
-Pillow==10.1.0
-requests==2.31.0
 decorator==4.4.2
 yt-dlp==2024.3.10
-imageio==2.33.1
-imageio-ffmpeg==0.4.9
+Pillow==10.1.0
