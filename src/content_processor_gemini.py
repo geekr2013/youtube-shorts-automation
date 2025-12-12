@@ -203,7 +203,7 @@ DESCRIPTION: (100자 이내, 해시태그 3-5개 포함, SEO 최적화)
             'processed_path': processed_path,
             'youtube_title': metadata['title'],
             'youtube_description': metadata['description']
-        }
+        })  # ← 여기가 수정된 부분 (괄호 제대로 닫힘)
         
         print(f"\n✅ 영상 처리 완료!")
         print(f"   최종 제목: {result['youtube_title']}")
