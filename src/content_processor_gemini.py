@@ -7,7 +7,7 @@ class GeminiContentProcessor:
     
     def __init__(self, api_key):
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
     
     def generate_title(self, video_info):
         """YouTube Shorts 제목 생성 (한글, 이모지 포함)"""
