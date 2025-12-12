@@ -1,142 +1,94 @@
 import os
 import sys
 from video_collector import VideoCollector
-from content_processor_gemini import GeminiContentProcessor
-from music_collector import MusicCollector
+from content_processor_gemini import ContentProcessor
 from youtube_uploader import YouTubeUploader
 from email_notifier import EmailNotifier
 
-def check_env_variables():
-    """필수 환경변수 확인"""
-    required_vars = [
-        'PEXELS_API_KEY',
-        'PIXABAY_API_KEY',
-        'GEMINI_API_KEY',
-        'SENDER_EMAIL',
-        'RECEIVER_EMAIL',
-        'GMAIL_PASSWORD',
-        'YOUTUBE_CLIENT_SECRET',
-        'YOUTUBE_REFRESH_TOKEN'
-    ]
+def main():
+    print("="*60)
+    print("🚀 개그콘서트 Shorts 자동 업로드 시스템 시작")
+    print("="*60)
     
-    missing = [var for var in required_vars if not os.getenv(var)]
+    # 환경 변수 로드
+    gemini_api_key = os.getenv('GEMINI_API_KEY')
+    sender_email = os.getenv('SENDER_EMAIL')
+    receiver_email = os.getenv('RECEIVER_EMAIL')
+    gmail_password = os.getenv('GMAIL_PASSWORD')
+    youtube_client_secret = os.getenv('YOUTUBE_CLIENT_SECRET')
+    youtube_refresh_token = os.getenv('YOUTUBE_REFRESH_TOKEN')
     
-    if missing:
-        print(f"❌ 누락된 환경변수: {', '.join(missing)}")
+    # 필수 환경 변수 확인
+    required_vars = {
+        'GEMINI_API_KEY': gemini_api_key,
+        'SENDER_EMAIL': sender_email,
+        'RECEIVER_EMAIL': receiver_email,
+        'GMAIL_PASSWORD': gmail_password,
+        'YOUTUBE_CLIENT_SECRET': youtube_client_secret,
+        'YOUTUBE_REFRESH_TOKEN': youtube_refresh_token
+    }
+    
+    missing_vars = [k for k, v in required_vars.items() if not v]
+    if missing_vars:
+        print(f"❌ 환경 변수 누락: {', '.join(missing_vars)}")
         sys.exit(1)
     
-    print("✅ 모든 환경변수 확인 완료\n")
-
-def main():
-    print("="*70)
-    print("🎬 YouTube Shorts 자동 업로드 시작")
-    print("="*70 + "\n")
-    
-    # 환경변수 확인
-    check_env_variables()
-    
-    # 초기화 (Pixabay API 추가)
-    video_collector = VideoCollector(
-        pexels_api_key=os.getenv('PEXELS_API_KEY'),
-        pixabay_api_key=os.getenv('PIXABAY_API_KEY')  # 추가
-    )
-    music_collector = MusicCollector(os.getenv('PIXABAY_API_KEY'))
-    content_processor = GeminiContentProcessor(os.getenv('GEMINI_API_KEY'))
-    youtube_uploader = YouTubeUploader()
-    email_notifier = EmailNotifier(
-        os.getenv('SENDER_EMAIL'),
-        os.getenv('GMAIL_PASSWORD')
-    )
-    
     try:
-        # 1단계: 다양한 키워드로 동영상 수집
-        print("📥 STEP 1: 다양한 키워드로 동영상 다운로드 중...\n")
-        videos = video_collector.collect_videos(count=3)
+        # 1. 영상 수집
+        collector = VideoCollector()
+        videos = collector.collect_videos(count=3)
         
         if not videos:
-            raise Exception("다운로드된 동영상이 없습니다.")
+            print("⚠️ 수집된 영상이 없습니다. 프로그램 종료.")
+            sys.exit(0)
         
-        print(f"\n✅ {len(videos)}개 동영상 다운로드 완료\n")
+        # 2. 영상 처리
+        processor = ContentProcessor(gemini_api_key)
+        processed_videos = []
         
-        # 2단계: 각 동영상 처리 및 업로드
+        for video in videos:
+            result = processor.process_video(video)
+            if result:
+                processed_videos.append(result)
+        
+        if not processed_videos:
+            print("❌ 처리된 영상이 없습니다.")
+            sys.exit(1)
+        
+        # 3. YouTube 업로드
+        uploader = YouTubeUploader(youtube_client_secret, youtube_refresh_token)
         upload_results = []
         
-        for i, video_info in enumerate(videos, 1):
-            print("="*70)
-            print(f"🎥 영상 {i}/{len(videos)} 처리 중...")
-            print(f"   키워드: {video_info['keyword']}")
-            print(f"   출처: {video_info['source']}")
-            print("="*70 + "\n")
-            
-            video_path = video_info['path']
-            
-            # 2-1: Gemini로 제목/설명 생성
-            print(f"🤖 Gemini AI로 한글 제목/설명 생성 중...")
-            title = content_processor.generate_title(video_info)
-            description = content_processor.generate_description(video_info, title)
-            
-            # 2-2: 배경음악 다운로드 (중복 방지)
-            music_path = music_collector.get_random_music(
-                duration=int(video_info['duration'])
+        for video in processed_videos:
+            upload_result = uploader.upload(
+                video_path=video['video_path'],
+                title=video['title'],
+                description=f"{video['description']}\n\n원본 출처: {video['source_url']}"
             )
-            
-            # 2-3: 배경음악 삽입
-            final_video_path = video_path.replace('.mp4', '_final.mp4')
-            final_video_path = content_processor.add_background_music(
-                video_path, 
-                music_path, 
-                final_video_path
-            )
-            
-            # 2-4: YouTube 업로드
-            print(f"\n📤 YouTube Shorts 업로드 중...")
-            video_id = youtube_uploader.upload_video(
-                final_video_path,
-                title,
-                description
-            )
-            
-            if video_id:
+            if upload_result:
                 upload_results.append({
-                    'title': title,
-                    'video_id': video_id,
-                    'url': f"https://youtube.com/shorts/{video_id}",
-                    'keyword': video_info['keyword'],
-                    'status': 'success'
+                    'title': video['title'],
+                    'url': upload_result['url'],
+                    'status': upload_result['status']
                 })
-                print(f"✅ 업로드 성공: https://youtube.com/shorts/{video_id}\n")
-            else:
-                upload_results.append({
-                    'title': title,
-                    'keyword': video_info['keyword'],
-                    'status': 'failed'
-                })
-                print(f"❌ 업로드 실패\n")
         
-        # 3단계: 이메일 알림
-        print("="*70)
-        print("📧 이메일 알림 전송 중...")
-        print("="*70 + "\n")
+        # 4. 이메일 알림
+        if upload_results:
+            notifier = EmailNotifier(sender_email, gmail_password)
+            notifier.send_notification(
+                receiver_email,
+                upload_results,
+                success_count=len(upload_results),
+                total_count=len(videos)
+            )
         
-        email_notifier.send_notification(
-            subject=f"[YouTube Shorts] 오늘 {len(upload_results)}개 영상 업로드 완료",
-            message="자동 업로드가 완료되었습니다.",
-            video_data=upload_results
-        )
-        
-        print("\n" + "="*70)
-        print("🎉 모든 작업 완료!")
-        print("="*70 + "\n")
+        print("\n" + "="*60)
+        print("✅ 모든 작업 완료!")
+        print(f"📊 결과: {len(upload_results)}/{len(videos)} 영상 업로드 성공")
+        print("="*60)
         
     except Exception as e:
-        print(f"\n❌ 오류 발생: {e}")
-        
-        # 오류 알림
-        email_notifier.send_notification(
-            subject="[YouTube Shorts] 자동 업로드 실패",
-            message=f"오류가 발생했습니다:\n\n{str(e)}"
-        )
-        
+        print(f"❌ 시스템 오류: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":
