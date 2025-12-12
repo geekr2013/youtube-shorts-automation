@@ -4,17 +4,14 @@ from pathlib import Path
 from typing import Dict, Optional
 import google.generativeai as genai
 
-# MoviePy 임포트 (버전 호환성 처리)
+# MoviePy 안정적 import (v1.0.3 기준)
 try:
     from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
-except ImportError:
-    try:
-        from moviepy import VideoFileClip, TextClip, CompositeVideoClip
-    except ImportError:
-        print("⚠️ MoviePy 임포트 실패. 대체 방법을 사용합니다.")
-        VideoFileClip = None
-        TextClip = None
-        CompositeVideoClip = None
+    MOVIEPY_AVAILABLE = True
+    print("✅ MoviePy import 성공")
+except ImportError as e:
+    MOVIEPY_AVAILABLE = False
+    print(f"⚠️ MoviePy import 실패: {e}")
 
 class ContentProcessorGemini:
     def __init__(self, api_key: str):
@@ -25,18 +22,27 @@ class ContentProcessorGemini:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # MoviePy 사용 가능 여부 확인
-        self.moviepy_available = VideoFileClip is not None
-        if not self.moviepy_available:
+        if not MOVIEPY_AVAILABLE:
             print("⚠️ MoviePy를 사용할 수 없습니다. 자막 추가가 비활성화됩니다.")
         
-        # 폰트 경로 설정
-        self.font_path = Path(__file__).parent.parent / "fonts" / "SeoulAlrim-ExtraBold.otf"
+        # 폰트 경로 설정 (다양한 경로 시도)
+        self.font_path = self._find_font()
+    
+    def _find_font(self) -> Optional[Path]:
+        """다양한 경로에서 서울알림 폰트 찾기"""
+        possible_paths = [
+            Path(__file__).parent.parent / "fonts" / "SeoulAlrim-ExtraBold.otf",
+            Path("./fonts/SeoulAlrim-ExtraBold.otf"),
+            Path("/usr/share/fonts/truetype/seoul/SeoulAlrim-ExtraBold.otf"),
+        ]
         
-        if not self.font_path.exists():
-            print(f"⚠️ 폰트 파일을 찾을 수 없습니다: {self.font_path}")
-            print(f"   기본 폰트로 대체됩니다.")
-            self.font_path = None
+        for path in possible_paths:
+            if path.exists():
+                print(f"✅ 서울알림 폰트 찾음: {path}")
+                return path
+        
+        print("⚠️ 서울알림 폰트를 찾을 수 없습니다. 기본 폰트를 사용합니다.")
+        return None
     
     def generate_metadata(self, video_path: str, original_title: str = "") -> Dict[str, str]:
         """Gemini로 YouTube 메타데이터 생성"""
@@ -100,9 +106,9 @@ DESCRIPTION: (100자 이내, 해시태그 3-5개 포함, SEO 최적화)
     ) -> str:
         """영상에 자막 추가 (서울알림 폰트 사용)"""
         
-        # MoviePy 사용 불가능하면 원본 반환
-        if not self.moviepy_available:
+        if not MOVIEPY_AVAILABLE:
             print(f"⚠️ MoviePy를 사용할 수 없어 자막을 추가하지 않습니다.")
+            print(f"   원본 영상을 사용합니다: {video_path}")
             return video_path
         
         print(f"\n🎬 자막 추가 중...")
@@ -122,7 +128,7 @@ DESCRIPTION: (100자 이내, 해시태그 3-5개 포함, SEO 최적화)
             print(f"   영상 길이: {duration:.1f}초")
             
             # 폰트 설정
-            if self.font_path and self.font_path.exists():
+            if self.font_path:
                 font_to_use = str(self.font_path)
                 print(f"   ✅ 서울알림 폰트 사용: {self.font_path.name}")
             else:
@@ -197,7 +203,7 @@ DESCRIPTION: (100자 이내, 해시태그 3-5개 포함, SEO 최적화)
             'processed_path': processed_path,
             'youtube_title': metadata['title'],
             'youtube_description': metadata['description']
-        })
+        }
         
         print(f"\n✅ 영상 처리 완료!")
         print(f"   최종 제목: {result['youtube_title']}")
