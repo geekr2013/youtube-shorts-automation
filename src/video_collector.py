@@ -110,43 +110,41 @@ class VideoCollector:
         
         return hours * 3600 + minutes * 60 + seconds
     
-    def download_video_with_cookies(self, video_id: str, video_url: str) -> str:
-        """쿠키 없이 직접 다운로드 (yt-dlp 설정 최적화)"""
-        print(f"📥 다운로드 시작: {video_id}")
-        
-        output_path = self.download_dir / f"{video_id}.mp4"
+    def download_video(self, video_id: str, title: str) -> Optional[str]:
+    """비디오 다운로드"""
+    try:
+        output_path = os.path.join(self.output_dir, f"{video_id}.mp4")
         
         ydl_opts = {
-            'format': 'best[ext=mp4][height<=1080]/best[ext=mp4]/best',
-            'outtmpl': str(output_path).replace('.mp4', '.%(ext)s'),
+            'format': 'best[ext=mp4]',
+            'outtmpl': output_path,
             'quiet': False,
             'no_warnings': False,
-            'ignoreerrors': False,
-            
-            # 봇 차단 우회 설정
-            'cookiefile': None,  # 쿠키 없이 시도
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'referer': 'https://www.youtube.com/',
-            'sleep_interval': 1,
-            'max_sleep_interval': 3,
+            'retries': 3,
+            'fragment_retries': 3,
+            'socket_timeout': 30,
+            'cookiefile': os.path.expanduser('~/.config/yt-dlp/cookies.txt'),  # 🔑 쿠키 추가
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
         }
         
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([video_url])
-            
-            # 확장자 확인 후 최종 경로 반환
-            for ext in ['.mp4', '.webm', '.mkv']:
-                final_path = self.download_dir / f"{video_id}{ext}"
-                if final_path.exists():
-                    return str(final_path)
-            
-            print(f"⚠️ 파일을 찾을 수 없음: {video_id}")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            print(f"⏬ 다운로드 시작: {title}")
+            ydl.download([f'https://www.youtube.com/watch?v={video_id}'])
+        
+        if os.path.exists(output_path):
+            print(f"✅ 다운로드 완료: {output_path}")
+            return output_path
+        else:
+            print(f"❌ 파일 생성 실패: {output_path}")
             return None
             
-        except Exception as e:
-            print(f"❌ 다운로드 실패 ({video_id}): {e}")
-            return None
+    except Exception as e:
+        print(f"❌ 다운로드 실패: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
     
     def collect_gagconcert_shorts(self, max_videos: int = 3) -> List[Dict]:
         """개그콘서트 쇼츠 수집 - API 우선, 실패 시 RSS"""
