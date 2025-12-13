@@ -2,66 +2,60 @@ name: Daily GagConcert Upload
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # 매일 오전 11시 (한국시간)
-  workflow_dispatch:
-
-permissions:
-  contents: write
+    - cron: '0 0 * * *'  # 매일 자정 (UTC) 실행
+  workflow_dispatch:  # 수동 실행 가능
 
 jobs:
-  upload:
+  run-upload:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg fonts-nanum
-        sudo fc-cache -fv
-    
-    - name: Install Python dependencies
-      run: |
-        pip install --upgrade pip
-        pip install moviepy==1.0.3
-        pip install imageio==2.31.1
-        pip install imageio-ffmpeg==0.4.9
-        pip install --no-deps moviepy
-        pip install -r requirements.txt
-    
-    - name: Verify installations
-      run: |
-        python -c "from moviepy.editor import VideoFileClip; print('✅ MoviePy 임포트 성공')"
-        ffmpeg -version | head -n1
-    
-    - name: Setup yt-dlp cookies
-      run: |
-        mkdir -p ~/.config/yt-dlp
-        echo "${{ secrets.YOUTUBE_COOKIES }}" > ~/.config/yt-dlp/cookies.txt
-        chmod 600 ~/.config/yt-dlp/cookies.txt
-    
-    - name: Run automation
-      env:
-        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-        YOUTUBE_DATA_API_KEY: ${{ secrets.YOUTUBE_DATA_API_KEY }}
-        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-        SMTP_PORT: ${{ secrets.SMTP_PORT }}
-        SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-        RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
-      run: |
-        python src/main.py
-    
-    - name: Commit changes
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add data/download_history.json || true
-        git diff --staged --quiet || git commit -m "Update download history [skip ci]"
-        git push || true
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-nanum
+          sudo fc-cache -fv
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install moviepy==1.0.3
+          pip install imageio==2.31.1
+          pip install imageio-ffmpeg==0.4.9
+          pip install --no-deps moviepy
+          pip install -r requirements.txt
+      
+      - name: Verify installations
+        run: |
+          python -c "from moviepy.editor import VideoFileClip; print('✅ MoviePy 임포트 성공')"
+          ffmpeg -version | head -n1
+      
+      - name: Run automation
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          YOUTUBE_DATA_API_KEY: ${{ secrets.YOUTUBE_DATA_API_KEY }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+        run: |
+          python src/main.py
+      
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data/download_history.json || true
+          git diff --staged --quiet || git commit -m "Update download history [skip ci]"
+          git push || true
