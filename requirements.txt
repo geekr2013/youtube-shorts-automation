@@ -1,9 +1,8 @@
 numpy==1.24.3
 pillow==10.0.0
 google-generativeai>=0.3.2
-praw>=7.7.1
+playwright>=1.40.0
 requests>=2.31.0
 google-auth>=2.23.0
 google-auth-oauthlib>=1.1.0
 google-api-python-client>=2.100.0
-mutagen>=1.47.0
