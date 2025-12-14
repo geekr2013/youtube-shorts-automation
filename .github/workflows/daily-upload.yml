@@ -1,8 +1,8 @@
-name: Daily GagConcert Upload
+name: Daily AAGAG Upload
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 자정 (UTC) 실행
+    - cron: '0 1 * * *'  # 매일 오전 10시 (KST) 실행
   workflow_dispatch:  # 수동 실행 가능
 
 jobs:
@@ -29,26 +29,19 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install moviepy==1.0.3
-          pip install imageio==2.31.1
-          pip install imageio-ffmpeg==0.4.9
-          pip install --no-deps moviepy
           pip install -r requirements.txt
+          playwright install chromium
+          playwright install-deps
       
-      - name: Verify installations
+      - name: Download background music
         run: |
-          python -c "from moviepy.editor import VideoFileClip; print('✅ MoviePy 임포트 성공')"
-          ffmpeg -version | head -n1
+          mkdir -p data/music
+          # 무료 배경음악 다운로드 (예시)
+          # wget -O data/music/background.mp3 "YOUR_MUSIC_URL"
       
       - name: Run automation
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          YOUTUBE_DATA_API_KEY: ${{ secrets.YOUTUBE_DATA_API_KEY }}
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
         run: |
           python src/main.py
       
