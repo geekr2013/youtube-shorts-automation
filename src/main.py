@@ -1,8 +1,9 @@
 """
-AAGAG 숏폼 자동화 메인 스크립트
-- AAGAG 크롤링
-- 원본 제목/설명 사용 (Gemini 제거)
-- 모든 영상을 세로형(9:16)으로 변환
+AAGAG 숏폼 자동화 메인 스크립트 - 완전 최적화 버전
+- 제목 최적화 (키워드 삽입)
+- 자막 추가
+- 썸네일 최적화
+- 세로형 변환
 - YouTube Shorts 업로드
 """
 
@@ -32,7 +33,47 @@ except ImportError as e:
     sys.exit(1)
 
 
-def extract_keywords_from_title(title: str, max_keywords: int = 8) -> list:
+def optimize_title(title: str) -> str:
+    """
+    제목 최적화 - 클릭을 유도하는 키워드 자동 삽입
+    
+    Args:
+        title: 원본 제목
+        
+    Returns:
+        최적화된 제목
+    """
+    # 트렌드 키워드 풀 (랜덤 선택)
+    import random
+    
+    prefix_keywords = [
+        "😱 충격!", "🔥 화제의", "😮 놀라운", "⚡ 실시간",
+        "💥 대박", "🎯 화제", "👀 주목", "🚨 긴급"
+    ]
+    
+    suffix_keywords = [
+        "(레전드)", "(실화)", "(충격)", "(화제)",
+        "(대박)", "(ㄷㄷ)", "(공감)", "(웃음)"
+    ]
+    
+    # 이미 이모지나 키워드가 있으면 스킵
+    if any(char in title for char in "😱🔥😮⚡💥🎯👀🚨"):
+        return title
+    
+    # 랜덤으로 prefix 또는 suffix 추가 (50% 확률)
+    if random.random() < 0.5:
+        optimized = f"{random.choice(prefix_keywords)} {title}"
+    else:
+        optimized = f"{title} {random.choice(suffix_keywords)}"
+    
+    # YouTube 제목 길이 제한 (100자)
+    if len(optimized) > 100:
+        optimized = title[:97] + "..."
+    
+    return optimized
+
+
+def extract_keywords_from_title(title: str, max_keywords: int = 10) -> list:
     """
     제목에서 키워드 추출하여 태그 생성
     
@@ -44,7 +85,7 @@ def extract_keywords_from_title(title: str, max_keywords: int = 8) -> list:
         키워드 리스트
     """
     # 기본 태그
-    base_tags = ['shorts', '숏츠', '쇼츠']
+    base_tags = ['shorts', '숏츠', '쇼츠', '핫이슈', '화제']
     
     # 제목을 공백/특수문자로 분리
     words = re.findall(r'[가-힣a-zA-Z0-9]+', title)
@@ -64,7 +105,7 @@ def extract_keywords_from_title(title: str, max_keywords: int = 8) -> list:
 
 def create_metadata_from_title(title: str, source_url: str = "") -> dict:
     """
-    원본 제목에서 메타데이터 생성 (Gemini 없이)
+    원본 제목에서 메타데이터 생성
     
     Args:
         title: 원본 제목
@@ -73,36 +114,138 @@ def create_metadata_from_title(title: str, source_url: str = "") -> dict:
     Returns:
         메타데이터 딕셔너리
     """
-    # 제목 정리 (파일명에서 추출된 경우 처리)
+    # 제목 정리
     clean_title = title
-    
-    # 파일 확장자 제거
     clean_title = re.sub(r'\.(mp4|gif|webm)$', '', clean_title, flags=re.IGNORECASE)
-    
-    # 숫자 접미사 제거 (예: _1, _2)
     clean_title = re.sub(r'_\d+$', '', clean_title)
-    
-    # 앞뒤 공백 제거
     clean_title = clean_title.strip()
     
     # 빈 제목 방지
     if not clean_title or len(clean_title) < 2:
         clean_title = "오늘의 핫 이슈 영상"
     
+    # 제목 최적화 (키워드 삽입)
+    optimized_title = optimize_title(clean_title)
+    
     # 설명 생성
     description = f"{clean_title}\n\n"
     if source_url:
         description += f"출처: AAGAG\n{source_url}\n\n"
-    description += "#shorts #숏츠 #쇼츠"
+    description += "#shorts #숏츠 #쇼츠 #핫이슈 #화제의영상"
     
     # 태그 생성
     tags = extract_keywords_from_title(clean_title)
     
     return {
-        'title': clean_title,
+        'title': optimized_title,
+        'original_title': clean_title,
         'description': description,
         'tags': tags
     }
+
+
+def add_subtitle_to_video(video_path: str, subtitle_text: str) -> str:
+    """
+    영상에 자막 추가 (ffmpeg 사용)
+    
+    Args:
+        video_path: 원본 영상 경로
+        subtitle_text: 자막 텍스트
+        
+    Returns:
+        자막이 추가된 영상 경로
+    """
+    try:
+        video_path = Path(video_path)
+        output_path = video_path.parent / f"{video_path.stem}_subtitle{video_path.suffix}"
+        
+        logger.info(f"   📝 자막 추가 중: '{subtitle_text[:30]}...'")
+        
+        # 자막 텍스트 이스케이프 처리 (ffmpeg 호환)
+        escaped_text = subtitle_text.replace("'", "'\\\\\\''").replace(":", "\\:")
+        
+        # ffmpeg 자막 추가 (drawtext 필터)
+        ffmpeg_cmd = [
+            'ffmpeg',
+            '-i', str(video_path),
+            '-vf',
+            f"drawtext=fontfile=/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf:"
+            f"text='{escaped_text}':"
+            f"fontcolor=white:"
+            f"fontsize=48:"
+            f"box=1:"
+            f"boxcolor=black@0.6:"
+            f"boxborderw=10:"
+            f"x=(w-text_w)/2:"
+            f"y=h-th-50",
+            '-c:a', 'copy',
+            '-y',
+            str(output_path)
+        ]
+        
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            logger.info(f"   ✅ 자막 추가 완료\n")
+            return str(output_path)
+        else:
+            logger.warning(f"   ⚠️ 자막 추가 실패, 원본 사용\n")
+            return str(video_path)
+            
+    except Exception as e:
+        logger.warning(f"   ⚠️ 자막 추가 오류: {e}")
+        return str(video_path)
+
+
+def extract_thumbnail(video_path: str) -> str:
+    """
+    영상에서 중간 프레임을 썸네일로 추출
+    
+    Args:
+        video_path: 영상 경로
+        
+    Returns:
+        썸네일 이미지 경로
+    """
+    try:
+        video_path = Path(video_path)
+        thumbnail_path = video_path.parent / f"{video_path.stem}_thumb.jpg"
+        
+        logger.info(f"   🖼️ 썸네일 추출 중...")
+        
+        # 영상 길이 확인
+        probe_cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            str(video_path)
+        ]
+        
+        result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
+        duration = float(result.stdout.strip())
+        
+        # 중간 지점에서 프레임 추출
+        middle_time = duration / 2
+        
+        ffmpeg_cmd = [
+            'ffmpeg',
+            '-ss', str(middle_time),
+            '-i', str(video_path),
+            '-vframes', '1',
+            '-q:v', '2',
+            '-y',
+            str(thumbnail_path)
+        ]
+        
+        subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
+        
+        logger.info(f"   ✅ 썸네일 추출 완료\n")
+        return str(thumbnail_path)
+        
+    except Exception as e:
+        logger.warning(f"   ⚠️ 썸네일 추출 실패: {e}\n")
+        return None
 
 
 def convert_to_shorts_format(video_path: str) -> str:
@@ -121,7 +264,7 @@ def convert_to_shorts_format(video_path: str) -> str:
         
         logger.info(f"   🎬 Shorts 포맷으로 변환 중...")
         
-        # ffprobe로 원본 영상 정보 확인
+        # 원본 영상 정보 확인
         probe_cmd = [
             'ffprobe',
             '-v', 'error',
@@ -143,7 +286,7 @@ def convert_to_shorts_format(video_path: str) -> str:
         
         # 이미 세로형인 경우 (9:16 비율)
         if 0.5 <= aspect_ratio <= 0.6:
-            logger.info(f"   ✅ 이미 세로형 영상입니다 (스킵)")
+            logger.info(f"   ✅ 이미 세로형 영상입니다 (스킵)\n")
             return str(video_path)
         
         # 가로형 영상인 경우: 위아래에 블러 배경 추가
@@ -203,7 +346,7 @@ def convert_to_shorts_format(video_path: str) -> str:
 def main():
     """메인 실행 함수"""
     logger.info("\n" + "="*70)
-    logger.info("🚀 AAGAG YouTube Shorts 자동화 시작")
+    logger.info("🚀 AAGAG YouTube Shorts 자동화 시작 (완전 최적화 버전)")
     logger.info("="*70 + "\n")
     
     try:
@@ -221,12 +364,12 @@ def main():
         else:
             logger.info("✅ YouTube 업로더 준비 완료\n")
         
-        # 2. AAGAG 콘텐츠 수집
+        # 2. AAGAG 콘텐츠 수집 (10개로 증가)
         logger.info("📥 AAGAG 콘텐츠 수집 시작...\n")
         collector = AAGAGCollector()
         
-        # 수집 및 다운로드 실행 (최대 5개)
-        videos = collector.collect_and_download(max_videos=5)
+        # 수집 및 다운로드 실행 (최대 10개)
+        videos = collector.collect_and_download(max_videos=10)
         
         if not videos:
             logger.warning("\n❌ 수집된 게시물이 없습니다.\n")
@@ -260,37 +403,44 @@ def main():
                 continue
             
             try:
-                # 3-1. 원본 제목 기반 메타데이터 생성
+                # 3-1. 메타데이터 생성 (제목 최적화 포함)
                 logger.info("📝 메타데이터 생성 중...")
                 metadata = create_metadata_from_title(original_title, source_url)
                 
                 title = metadata['title']
+                original_clean_title = metadata['original_title']
                 description = metadata['description']
                 tags = metadata['tags']
                 
-                logger.info(f"   ✅ 제목: {title}")
-                logger.info(f"   ✅ 설명: {description[:50]}...")
+                logger.info(f"   ✅ 원본 제목: {original_clean_title}")
+                logger.info(f"   ✅ 최적화 제목: {title}")
                 logger.info(f"   ✅ 태그: {', '.join(tags[:5])}...\n")
                 
                 # 3-2. Shorts 포맷 변환 (세로형 1080x1920)
                 shorts_video_path = convert_to_shorts_format(video_path)
                 
-                # 3-3. 배경음악 추가 (선택)
-                final_video_path = shorts_video_path
+                # 3-3. 자막 추가 (원본 제목 사용)
+                subtitled_video_path = add_subtitle_to_video(shorts_video_path, original_clean_title)
+                
+                # 3-4. 썸네일 추출 (중간 프레임)
+                thumbnail_path = extract_thumbnail(subtitled_video_path)
+                
+                # 3-5. 배경음악 추가 (선택)
+                final_video_path = subtitled_video_path
                 if enable_bgm and os.path.exists(bgm_path):
                     logger.info("🎵 배경음악 추가 중...")
                     try:
                         final_video_path = add_background_music(
-                            video_path=shorts_video_path,
+                            video_path=subtitled_video_path,
                             music_path=bgm_path
                         )
                         logger.info(f"   ✅ 배경음악 추가 완료\n")
                     except Exception as e:
                         logger.warning(f"   ⚠️ 배경음악 추가 실패: {e}")
                         logger.warning(f"   ⚠️ 원본 영상 사용\n")
-                        final_video_path = shorts_video_path
+                        final_video_path = subtitled_video_path
                 
-                # 3-4. YouTube 업로드
+                # 3-6. YouTube 업로드
                 if uploader.authenticated:
                     logger.info("📤 YouTube 업로드 중...")
                     result = uploader.upload_video(
@@ -298,6 +448,7 @@ def main():
                         title=title,
                         description=description,
                         tags=tags,
+                        thumbnail_path=thumbnail_path,
                         privacy="public"
                     )
                     
@@ -325,7 +476,7 @@ def main():
             success_count = sum(1 for r in upload_results if r.get('success'))
             
             email_body = f"""
-AAGAG YouTube Shorts 자동화 실행 결과
+AAGAG YouTube Shorts 자동화 실행 결과 (최적화 버전)
 
 📊 수집 결과:
 - 수집된 비디오: {len(videos)}개
