@@ -1,5 +1,15 @@
+# 웹 크롤링
 playwright>=1.40.0
 requests>=2.31.0
+
+# YouTube API
 google-api-python-client>=2.100.0
 google-auth-oauthlib>=1.1.0
 google-auth-httplib2>=0.1.1
+
+# Gemini AI
+google-generativeai>=0.3.0
+
+# 비디오 처리 (선택사항 - 자막 기능용)
+# moviepy>=1.0.3
+# imagemagick는 시스템 패키지로 설치 필요
