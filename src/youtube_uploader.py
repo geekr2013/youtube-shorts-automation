@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
@@ -30,9 +29,36 @@ class YouTubeUploader:
                 self.credentials.refresh(Request())
             else:
                 # GitHub Secrets에서 OAuth 클라이언트 정보 가져오기
-                client_id = os.getenv('YOUTUBE_CLIENT_ID')
+                # YOUTUBE_CLIENT_ID가 없으면 CLIENT_SECRET에서 추출 시도
                 client_secret = os.getenv('YOUTUBE_CLIENT_SECRET')
                 refresh_token = os.getenv('YOUTUBE_REFRESH_TOKEN')
+                
+                # CLIENT_SECRET이 JSON 형식인 경우 파싱
+                if client_secret and client_secret.startswith('{'):
+                    import json
+                    try:
+                        secret_data = json.loads(client_secret)
+                        if 'installed' in secret_data:
+                            client_id = secret_data['installed']['client_id']
+                            client_secret_value = secret_data['installed']['client_secret']
+                        elif 'web' in secret_data:
+                            client_id = secret_data['web']['client_id']
+                            client_secret_value = secret_data['web']['client_secret']
+                        else:
+                            print("❌ CLIENT_SECRET JSON 형식 오류")
+                            return
+                    except:
+                        print("❌ CLIENT_SECRET 파싱 실패")
+                        return
+                else:
+                    # 별도로 저장된 경우
+                    client_id = os.getenv('YOUTUBE_CLIENT_ID')
+                    client_secret_value = client_secret
+                
+                if not client_id:
+                    print("❌ YOUTUBE_CLIENT_ID가 필요합니다.")
+                    print("📝 Google Cloud Console에서 OAuth 클라이언트 ID를 확인하세요.")
+                    return
                 
                 if refresh_token:
                     # Refresh Token으로 인증
@@ -41,19 +67,16 @@ class YouTubeUploader:
                         refresh_token=refresh_token,
                         token_uri='https://oauth2.googleapis.com/token',
                         client_id=client_id,
-                        client_secret=client_secret,
+                        client_secret=client_secret_value,
                         scopes=self.SCOPES
                     )
                     self.credentials.refresh(Request())
                 else:
-                    print("❌ YouTube 인증 정보가 없습니다.")
-                    print("📝 다음 단계를 진행하세요:")
-                    print("1. Google Cloud Console에서 OAuth 클라이언트 생성")
-                    print("2. client_secrets.json 다운로드")
-                    print("3. 로컬에서 인증 후 Refresh Token 발급")
+                    print("❌ YOUTUBE_REFRESH_TOKEN이 필요합니다.")
                     return
             
             # 토큰 저장
+            token_file.parent.mkdir(parents=True, exist_ok=True)
             with open(token_file, 'wb') as token:
                 pickle.dump(self.credentials, token)
         
@@ -90,7 +113,7 @@ class YouTubeUploader:
                     'categoryId': '23'  # Comedy 카테고리
                 },
                 'status': {
-                    'privacyStatus': 'public',  # public, unlisted, private
+                    'privacyStatus': 'public',
                     'selfDeclaredMadeForKids': False
                 }
             }
@@ -100,7 +123,7 @@ class YouTubeUploader:
                 str(video_path),
                 mimetype='video/*',
                 resumable=True,
-                chunksize=1024*1024  # 1MB chunks
+                chunksize=1024*1024
             )
             
             request = self.youtube.videos().insert(
