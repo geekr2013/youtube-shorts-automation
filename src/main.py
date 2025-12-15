@@ -1,102 +1,77 @@
 import os
-import sys
-from aagag_collector import AagagCollector
-from audio_detector import AudioDetector
-from background_music import BackgroundMusicAdder
-from title_optimizer import TitleOptimizer
+from pathlib import Path
+from aagag_collector import AAGAGCollector
+from audio_detector import has_audio  # ← 변경
+from background_music import add_background_music
+from title_optimizer import optimize_title, generate_description
 
 def main():
-    print("🚀 AAGAG 밈 자동화 시스템 시작\n")
+    print("🚀 AAGAG 숏폼 자동화 시작")
     
-    # 환경 변수
-    gemini_api_key = os.getenv('GOOGLE_API_KEY')
+    # 디렉토리 설정
+    video_dir = Path('data/videos')
+    music_dir = Path('data/music')
+    video_dir.mkdir(parents=True, exist_ok=True)
+    music_dir.mkdir(parents=True, exist_ok=True)
     
-    if not gemini_api_key:
-        print("❌ GOOGLE_API_KEY 환경 변수가 설정되지 않았습니다.")
-        sys.exit(1)
-    
-    # 목표 개수
-    target_count = 5
-    
-    # 1. AAGAG 수집기 초기화
-    collector = AagagCollector()
-    
-    # 2. 비디오 게시물 수집
-    posts = collector.get_video_posts(limit=30)
+    # 1. AAGAG 콘텐츠 수집 및 다운로드
+    print("\n📥 AAGAG 콘텐츠 수집 중...")
+    collector = AAGAGCollector()
+    posts = collector.collect_posts(max_posts=20)
     
     if not posts:
         print("❌ 수집된 게시물이 없습니다.")
         return
     
-    print(f"📊 수집된 비디오 게시물: {len(posts)}개\n")
+    print(f"✅ {len(posts)}개 게시물 수집 완료")
     
-    # 3. 게시물 처리
+    # 처리할 영상 개수 제한 (1일 3~5개)
+    max_videos = min(5, len(posts))
     processed_count = 0
     
-    for post in posts:
-        if processed_count >= target_count:
-            break
-        
-        print(f"\n{'='*70}")
-        print(f"📝 처리 중 [{processed_count+1}/{target_count}]: {post['title']}")
-        print(f"🔗 URL: {post['url']}")
-        
-        # 3-1. 미디어 URL 추출
-        media_url = collector.extract_media_url(post['url'])
-        if not media_url:
-            print(f"⚠️ 미디어 URL을 찾을 수 없어 건너뜁니다.")
-            continue
-        
-        # 3-2. 비디오 다운로드
-        video_path = collector.download_video(media_url, post['idx'])
-        if not video_path:
-            print(f"⚠️ 다운로드 실패, 건너뜁니다.")
-            continue
-        
-        # 3-3. 오디오 감지
-        audio_detector = AudioDetector()
-        has_audio = audio_detector.has_audio(video_path)
-        
-        final_video_path = video_path
-        
-        if has_audio:
-            has_significant = audio_detector.has_significant_audio(video_path)
-            print(f"🔊 오디오: {'있음 (의미있음)' if has_significant else '있음 (무음)'}")
+    for post in posts[:max_videos]:
+        try:
+            print(f"\n{'='*50}")
+            print(f"📌 처리 중: {post['title']}")
             
-            if not has_significant:
-                # 무음이면 배경음악 추가
-                print("🎵 배경음악 추가 필요")
-                music_adder = BackgroundMusicAdder()
-                music_path = 'data/music/background.mp3'
-                output_path = video_path.replace('.mp4', '_music.mp4')
-                final_video_path = music_adder.add_background_music(
-                    video_path, music_path, output_path, volume=0.2
-                )
-        else:
-            print("🔇 오디오: 없음 → 배경음악 추가")
-            music_adder = BackgroundMusicAdder()
-            music_path = 'data/music/background.mp3'
-            output_path = video_path.replace('.mp4', '_music.mp4')
-            final_video_path = music_adder.add_background_music(
-                video_path, music_path, output_path, volume=0.2
-            )
-        
-        # 3-4. 제목 및 설명 생성
-        optimizer = TitleOptimizer(gemini_api_key)
-        optimized_title = optimizer.generate_engaging_title(post['title'])
-        description = optimizer.generate_description(optimized_title)
-        
-        print(f"\n✨ 최종 제목: {optimized_title}")
-        print(f"📄 설명: {description[:100]}...")
-        print(f"🎬 최종 영상: {final_video_path}")
-        
-        # TODO: YouTube 업로드 (다음 단계)
-        # uploader.upload(final_video_path, optimized_title, description)
-        
-        processed_count += 1
-        print(f"✅ 처리 완료 ({processed_count}/{target_count})")
+            # 영상 다운로드
+            video_path = collector.download_video(post)
+            if not video_path:
+                print(f"⚠️ 다운로드 실패: {post['title']}")
+                continue
+            
+            # 원본 제목에서 확장자 제거
+            clean_title = optimize_title(post['title'])
+            description = generate_description(post['title'])
+            
+            # 오디오 확인 (함수로 직접 호출)
+            print("\n🔊 오디오 분석 중...")
+            video_has_audio = has_audio(video_path)  # ← 변경
+            
+            # 배경음악 추가 여부 결정
+            final_video_path = video_path
+            if not video_has_audio:
+                music_file = music_dir / 'background.mp3'
+                if music_file.exists():
+                    print("🎵 배경음악 추가 중...")
+                    final_video_path = add_background_music(video_path, music_file)
+                else:
+                    print("⚠️ 배경음악 파일 없음 - 원본 사용")
+            else:
+                print("✅ 오디오 있음 - 원본 사용")
+            
+            print(f"\n✅ 처리 완료: {clean_title}")
+            print(f"   파일: {final_video_path}")
+            print(f"   설명: {description[:50]}...")
+            
+            processed_count += 1
+            
+        except Exception as e:
+            print(f"❌ 오류 발생: {str(e)}")
+            continue
     
-    print(f"\n🎉 총 {processed_count}개 콘텐츠 처리 완료!")
+    print(f"\n{'='*50}")
+    print(f"🎉 총 {processed_count}개 영상 처리 완료!")
 
 if __name__ == '__main__':
     main()
