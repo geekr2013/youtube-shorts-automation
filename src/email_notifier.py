@@ -8,9 +8,10 @@ class EmailNotifier:
     def __init__(self):
         self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
         self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
-        self.username = os.getenv('SMTP_USERNAME')
-        self.password = os.getenv('SMTP_PASSWORD')
-        self.recipient = os.getenv('RECIPIENT_EMAIL')
+        # 현재 GitHub Secrets 이름에 맞게 수정
+        self.username = os.getenv('SENDER_EMAIL')  # SMTP_USERNAME 대신
+        self.password = os.getenv('GMAIL_PASSWORD')  # SMTP_PASSWORD 대신
+        self.recipient = os.getenv('RECEIVER_EMAIL')  # RECIPIENT_EMAIL 대신
         
         if not all([self.username, self.password, self.recipient]):
             print("⚠️ 이메일 설정이 완료되지 않았습니다.")
