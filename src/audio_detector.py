@@ -1,67 +1,59 @@
 import subprocess
 import json
+from pathlib import Path
 
-class AudioDetector:
-    @staticmethod
-    def has_audio(video_path):
-        """비디오에 오디오 트랙이 있는지 확인"""
-        try:
-            cmd = [
-                'ffprobe',
-                '-v', 'quiet',
-                '-print_format', 'json',
-                '-show_streams',
-                video_path
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            data = json.loads(result.stdout)
-            
-            # 오디오 스트림 확인
-            for stream in data.get('streams', []):
-                if stream.get('codec_type') == 'audio':
-                    return True
-            
-            return False
+def has_audio(video_path):
+    """비디오에 오디오 트랙이 있는지 확인"""
+    try:
+        # 오디오 스트림 존재 확인
+        result = subprocess.run(
+            [
+                'ffprobe', '-v', 'error',
+                '-select_streams', 'a:0',
+                '-show_entries', 'stream=codec_type',
+                '-of', 'json',
+                str(video_path)
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
         
-        except Exception as e:
-            print(f"⚠️ 오디오 감지 실패: {str(e)}")
+        data = json.loads(result.stdout)
+        has_audio_track = len(data.get('streams', [])) > 0
+        
+        if not has_audio_track:
+            print(f"⚠️ {video_path}: 오디오 트랙 없음")
             return False
-    
-    @staticmethod
-    def has_significant_audio(video_path, threshold_db=-50):
-        """의미 있는 오디오가 있는지 확인 (무음 제외)"""
-        try:
-            cmd = [
-                'ffmpeg',
-                '-i', video_path,
+            
+        # 볼륨 레벨 확인
+        result = subprocess.run(
+            [
+                'ffmpeg', '-i', str(video_path),
                 '-af', 'volumedetect',
-                '-f', 'null',
-                '-',
-                '-hide_banner'
-            ]
-            
-            result = subprocess.run(
-                cmd, 
-                capture_output=True, 
-                text=True, 
-                stderr=subprocess.STDOUT,
-                timeout=30
-            )
-            output = result.stdout
-            
-            # mean_volume 추출
-            for line in output.split('\n'):
-                if 'mean_volume' in line:
-                    try:
-                        volume = float(line.split(':')[1].strip().split()[0])
-                        print(f"📊 평균 볼륨: {volume} dB")
-                        return volume > threshold_db
-                    except:
-                        pass
-            
-            return True  # 감지 실패 시 안전하게 True 반환
+                '-f', 'null', '-'
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
         
-        except Exception as e:
-            print(f"⚠️ 오디오 볼륨 감지 실패: {str(e)}")
-            return True
+        max_volume = -100.0
+        for line in result.stderr.split('\n'):
+            if 'max_volume:' in line:
+                max_volume = float(line.split(':')[1].strip().split()[0])
+                break
+        
+        print(f"🔊 {video_path}: 최대 볼륨 {max_volume} dB")
+        
+        # 볼륨이 -60dB 이하면 무음으로 간주
+        is_silent = max_volume < -60.0
+        if is_silent:
+            print(f"🔇 {video_path}: 무음 영상으로 판단")
+        
+        return not is_silent
+        
+    except Exception as e:
+        print(f"❌ 오디오 감지 오류 ({video_path}): {str(e)}")
+        return True  # 에러 시 안전하게 오디오 있다고 가정
