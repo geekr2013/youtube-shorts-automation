@@ -1,188 +1,153 @@
-import re
-import os
+import requests
+from pathlib import Path
+from playwright.sync_api import sync_playwright
 import time
 import json
-import requests
-from datetime import datetime
-from playwright.sync_api import sync_playwright
 
-class AagagCollector:
+class AAGAGCollector:
     def __init__(self):
-        self.base_url = 'https://aagag.com/issue/'
-        self.history_file = 'data/download_history.json'
+        self.base_url = "https://aagag.com/issue/"
+        self.download_dir = Path('data/videos')
+        self.download_dir.mkdir(parents=True, exist_ok=True)
+        self.history_file = Path('data/download_history.json')
         self.downloaded_ids = self._load_history()
     
     def _load_history(self):
-        """다운로드 이력 로드"""
-        try:
-            if os.path.exists(self.history_file):
-                with open(self.history_file, 'r', encoding='utf-8') as f:
-                    return set(json.load(f))
-            return set()
-        except:
-            return set()
+        """다운로드 기록 로드"""
+        if self.history_file.exists():
+            with open(self.history_file, 'r', encoding='utf-8') as f:
+                return set(json.load(f))
+        return set()
     
     def _save_history(self):
-        """다운로드 이력 저장"""
-        try:
-            os.makedirs(os.path.dirname(self.history_file), exist_ok=True)
-            with open(self.history_file, 'w', encoding='utf-8') as f:
-                json.dump(list(self.downloaded_ids), f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"⚠️ 이력 저장 실패: {str(e)}")
+        """다운로드 기록 저장"""
+        with open(self.history_file, 'w', encoding='utf-8') as f:
+            json.dump(list(self.downloaded_ids), f, ensure_ascii=False, indent=2)
     
-    def get_video_posts(self, limit=20):
-        """비디오 게시물 목록 수집"""
-        print(f"🔍 AAGAG 게시물 수집 중...")
+    def collect_posts(self, max_posts=20):
+        """AAGAG 게시물 목록 수집"""
+        print(f"🔍 AAGAG 크롤링 시작: {self.base_url}")
+        posts = []
         
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            
-            try:
-                page.goto(self.base_url, wait_until='networkidle', timeout=30000)
-                time.sleep(2)
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
                 
-                # 게시물 링크 추출
-                posts = []
-                links = page.query_selector_all('a.article')
+                # 메인 페이지 접속
+                page.goto(self.base_url, wait_until='domcontentloaded', timeout=30000)
+                page.wait_for_timeout(2000)
                 
-                for link in links[:limit]:
+                # 게시물 링크 수집
+                post_links = page.query_selector_all('a.list-group-item')
+                print(f"📋 발견된 게시물: {len(post_links)}개")
+                
+                for i, link in enumerate(post_links[:max_posts]):
                     try:
+                        # 게시물 URL 추출
                         href = link.get_attribute('href')
-                        text = link.inner_text()
-                        
-                        # idx 추출
-                        match = re.search(r'idx=(\d+)', href)
-                        if not match:
+                        if not href or '?idx=' not in href:
                             continue
                         
-                        idx = match.group(1)
+                        post_id = href.split('?idx=')[1].split('&')[0]
                         
-                        # 이미 다운로드한 게시물 건너뛰기
-                        if idx in self.downloaded_ids:
+                        # 이미 다운로드한 게시물은 스킵
+                        if post_id in self.downloaded_ids:
+                            print(f"⏭️  [{i+1}] 이미 다운로드됨: {post_id}")
                             continue
                         
-                        # 제목과 메타데이터 파싱
-                        lines = text.strip().split('\n')
-                        title = lines[0] if lines else ''
+                        # 제목 추출
+                        title_elem = link.query_selector('.subject')
+                        title = title_elem.inner_text().strip() if title_elem else f"AAGAG_{post_id}"
                         
-                        # 비디오 게시물 필터링 (.gif, .mp4 포함 또는 파일 크기가 큰 경우)
-                        is_video = any(ext in title.lower() for ext in ['.gif', '.mp4', '.webm', '.mov'])
+                        post_url = f"https://aagag.com{href}" if href.startswith('/') else href
                         
-                        # 파일 크기 체크 (보통 영상은 0.5MB 이상)
-                        if not is_video:
-                            size_match = re.search(r'([\d.]+)\s*MB', text)
-                            if size_match:
-                                size_mb = float(size_match.group(1))
-                                is_video = size_mb >= 0.5
+                        posts.append({
+                            'id': post_id,
+                            'title': title,
+                            'url': post_url
+                        })
                         
-                        if is_video:
-                            posts.append({
-                                'idx': idx,
-                                'title': title,
-                                'url': f"{self.base_url}?idx={idx}",
-                                'raw_text': text
-                            })
-                    
+                        print(f"✅ [{i+1}] {title}")
+                        
                     except Exception as e:
-                        print(f"⚠️ 게시물 파싱 실패: {str(e)}")
+                        print(f"⚠️  게시물 파싱 실패: {str(e)}")
                         continue
                 
                 browser.close()
-                print(f"✅ 총 {len(posts)}개 비디오 게시물 발견")
-                return posts
-            
-            except Exception as e:
-                print(f"❌ 페이지 로드 실패: {str(e)}")
-                browser.close()
-                return []
-    
-    def extract_media_url(self, post_url):
-        """상세 페이지에서 실제 미디어 URL 추출"""
-        print(f"🔍 미디어 URL 추출 중: {post_url}")
+                
+        except Exception as e:
+            print(f"❌ 크롤링 오류: {str(e)}")
         
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            
-            try:
-                page.goto(post_url, wait_until='networkidle', timeout=30000)
-                time.sleep(2)
-                
-                # video 태그 확인
-                video_element = page.query_selector('video source')
-                if video_element:
-                    media_url = video_element.get_attribute('src')
-                    if media_url:
-                        # 상대 URL을 절대 URL로 변환
-                        if media_url.startswith('//'):
-                            media_url = 'https:' + media_url
-                        elif media_url.startswith('/'):
-                            media_url = 'https://aagag.com' + media_url
-                        
-                        browser.close()
-                        print(f"✅ 비디오 URL 발견: {media_url}")
-                        return media_url
-                
-                # img 태그 확인 (GIF)
-                img_element = page.query_selector('img[src*=".gif"], img[src*=".mp4"]')
-                if img_element:
-                    media_url = img_element.get_attribute('src')
-                    if media_url:
-                        if media_url.startswith('//'):
-                            media_url = 'https:' + media_url
-                        elif media_url.startswith('/'):
-                            media_url = 'https://aagag.com' + media_url
-                        
-                        browser.close()
-                        print(f"✅ 이미지 URL 발견: {media_url}")
-                        return media_url
-                
-                browser.close()
-                print(f"⚠️ 미디어 URL을 찾을 수 없음")
-                return None
-            
-            except Exception as e:
-                print(f"❌ 미디어 추출 실패: {str(e)}")
-                browser.close()
-                return None
+        print(f"\n📊 수집 완료: {len(posts)}개 (신규)")
+        return posts
     
-    def download_video(self, media_url, idx, output_dir='data/videos'):
-        """비디오 다운로드"""
+    def download_video(self, post):
+        """게시물에서 비디오 다운로드"""
+        post_id = post['id']
+        post_url = post['url']
+        
+        print(f"\n📥 다운로드 시작: {post['title']}")
+        
         try:
-            os.makedirs(output_dir, exist_ok=True)
-            
-            # 파일 확장자 결정
-            ext = '.mp4'
-            if '.gif' in media_url.lower():
-                ext = '.gif'
-            elif '.webm' in media_url.lower():
-                ext = '.webm'
-            
-            output_path = os.path.join(output_dir, f'aagag_{idx}{ext}')
-            
-            print(f"📥 다운로드 중: {media_url}")
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://aagag.com/'
-            }
-            
-            response = requests.get(media_url, headers=headers, stream=True, timeout=30)
-            response.raise_for_status()
-            
-            with open(output_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            
-            # 다운로드 이력에 추가
-            self.downloaded_ids.add(idx)
-            self._save_history()
-            
-            print(f"✅ 다운로드 완료: {output_path}")
-            return output_path
-        
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                
+                # 게시물 페이지 접속
+                page.goto(post_url, wait_until='domcontentloaded', timeout=30000)
+                page.wait_for_timeout(2000)
+                
+                # 비디오 URL 추출 (video 태그의 src)
+                video_element = page.query_selector('video source')
+                if not video_element:
+                    video_element = page.query_selector('video')
+                
+                if not video_element:
+                    print(f"❌ 비디오 요소를 찾을 수 없음")
+                    browser.close()
+                    return None
+                
+                video_url = video_element.get_attribute('src')
+                if not video_url:
+                    print(f"❌ 비디오 URL을 찾을 수 없음")
+                    browser.close()
+                    return None
+                
+                # 상대 경로를 절대 경로로 변환
+                if video_url.startswith('//'):
+                    video_url = 'https:' + video_url
+                elif video_url.startswith('/'):
+                    video_url = 'https://i.aagag.com' + video_url
+                
+                print(f"🎬 비디오 URL: {video_url}")
+                
+                browser.close()
+                
+                # 비디오 다운로드
+                response = requests.get(video_url, stream=True, timeout=30)
+                response.raise_for_status()
+                
+                # 파일 저장
+                file_extension = '.mp4'
+                if '.webm' in video_url:
+                    file_extension = '.webm'
+                
+                video_path = self.download_dir / f"{post_id}{file_extension}"
+                
+                with open(video_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                file_size = video_path.stat().st_size / (1024 * 1024)
+                print(f"✅ 다운로드 완료: {video_path.name} ({file_size:.2f} MB)")
+                
+                # 다운로드 기록 저장
+                self.downloaded_ids.add(post_id)
+                self._save_history()
+                
+                return video_path
+                
         except Exception as e:
             print(f"❌ 다운로드 실패: {str(e)}")
             return None
