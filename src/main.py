@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from aagag_collector import AAGAGCollector
-from audio_detector import has_audio  # ← 변경
+from audio_detector import has_audio
 from background_music import add_background_music
 from title_optimizer import optimize_title, generate_description
 
@@ -44,9 +44,9 @@ def main():
             clean_title = optimize_title(post['title'])
             description = generate_description(post['title'])
             
-            # 오디오 확인 (함수로 직접 호출)
+            # 오디오 확인
             print("\n🔊 오디오 분석 중...")
-            video_has_audio = has_audio(video_path)  # ← 변경
+            video_has_audio = has_audio(video_path)
             
             # 배경음악 추가 여부 결정
             final_video_path = video_path
@@ -68,6 +68,8 @@ def main():
             
         except Exception as e:
             print(f"❌ 오류 발생: {str(e)}")
+            import traceback
+            traceback.print_exc()
             continue
     
     print(f"\n{'='*50}")
