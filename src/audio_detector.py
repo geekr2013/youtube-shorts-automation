@@ -5,7 +5,6 @@ from pathlib import Path
 def has_audio(video_path):
     """비디오에 오디오 트랙이 있는지 확인"""
     try:
-        # 오디오 스트림 존재 확인
         result = subprocess.run(
             [
                 'ffprobe', '-v', 'error',
@@ -27,7 +26,6 @@ def has_audio(video_path):
             print(f"⚠️ {video_path}: 오디오 트랙 없음")
             return False
             
-        # 볼륨 레벨 확인
         result = subprocess.run(
             [
                 'ffmpeg', '-i', str(video_path),
@@ -47,7 +45,6 @@ def has_audio(video_path):
         
         print(f"🔊 {video_path}: 최대 볼륨 {max_volume} dB")
         
-        # 볼륨이 -60dB 이하면 무음으로 간주
         is_silent = max_volume < -60.0
         if is_silent:
             print(f"🔇 {video_path}: 무음 영상으로 판단")
@@ -56,4 +53,4 @@ def has_audio(video_path):
         
     except Exception as e:
         print(f"❌ 오디오 감지 오류 ({video_path}): {str(e)}")
-        return True  # 에러 시 안전하게 오디오 있다고 가정
+        return True
