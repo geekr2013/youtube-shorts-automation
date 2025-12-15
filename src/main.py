@@ -1,130 +1,137 @@
 import os
-from pathlib import Path
+import sys
 from aagag_collector import AAGAGCollector
 from audio_detector import has_audio
 from background_music import add_background_music
-from title_optimizer import optimize_title, generate_description
-from youtube_uploader import YouTubeUploader
-from email_notifier import EmailNotifier
+from title_optimizer import optimize_title
+from youtube_uploader import upload_to_youtube
+from email_notifier import send_email
+
 
 def main():
     print("🚀 AAGAG 숏폼 자동화 시작")
     
-    # 디렉토리 설정
-    video_dir = Path('data/videos')
-    music_dir = Path('data/music')
-    video_dir.mkdir(parents=True, exist_ok=True)
-    music_dir.mkdir(parents=True, exist_ok=True)
+    # YouTube 인증
+    if not upload_to_youtube("", "", dry_run=True):
+        print("❌ YouTube API 인증 실패")
+        sys.exit(1)
+    print("✅ YouTube API 인증 완료")
     
-    # YouTube 업로더 초기화
-    uploader = YouTubeUploader()
+    # 이메일 설정 확인
+    sender_email = os.getenv("SENDER_EMAIL")
+    gmail_password = os.getenv("GMAIL_PASSWORD")
+    receiver_email = os.getenv("RECEIVER_EMAIL")
     
-    # 이메일 알림 초기화 (현재 Secrets 이름에 맞게 수정)
-    email_notifier = None
-    if all([os.getenv('SENDER_EMAIL'), os.getenv('GMAIL_PASSWORD'), 
-            os.getenv('RECEIVER_EMAIL')]):
-        email_notifier = EmailNotifier()
+    email_enabled = all([sender_email, gmail_password, receiver_email])
+    if email_enabled:
         print("📧 이메일 알림 활성화")
     
-    # 1. AAGAG 콘텐츠 수집 및 다운로드
+    # AAGAG 콘텐츠 수집
     print("\n📥 AAGAG 콘텐츠 수집 중...")
-    collector = AAGAGCollector()
-    posts = collector.collect_posts(max_posts=20)
+    collector = AAGAGCollector(
+        download_dir="downloads",
+        history_file="data/download_history.json"
+    )
     
-    if not posts:
-        print("❌ 수집된 게시물이 없습니다.")
-        if email_notifier:
-            email_notifier.send_notification(
-                subject="AAGAG 자동화 - 수집 실패",
-                body="수집된 게시물이 없습니다."
+    # 비디오 다운로드 (최대 5개)
+    videos = collector.collect_and_download(max_videos=5)
+    
+    if not videos:
+        print("⚠️ 다운로드된 비디오가 없습니다.")
+        if email_enabled:
+            send_email(
+                subject="[AAGAG 자동화] 콘텐츠 없음",
+                body="오늘 수집된 새로운 비디오가 없습니다.",
+                sender_email=sender_email,
+                sender_password=gmail_password,
+                receiver_email=receiver_email
             )
         return
     
-    print(f"✅ {len(posts)}개 게시물 수집 완료")
+    print(f"✅ {len(videos)}개 비디오 다운로드 완료\n")
     
-    # 처리할 영상 개수 제한 (1일 3~5개)
-    max_videos = min(5, len(posts))
-    processed_videos = []
-    failed_videos = []
+    # 각 비디오 처리
+    success_count = 0
+    fail_count = 0
+    results = []
     
-    for post in posts[:max_videos]:
+    for idx, video in enumerate(videos, 1):
+        print("=" * 50)
+        print(f"📌 처리 중 [{idx}/{len(videos)}]: {video['title']}")
+        
         try:
-            print(f"\n{'='*50}")
-            print(f"📌 처리 중: {post['title']}")
+            video_path = video['path']
+            original_title = video['title']
             
-            # 영상 다운로드
-            video_path = collector.download_video(post)
-            if not video_path:
-                print(f"⚠️ 다운로드 실패: {post['title']}")
-                failed_videos.append(post['title'])
-                continue
-            
-            # 원본 제목에서 확장자 제거
-            clean_title = optimize_title(post['title'])
-            description = generate_description(post['title'])
-            
-            # 오디오 확인
-            print("\n🔊 오디오 분석 중...")
+            # 1. 오디오 감지
+            print("  🔊 오디오 확인 중...")
             video_has_audio = has_audio(video_path)
             
-            # 배경음악 추가 여부 결정
-            final_video_path = video_path
             if not video_has_audio:
-                music_file = music_dir / 'background.mp3'
-                if music_file.exists():
-                    print("🎵 배경음악 추가 중...")
-                    final_video_path = add_background_music(video_path, music_file)
+                print("  ⚠️ 오디오 없음 - 배경음악 추가 중...")
+                music_path = "data/music/background.mp3"
+                
+                if os.path.exists(music_path):
+                    result = add_background_music(video_path, music_path)
+                    if result:
+                        video_path = result
+                        print(f"  ✅ 배경음악 추가 완료")
+                    else:
+                        print(f"  ⚠️ 배경음악 추가 실패 (원본 사용)")
                 else:
-                    print("⚠️ 배경음악 파일 없음 - 원본 사용")
+                    print(f"  ⚠️ 배경음악 파일 없음: {music_path}")
             else:
-                print("✅ 오디오 있음 - 원본 사용")
+                print("  ✅ 오디오 있음")
             
-            # YouTube Shorts 업로드
-            print(f"\n📤 YouTube Shorts 업로드 중...")
-            video_url = uploader.upload_short(
-                video_path=final_video_path,
-                title=clean_title,
+            # 2. 제목 최적화
+            print("  📝 제목 최적화 중...")
+            optimized_data = optimize_title(original_title)
+            title = optimized_data["title"]
+            description = optimized_data["description"]
+            print(f"  ✅ 최적화된 제목: {title}")
+            
+            # 3. YouTube 업로드
+            print("  📤 YouTube 업로드 중...")
+            upload_success = upload_to_youtube(
+                video_path=video_path,
+                title=title,
                 description=description
             )
             
-            if video_url:
-                print(f"🎉 업로드 성공: {video_url}")
-                processed_videos.append({
-                    'title': clean_title,
-                    'url': video_url
-                })
+            if upload_success:
+                print(f"  ✅ YouTube 업로드 성공!")
+                success_count += 1
+                results.append(f"✅ {title}")
             else:
-                print(f"❌ 업로드 실패: {clean_title}")
-                failed_videos.append(clean_title)
-            
+                print(f"  ❌ YouTube 업로드 실패")
+                fail_count += 1
+                results.append(f"❌ {title}")
+        
         except Exception as e:
-            print(f"❌ 오류 발생: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            failed_videos.append(post.get('title', 'Unknown'))
-            continue
+            print(f"  ❌ 오류 발생: {e}")
+            fail_count += 1
+            results.append(f"❌ {original_title} (오류: {str(e)})")
+        
+        print()
     
-    # 결과 요약
-    print(f"\n{'='*50}")
-    print(f"🎉 처리 완료!")
-    print(f"✅ 성공: {len(processed_videos)}개")
-    print(f"❌ 실패: {len(failed_videos)}개")
+    # 최종 결과
+    print("=" * 50)
+    print("🎉 처리 완료!")
+    print(f"✅ 성공: {success_count}개")
+    print(f"❌ 실패: {fail_count}개")
     
-    # 이메일 알림 전송
-    if email_notifier and len(processed_videos) > 0:
-        email_body = f"""
-AAGAG 숏폼 자동화 결과
-
-✅ 업로드 성공: {len(processed_videos)}개
-{''.join([f'- {v["title"]}: {v["url"]}' + chr(10) for v in processed_videos])}
-
-❌ 실패: {len(failed_videos)}개
-{''.join([f'- {title}' + chr(10) for title in failed_videos])}
-"""
-        email_notifier.send_notification(
-            subject=f"AAGAG 자동화 완료 - {len(processed_videos)}개 업로드",
-            body=email_body
+    # 이메일 전송
+    if email_enabled:
+        result_text = "\n".join(results)
+        send_email(
+            subject=f"[AAGAG 자동화] 처리 완료 ({success_count}개 성공)",
+            body=f"처리 결과:\n\n{result_text}\n\n성공: {success_count}개\n실패: {fail_count}개",
+            sender_email=sender_email,
+            sender_password=gmail_password,
+            receiver_email=receiver_email
         )
+        print("📧 이메일 전송 완료")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
