@@ -4,15 +4,16 @@ from aagag_collector import AAGAGCollector
 from audio_detector import has_audio
 from background_music import add_background_music
 from title_optimizer import optimize_title
-from youtube_uploader import upload_to_youtube
-from email_notifier import send_email
+from youtube_uploader import YouTubeUploader
+from email_notifier import send_email_notification
 
 
 def main():
     print("🚀 AAGAG 숏폼 자동화 시작")
     
-    # YouTube 인증
-    if not upload_to_youtube("", "", dry_run=True):
+    # YouTube 업로더 초기화
+    uploader = YouTubeUploader()
+    if not uploader.authenticate():
         print("❌ YouTube API 인증 실패")
         sys.exit(1)
     print("✅ YouTube API 인증 완료")
@@ -39,7 +40,7 @@ def main():
     if not videos:
         print("⚠️ 다운로드된 비디오가 없습니다.")
         if email_enabled:
-            send_email(
+            send_email_notification(
                 subject="[AAGAG 자동화] 콘텐츠 없음",
                 body="오늘 수집된 새로운 비디오가 없습니다.",
                 sender_email=sender_email,
@@ -92,7 +93,7 @@ def main():
             
             # 3. YouTube 업로드
             print("  📤 YouTube 업로드 중...")
-            upload_success = upload_to_youtube(
+            upload_success = uploader.upload_video(
                 video_path=video_path,
                 title=title,
                 description=description
@@ -123,7 +124,7 @@ def main():
     # 이메일 전송
     if email_enabled:
         result_text = "\n".join(results)
-        send_email(
+        send_email_notification(
             subject=f"[AAGAG 자동화] 처리 완료 ({success_count}개 성공)",
             body=f"처리 결과:\n\n{result_text}\n\n성공: {success_count}개\n실패: {fail_count}개",
             sender_email=sender_email,
