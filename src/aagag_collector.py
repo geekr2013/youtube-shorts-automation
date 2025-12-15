@@ -3,6 +3,7 @@ import json
 import requests
 import time
 import subprocess
+import re
 from playwright.sync_api import sync_playwright
 from urllib.parse import urljoin
 
@@ -35,6 +36,32 @@ class AAGAGCollector:
         with open(self.history_file, 'w', encoding='utf-8') as f:
             json.dump(list(self.downloaded_ids), f, ensure_ascii=False, indent=2)
     
+    def extract_title_and_type(self, raw_text):
+        """
+        원본 텍스트에서 제목과 파일 타입 추출
+        
+        예: "재미있어 보이는 에어홀 놀이.gif2.3 MB767010124시간전"
+        -> ("재미있어 보이는 에어홀 놀이", "gif")
+        
+        Args:
+            raw_text: 원본 게시물 텍스트
+            
+        Returns:
+            tuple: (제목, 파일타입) 또는 (None, None)
+        """
+        # .mp4 또는 .gif 패턴 찾기 (대소문자 무시)
+        mp4_match = re.search(r'(.+?)\.mp4', raw_text, re.IGNORECASE)
+        gif_match = re.search(r'(.+?)\.gif', raw_text, re.IGNORECASE)
+        
+        if mp4_match:
+            title = mp4_match.group(1).strip()
+            return (title, "mp4")
+        elif gif_match:
+            title = gif_match.group(1).strip()
+            return (title, "gif")
+        
+        return (None, None)
+    
     def collect_posts(self, max_posts=50):
         """
         AAGAG 메인 페이지에서 게시물 링크 수집
@@ -65,27 +92,24 @@ class AAGAGCollector:
                 for link in article_links[:max_posts]:
                     try:
                         href = link.get_attribute("href")
-                        title = link.inner_text().strip()
+                        raw_text = link.inner_text().strip()
                         
-                        if href and title:
+                        if href and raw_text:
                             full_url = urljoin(self.base_url, href)
                             
-                            # .mp4 또는 .gif 파일 필터링
-                            title_lower = title.lower()
-                            if title_lower.endswith('.mp4'):
+                            # 제목과 파일 타입 추출
+                            title, file_type = self.extract_title_and_type(raw_text)
+                            
+                            if title and file_type:
                                 posts.append({
                                     "url": full_url,
-                                    "title": title,
-                                    "type": "mp4"
+                                    "title": f"{title}.{file_type}",  # 확장자 포함
+                                    "type": file_type
                                 })
-                                print(f"  🎬 [MP4] {title[:50]}... ({full_url})")
-                            elif title_lower.endswith('.gif'):
-                                posts.append({
-                                    "url": full_url,
-                                    "title": title,
-                                    "type": "gif"
-                                })
-                                print(f"  🖼️ [GIF] {title[:50]}... ({full_url})")
+                                
+                                emoji = "🎬" if file_type == "mp4" else "🖼️"
+                                print(f"  {emoji} [{file_type.upper()}] {title[:40]}...")
+                                
                     except Exception as e:
                         print(f"  ⚠️ 게시물 파싱 실패: {e}")
                         continue
@@ -132,7 +156,6 @@ class AAGAGCollector:
                     # 정규식 백업
                     content = page.content()
                     if "i.aagag.com" in content and ".mp4" in content:
-                        import re
                         pattern = r'https://i\.aagag\.com/[A-Za-z0-9]+\.mp4'
                         matches = re.findall(pattern, content)
                         if matches:
@@ -154,7 +177,6 @@ class AAGAGCollector:
                     # 정규식 백업
                     content = page.content()
                     if "i.aagag.com" in content and ".gif" in content:
-                        import re
                         pattern = r'https://i\.aagag\.com/[A-Za-z0-9]+\.gif'
                         matches = re.findall(pattern, content)
                         if matches:
