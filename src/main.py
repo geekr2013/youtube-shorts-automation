@@ -2,12 +2,14 @@
 AAGAG 숏폼 자동화 메인 스크립트
 - AAGAG 크롤링
 - 원본 제목/설명 사용 (Gemini 제거)
+- 모든 영상을 세로형(9:16)으로 변환
 - YouTube Shorts 업로드
 """
 
 import os
 import sys
 import re
+import subprocess
 from pathlib import Path
 import logging
 
@@ -83,6 +85,10 @@ def create_metadata_from_title(title: str, source_url: str = "") -> dict:
     # 앞뒤 공백 제거
     clean_title = clean_title.strip()
     
+    # 빈 제목 방지
+    if not clean_title or len(clean_title) < 2:
+        clean_title = "오늘의 핫 이슈 영상"
+    
     # 설명 생성
     description = f"{clean_title}\n\n"
     if source_url:
@@ -97,6 +103,101 @@ def create_metadata_from_title(title: str, source_url: str = "") -> dict:
         'description': description,
         'tags': tags
     }
+
+
+def convert_to_shorts_format(video_path: str) -> str:
+    """
+    영상을 YouTube Shorts 세로 포맷(1080x1920)으로 변환
+    
+    Args:
+        video_path: 원본 영상 경로
+        
+    Returns:
+        변환된 영상 경로
+    """
+    try:
+        video_path = Path(video_path)
+        output_path = video_path.parent / f"{video_path.stem}_shorts{video_path.suffix}"
+        
+        logger.info(f"   🎬 Shorts 포맷으로 변환 중...")
+        
+        # ffprobe로 원본 영상 정보 확인
+        probe_cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-select_streams', 'v:0',
+            '-show_entries', 'stream=width,height',
+            '-of', 'csv=s=x:p=0',
+            str(video_path)
+        ]
+        
+        result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
+        width, height = map(int, result.stdout.strip().split('x'))
+        
+        aspect_ratio = width / height
+        logger.info(f"   📐 원본 크기: {width}x{height} (비율: {aspect_ratio:.2f})")
+        
+        # YouTube Shorts 포맷: 1080x1920 (9:16)
+        target_width = 1080
+        target_height = 1920
+        
+        # 이미 세로형인 경우 (9:16 비율)
+        if 0.5 <= aspect_ratio <= 0.6:
+            logger.info(f"   ✅ 이미 세로형 영상입니다 (스킵)")
+            return str(video_path)
+        
+        # 가로형 영상인 경우: 위아래에 블러 배경 추가
+        if aspect_ratio > 1:
+            logger.info(f"   🔄 가로형 영상 → 세로형 변환 (블러 배경 추가)")
+            
+            ffmpeg_cmd = [
+                'ffmpeg',
+                '-i', str(video_path),
+                '-filter_complex',
+                f'[0:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,'
+                f'boxblur=20:5,'
+                f'setsar=1[bg];'
+                f'[0:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,'
+                f'setsar=1[fg];'
+                f'[bg][fg]overlay=(W-w)/2:(H-h)/2',
+                '-c:v', 'libx264',
+                '-preset', 'medium',
+                '-crf', '23',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-movflags', '+faststart',
+                '-y',
+                str(output_path)
+            ]
+        else:
+            # 정사각형 또는 세로에 가까운 경우: 단순 패딩
+            logger.info(f"   🔄 영상 크기 조정 중...")
+            
+            ffmpeg_cmd = [
+                'ffmpeg',
+                '-i', str(video_path),
+                '-vf', f'scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,'
+                       f'pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black,'
+                       f'setsar=1',
+                '-c:v', 'libx264',
+                '-preset', 'medium',
+                '-crf', '23',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-movflags', '+faststart',
+                '-y',
+                str(output_path)
+            ]
+        
+        subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
+        
+        logger.info(f"   ✅ 변환 완료: {output_path.name}\n")
+        return str(output_path)
+        
+    except Exception as e:
+        logger.warning(f"   ⚠️ 포맷 변환 실패: {e}")
+        logger.warning(f"   ⚠️ 원본 영상 사용\n")
+        return str(video_path)
 
 
 def main():
@@ -151,7 +252,7 @@ def main():
             logger.info(f"{'='*70}\n")
             
             video_path = video.get('video_path')
-            original_title = video.get('title', '무제')
+            original_title = video.get('title', '오늘의 핫 이슈 영상')
             source_url = video.get('source_url', '')
             
             if not video_path or not os.path.exists(video_path):
@@ -159,8 +260,8 @@ def main():
                 continue
             
             try:
-                # 3-1. 원본 제목 기반 메타데이터 생성 (Gemini 제거)
-                logger.info("📝 원본 제목 기반 메타데이터 생성 중...")
+                # 3-1. 원본 제목 기반 메타데이터 생성
+                logger.info("📝 메타데이터 생성 중...")
                 metadata = create_metadata_from_title(original_title, source_url)
                 
                 title = metadata['title']
@@ -171,22 +272,25 @@ def main():
                 logger.info(f"   ✅ 설명: {description[:50]}...")
                 logger.info(f"   ✅ 태그: {', '.join(tags[:5])}...\n")
                 
-                # 3-2. 배경음악 추가 (선택)
-                final_video_path = video_path
+                # 3-2. Shorts 포맷 변환 (세로형 1080x1920)
+                shorts_video_path = convert_to_shorts_format(video_path)
+                
+                # 3-3. 배경음악 추가 (선택)
+                final_video_path = shorts_video_path
                 if enable_bgm and os.path.exists(bgm_path):
                     logger.info("🎵 배경음악 추가 중...")
                     try:
                         final_video_path = add_background_music(
-                            video_path=video_path,
+                            video_path=shorts_video_path,
                             music_path=bgm_path
                         )
                         logger.info(f"   ✅ 배경음악 추가 완료\n")
                     except Exception as e:
                         logger.warning(f"   ⚠️ 배경음악 추가 실패: {e}")
                         logger.warning(f"   ⚠️ 원본 영상 사용\n")
-                        final_video_path = video_path
+                        final_video_path = shorts_video_path
                 
-                # 3-3. YouTube 업로드
+                # 3-4. YouTube 업로드
                 if uploader.authenticated:
                     logger.info("📤 YouTube 업로드 중...")
                     result = uploader.upload_video(
