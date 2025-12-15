@@ -34,29 +34,24 @@ class AAGAGCollector:
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
                 
-                # 메인 페이지 접속
                 page.goto(self.base_url, wait_until='domcontentloaded', timeout=30000)
                 page.wait_for_timeout(2000)
                 
-                # 게시물 링크 수집
                 post_links = page.query_selector_all('a.list-group-item')
                 print(f"📋 발견된 게시물: {len(post_links)}개")
                 
                 for i, link in enumerate(post_links[:max_posts]):
                     try:
-                        # 게시물 URL 추출
                         href = link.get_attribute('href')
                         if not href or '?idx=' not in href:
                             continue
                         
                         post_id = href.split('?idx=')[1].split('&')[0]
                         
-                        # 이미 다운로드한 게시물은 스킵
                         if post_id in self.downloaded_ids:
                             print(f"⏭️  [{i+1}] 이미 다운로드됨: {post_id}")
                             continue
                         
-                        # 제목 추출
                         title_elem = link.query_selector('.subject')
                         title = title_elem.inner_text().strip() if title_elem else f"AAGAG_{post_id}"
                         
@@ -94,11 +89,9 @@ class AAGAGCollector:
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
                 
-                # 게시물 페이지 접속
                 page.goto(post_url, wait_until='domcontentloaded', timeout=30000)
                 page.wait_for_timeout(2000)
                 
-                # 비디오 URL 추출 (video 태그의 src)
                 video_element = page.query_selector('video source')
                 if not video_element:
                     video_element = page.query_selector('video')
@@ -114,7 +107,6 @@ class AAGAGCollector:
                     browser.close()
                     return None
                 
-                # 상대 경로를 절대 경로로 변환
                 if video_url.startswith('//'):
                     video_url = 'https:' + video_url
                 elif video_url.startswith('/'):
@@ -124,11 +116,9 @@ class AAGAGCollector:
                 
                 browser.close()
                 
-                # 비디오 다운로드
                 response = requests.get(video_url, stream=True, timeout=30)
                 response.raise_for_status()
                 
-                # 파일 저장
                 file_extension = '.mp4'
                 if '.webm' in video_url:
                     file_extension = '.webm'
@@ -142,7 +132,6 @@ class AAGAGCollector:
                 file_size = video_path.stat().st_size / (1024 * 1024)
                 print(f"✅ 다운로드 완료: {video_path.name} ({file_size:.2f} MB)")
                 
-                # 다운로드 기록 저장
                 self.downloaded_ids.add(post_id)
                 self._save_history()
                 
