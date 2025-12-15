@@ -33,7 +33,7 @@ class ContentProcessor:
             api_key: Google Gemini API 키
         """
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')  # 수정: 최신 모델명
         print("✅ Gemini API 초기화 완료")
         
         # 폰트 경로 찾기
