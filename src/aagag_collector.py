@@ -1,6 +1,6 @@
 """
-AAGAG 콘텐츠 수집기 - 최종 안정 버전
-제목 필터링 없이 모든 게시물의 실제 다운로드 링크 확인
+AAGAG 콘텐츠 수집기 - 갤러리 페이지 지원 버전
+여러 개의 비디오/GIF가 있는 경우 모두 수집
 """
 
 import os
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class AAGAGCollector:
-    """AAGAG 사이트 크롤러 - 실제 다운로드 링크 기반"""
+    """AAGAG 사이트 크롤러 - 갤러리 지원"""
     
     def __init__(self, base_url: str = "https://aagag.com/issue/"):
         self.base_url = base_url
@@ -47,7 +47,7 @@ class AAGAGCollector:
     
     def collect_and_download(self, max_videos: int = 5) -> List[Dict]:
         """
-        게시물 수집 및 다운로드
+        게시물 수집 및 다운로드 (갤러리 지원)
         
         Args:
             max_videos: 최대 수집 개수
@@ -79,15 +79,11 @@ class AAGAGCollector:
                 
                 logger.info(f"✅ 발견한 게시물 링크: {len(post_links)}개")
                 
-                # 2. 각 게시물 방문하여 실제 다운로드 링크 확인
+                # 2. 각 게시물 방문하여 모든 다운로드 링크 확인
                 checked_count = 0
                 for post_url in post_links:
                     if len(collected_videos) >= max_videos:
                         break
-                    
-                    # 이미 다운로드한 게시물 스킵
-                    if post_url in self.downloaded_urls:
-                        continue
                     
                     checked_count += 1
                     logger.info(f"🔍 [{checked_count}/{len(post_links)}] 게시물 확인 중: {post_url}")
@@ -95,47 +91,60 @@ class AAGAGCollector:
                     try:
                         # 게시물 상세 페이지 방문
                         page.goto(post_url, wait_until="domcontentloaded", timeout=15000)
-                        page.wait_for_timeout(1000)
+                        page.wait_for_timeout(1500)
                         
-                        # 실제 다운로드 링크 찾기
-                        download_url = self._extract_download_url(page)
+                        # 모든 미디어 URL 추출 (갤러리 지원)
+                        media_urls = self._extract_all_media_urls(page)
                         
-                        if download_url:
-                            # MP4 또는 GIF인지 확인
-                            file_ext = self._get_file_extension(download_url)
+                        if media_urls:
+                            logger.info(f"   📦 발견한 미디어: {len(media_urls)}개")
                             
-                            if file_ext in ['.mp4', '.gif']:
-                                # 제목 추출 (게시물 페이지의 실제 제목)
-                                title = self._extract_title(page, download_url)
+                            # 각 미디어 처리
+                            for idx, media_url in enumerate(media_urls):
+                                if len(collected_videos) >= max_videos:
+                                    break
                                 
-                                logger.info(f"✅ 발견: {title} ({file_ext})")
+                                # 이미 다운로드한 URL 스킵
+                                if media_url in self.downloaded_urls:
+                                    logger.debug(f"   ⏭️ 이미 다운로드함: {media_url}")
+                                    continue
                                 
-                                # 다운로드
-                                video_path = self._download_file(download_url, title, file_ext)
+                                file_ext = self._get_file_extension(media_url)
                                 
-                                if video_path:
-                                    # GIF → MP4 변환
-                                    if file_ext == '.gif':
-                                        video_path = self._convert_gif_to_mp4(video_path)
+                                if file_ext in ['.mp4', '.gif']:
+                                    # 제목 생성 (여러 개인 경우 번호 추가)
+                                    base_title = self._extract_title(page, media_url)
+                                    if len(media_urls) > 1:
+                                        title = f"{base_title}_{idx+1}"
+                                    else:
+                                        title = base_title
                                     
-                                    collected_videos.append({
-                                        'title': title,
-                                        'video_path': str(video_path),
-                                        'source_url': post_url,
-                                        'download_url': download_url,
-                                        'type': file_ext
-                                    })
+                                    logger.info(f"   ✅ [{idx+1}/{len(media_urls)}] {title} ({file_ext})")
                                     
-                                    # 이력에 추가
-                                    self.downloaded_urls.add(post_url)
-                                    self._save_history()
-                            else:
-                                logger.debug(f"⏭️ 스킵 (지원하지 않는 형식): {file_ext}")
+                                    # 다운로드
+                                    video_path = self._download_file(media_url, title, file_ext)
+                                    
+                                    if video_path:
+                                        # GIF → MP4 변환
+                                        if file_ext == '.gif':
+                                            video_path = self._convert_gif_to_mp4(video_path)
+                                        
+                                        collected_videos.append({
+                                            'title': title,
+                                            'video_path': str(video_path),
+                                            'source_url': post_url,
+                                            'download_url': media_url,
+                                            'type': file_ext
+                                        })
+                                        
+                                        # 이력에 추가
+                                        self.downloaded_urls.add(media_url)
+                                        self._save_history()
                         else:
-                            logger.debug(f"⏭️ 스킵 (다운로드 링크 없음)")
+                            logger.debug(f"   ⏭️ 스킵 (미디어 없음)")
                     
                     except Exception as e:
-                        logger.warning(f"⚠️ 게시물 처리 실패: {e}")
+                        logger.warning(f"   ⚠️ 게시물 처리 실패: {e}")
                         continue
                 
                 logger.info(f"\n✅ 비디오/GIF 게시물 {len(collected_videos)}개 수집 완료")
@@ -148,37 +157,84 @@ class AAGAGCollector:
         
         return collected_videos
     
-    def _extract_download_url(self, page) -> Optional[str]:
-        """게시물 페이지에서 실제 다운로드 URL 추출"""
+    def _extract_all_media_urls(self, page) -> List[str]:
+        """
+        게시물 페이지에서 모든 미디어 URL 추출 (갤러리 지원)
+        
+        Returns:
+            미디어 URL 리스트 (중복 제거됨)
+        """
+        media_urls = []
+        
         try:
-            # 방법 1: i.aagag.com 직접 링크 찾기
-            links = page.eval_on_selector_all(
-                'a',
-                'elements => elements.map(e => e.href)'
+            # 방법 1: <img> 태그에서 i.aagag.com 이미지/GIF 찾기
+            img_sources = page.eval_on_selector_all(
+                'img',
+                '''elements => elements
+                    .map(e => e.src)
+                    .filter(src => src && src.includes('i.aagag.com'))
+                '''
             )
             
-            for link in links:
-                if 'i.aagag.com' in link and (link.endswith('.mp4') or link.endswith('.gif')):
-                    return link
+            for src in img_sources:
+                # 썸네일/미니 이미지 제외, 실제 파일만
+                if '/mini/' not in src and '/200x170/' not in src:
+                    # .jpg를 .gif나 .mp4로 변환 시도
+                    if src.endswith('.jpg'):
+                        # 같은 파일명의 .gif와 .mp4 시도
+                        base_url = src.rsplit('.', 1)[0]
+                        media_urls.append(f"{base_url}.gif")
+                        media_urls.append(f"{base_url}.mp4")
+                    else:
+                        media_urls.append(src)
             
-            # 방법 2: 페이지 소스에서 정규식으로 찾기
+            # 방법 2: 페이지 소스에서 직접 i.aagag.com 링크 찾기
             content = page.content()
-            patterns = [
-                r'https://i\.aagag\.com/[A-Za-z0-9]+\.(mp4|gif)',
-                r'href="(https://i\.aagag\.com/[^"]+\.(mp4|gif))"',
-                r"src='(https://i\.aagag\.com/[^']+\.(mp4|gif))'"
-            ]
             
-            for pattern in patterns:
-                match = re.search(pattern, content)
-                if match:
-                    return match.group(1) if match.lastindex else match.group(0)
+            # MP4 패턴
+            mp4_pattern = r'https://i\.aagag\.com/[A-Za-z0-9]+\.mp4'
+            mp4_matches = re.findall(mp4_pattern, content)
+            media_urls.extend(mp4_matches)
             
-            return None
+            # GIF 패턴
+            gif_pattern = r'https://i\.aagag\.com/[A-Za-z0-9]+\.gif'
+            gif_matches = re.findall(gif_pattern, content)
+            media_urls.extend(gif_matches)
+            
+            # 방법 3: <a> 태그의 href 확인
+            links = page.eval_on_selector_all(
+                'a',
+                '''elements => elements
+                    .map(e => e.href)
+                    .filter(href => href && href.includes('i.aagag.com') && 
+                           (href.endsWith('.mp4') || href.endsWith('.gif')))
+                '''
+            )
+            media_urls.extend(links)
+            
+            # 중복 제거 및 정렬
+            unique_urls = list(dict.fromkeys(media_urls))
+            
+            # 실제 존재 여부 확인 (HEAD 요청)
+            valid_urls = []
+            for url in unique_urls:
+                if self._check_url_exists(url):
+                    valid_urls.append(url)
+            
+            return valid_urls
         
         except Exception as e:
-            logger.debug(f"다운로드 URL 추출 실패: {e}")
-            return None
+            logger.debug(f"미디어 URL 추출 실패: {e}")
+            return []
+    
+    def _check_url_exists(self, url: str) -> bool:
+        """URL이 실제로 존재하는지 확인 (HEAD 요청)"""
+        try:
+            import requests
+            response = requests.head(url, timeout=5, allow_redirects=True)
+            return response.status_code == 200
+        except:
+            return False
     
     def _get_file_extension(self, url: str) -> str:
         """URL에서 파일 확장자 추출"""
@@ -221,7 +277,7 @@ class AAGAGCollector:
                 filepath = self.download_dir / filename
                 counter += 1
             
-            logger.info(f"📥 다운로드 중: {filename}")
+            logger.info(f"      📥 다운로드 중: {filename}")
             
             response = requests.get(url, timeout=30)
             response.raise_for_status()
@@ -229,11 +285,12 @@ class AAGAGCollector:
             with open(filepath, 'wb') as f:
                 f.write(response.content)
             
-            logger.info(f"✅ 다운로드 완료: {filepath} ({len(response.content) / 1024 / 1024:.2f} MB)")
+            size_mb = len(response.content) / 1024 / 1024
+            logger.info(f"      ✅ 완료: {filepath.name} ({size_mb:.2f} MB)")
             return filepath
         
         except Exception as e:
-            logger.error(f"❌ 다운로드 실패: {e}")
+            logger.error(f"      ❌ 다운로드 실패: {e}")
             return None
     
     def _convert_gif_to_mp4(self, gif_path: Path) -> Path:
@@ -243,7 +300,7 @@ class AAGAGCollector:
             
             mp4_path = gif_path.with_suffix('.mp4')
             
-            logger.info(f"🔄 GIF → MP4 변환 중: {gif_path.name}")
+            logger.info(f"      🔄 GIF → MP4 변환 중...")
             
             # YouTube Shorts 호환 설정
             cmd = [
@@ -264,11 +321,11 @@ class AAGAGCollector:
             # 원본 GIF 삭제
             gif_path.unlink()
             
-            logger.info(f"✅ 변환 완료: {mp4_path.name}")
+            logger.info(f"      ✅ 변환 완료: {mp4_path.name}")
             return mp4_path
         
         except Exception as e:
-            logger.error(f"❌ GIF 변환 실패: {e}")
+            logger.error(f"      ❌ GIF 변환 실패: {e}")
             return gif_path
 
 
