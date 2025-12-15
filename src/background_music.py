@@ -1,77 +1,72 @@
+from pathlib import Path
 import subprocess
-import os
-import json
 
-class BackgroundMusicAdder:
-    def __init__(self, music_dir='data/music'):
-        """배경음악 디렉토리"""
-        self.music_dir = music_dir
-        os.makedirs(music_dir, exist_ok=True)
+def add_background_music(video_path, music_path, output_path=None):
+    """
+    비디오에 배경음악 추가
     
-    def add_background_music(self, video_path, music_path, output_path, volume=0.2):
-        """비디오에 배경음악 추가"""
-        try:
-            if not os.path.exists(music_path):
-                print(f"⚠️ 배경음악 파일 없음: {music_path}")
-                return video_path
-            
-            print(f"🎵 배경음악 추가 중...")
-            
-            # 비디오 길이 확인
-            duration = self._get_video_duration(video_path)
-            
-            # ffmpeg 명령어: 배경음악을 비디오 길이에 맞춰 반복하고 볼륨 조절
-            cmd = [
-                'ffmpeg',
-                '-i', video_path,
+    Args:
+        video_path: 원본 비디오 파일 경로
+        music_path: 배경음악 파일 경로
+        output_path: 출력 파일 경로 (기본값: 원본_with_music.mp4)
+        
+    Returns:
+        출력 파일 경로
+    """
+    video_path = Path(video_path)
+    music_path = Path(music_path)
+    
+    if output_path is None:
+        output_path = video_path.parent / f"{video_path.stem}_with_music{video_path.suffix}"
+    else:
+        output_path = Path(output_path)
+    
+    try:
+        # 비디오 길이 확인
+        result = subprocess.run(
+            [
+                'ffprobe', '-v', 'error',
+                '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                str(video_path)
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        video_duration = float(result.stdout.strip())
+        
+        print(f"🎬 비디오 길이: {video_duration:.2f}초")
+        
+        # 배경음악 추가 (비디오 길이만큼 반복/자르기)
+        subprocess.run(
+            [
+                'ffmpeg', '-y',
+                '-i', str(video_path),
                 '-stream_loop', '-1',  # 음악 무한 반복
-                '-i', music_path,
-                '-filter_complex',
-                f'[1:a]volume={volume},atrim=0:{duration},asetpts=PTS-STARTPTS[bg]',
-                '-map', '0:v',
-                '-map', '[bg]',
-                '-c:v', 'libx264',
-                '-c:a', 'aac',
-                '-shortest',
-                '-y',
-                output_path
-            ]
-            
-            result = subprocess.run(
-                cmd, 
-                capture_output=True, 
-                text=True,
-                timeout=120
-            )
-            
-            if result.returncode == 0 and os.path.exists(output_path):
-                print(f"✅ 배경음악 추가 완료: {output_path}")
-                return output_path
-            else:
-                print(f"⚠️ 배경음악 추가 실패, 원본 사용")
-                return video_path
+                '-i', str(music_path),
+                '-t', str(video_duration),  # 비디오 길이만큼만
+                '-c:v', 'copy',  # 비디오 코덱 복사 (재인코딩 안함)
+                '-c:a', 'aac',  # 오디오 AAC 코덱
+                '-b:a', '128k',  # 오디오 비트레이트
+                '-filter_complex', '[1:a]volume=0.3[a]',  # 배경음악 볼륨 30%
+                '-map', '0:v',  # 비디오 스트림
+                '-map', '[a]',  # 오디오 스트림
+                '-shortest',  # 짧은 쪽에 맞춤
+                str(output_path)
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
+        )
         
-        except Exception as e:
-            print(f"❌ 배경음악 추가 오류: {str(e)}")
-            return video_path
-    
-    def _get_video_duration(self, video_path):
-        """비디오 길이(초) 반환"""
-        try:
-            cmd = [
-                'ffprobe',
-                '-v', 'quiet',
-                '-print_format', 'json',
-                '-show_format',
-                video_path
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            data = json.loads(result.stdout)
-            duration = float(data['format']['duration'])
-            print(f"⏱️ 비디오 길이: {duration:.1f}초")
-            return duration
+        print(f"✅ 배경음악 추가 완료: {output_path.name}")
+        return output_path
         
-        except:
-            print(f"⚠️ 비디오 길이 감지 실패, 기본값 60초 사용")
-            return 60
+    except subprocess.CalledProcessError as e:
+        print(f"❌ FFmpeg 오류: {e.stderr.decode('utf-8', errors='ignore')}")
+        return video_path  # 실패 시 원본 반환
+    except Exception as e:
+        print(f"❌ 배경음악 추가 실패: {str(e)}")
+        return video_path  # 실패 시 원본 반환
