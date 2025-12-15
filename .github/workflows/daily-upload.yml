@@ -1,22 +1,22 @@
-name: Daily GagConcert Upload
+name: Daily AAGAG Upload
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 자정 (UTC)
+    - cron: '0 0 * * *'  # 매일 자정 (UTC) = 한국 시간 오전 9시
   workflow_dispatch:  # 수동 실행 가능
 
 jobs:
   run-upload:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Git push 권한 추가
+      contents: write  # Git push 권한
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true  # Git push 권한 유지
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -26,7 +26,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-nanum
+          sudo apt-get install -y ffmpeg fonts-nanum fonts-nanum-coding
           sudo fc-cache -fv
 
       - name: Install Python dependencies
@@ -44,14 +44,15 @@ jobs:
           mkdir -p data/videos
           mkdir -p data/music
 
-      - name: Run automation
+      - name: Run AAGAG automation
         env:
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
-          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+          NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
+          ENABLE_BGM: 'false'
         run: python src/main.py
 
       - name: Commit and push changes
