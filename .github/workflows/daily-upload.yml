@@ -1,4 +1,4 @@
-name: Daily GagConcert Upload
+name: Daily AAGAG Shorts Upload
 
 on:
   schedule:
@@ -44,8 +44,9 @@ jobs:
       
       - name: Run automation
         env:
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          YOUTUBE_DATA_API_KEY: ${{ secrets.YOUTUBE_DATA_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
@@ -59,5 +60,6 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add data/download_history.json || true
-          git diff --staged --quiet || git commit -m "Update download history [skip ci]" || true
+          git add data/youtube_token.pickle || true
+          git diff --staged --quiet || git commit -m "Update automation data [skip ci]" || true
           git push || true
