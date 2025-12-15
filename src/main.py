@@ -1,13 +1,13 @@
 """
 AAGAG 숏폼 자동화 메인 스크립트
 - AAGAG 크롤링
-- Gemini AI 제목/설명 생성
-- 배경음악 추가 (선택)
+- 원본 제목/설명 사용 (Gemini 제거)
 - YouTube Shorts 업로드
 """
 
 import os
 import sys
+import re
 from pathlib import Path
 import logging
 
@@ -22,13 +22,81 @@ logger = logging.getLogger(__name__)
 try:
     from aagag_collector import AAGAGCollector
     from youtube_uploader import YouTubeUploader
-    from content_processor_gemini import ContentProcessor
     from email_notifier import send_email_notification
     from background_music import add_background_music
     logger.info("✅ 모듈 임포트 완료")
 except ImportError as e:
     logger.error(f"❌ 모듈 임포트 실패: {e}")
     sys.exit(1)
+
+
+def extract_keywords_from_title(title: str, max_keywords: int = 8) -> list:
+    """
+    제목에서 키워드 추출하여 태그 생성
+    
+    Args:
+        title: 원본 제목
+        max_keywords: 최대 키워드 개수
+        
+    Returns:
+        키워드 리스트
+    """
+    # 기본 태그
+    base_tags = ['shorts', '숏츠', '쇼츠']
+    
+    # 제목을 공백/특수문자로 분리
+    words = re.findall(r'[가-힣a-zA-Z0-9]+', title)
+    
+    # 2글자 이상의 단어만 선택
+    keywords = [word for word in words if len(word) >= 2]
+    
+    # 중복 제거
+    keywords = list(dict.fromkeys(keywords))
+    
+    # 최대 개수 제한
+    keywords = keywords[:max_keywords - len(base_tags)]
+    
+    # 기본 태그와 합치기
+    return base_tags + keywords
+
+
+def create_metadata_from_title(title: str, source_url: str = "") -> dict:
+    """
+    원본 제목에서 메타데이터 생성 (Gemini 없이)
+    
+    Args:
+        title: 원본 제목
+        source_url: 출처 URL
+        
+    Returns:
+        메타데이터 딕셔너리
+    """
+    # 제목 정리 (파일명에서 추출된 경우 처리)
+    clean_title = title
+    
+    # 파일 확장자 제거
+    clean_title = re.sub(r'\.(mp4|gif|webm)$', '', clean_title, flags=re.IGNORECASE)
+    
+    # 숫자 접미사 제거 (예: _1, _2)
+    clean_title = re.sub(r'_\d+$', '', clean_title)
+    
+    # 앞뒤 공백 제거
+    clean_title = clean_title.strip()
+    
+    # 설명 생성
+    description = f"{clean_title}\n\n"
+    if source_url:
+        description += f"출처: AAGAG\n{source_url}\n\n"
+    description += "#shorts #숏츠 #쇼츠"
+    
+    # 태그 생성
+    tags = extract_keywords_from_title(clean_title)
+    
+    return {
+        'title': clean_title,
+        'description': description,
+        'tags': tags
+    }
 
 
 def main():
@@ -39,7 +107,6 @@ def main():
     
     try:
         # 0. 환경 변수 확인
-        gemini_api_key = os.getenv('GEMINI_API_KEY')
         gmail_user = os.getenv('GMAIL_USERNAME')
         notification_email = os.getenv('NOTIFICATION_EMAIL')
         enable_bgm = os.getenv('ENABLE_BGM', 'false').lower() == 'true'
@@ -53,19 +120,7 @@ def main():
         else:
             logger.info("✅ YouTube 업로더 준비 완료\n")
         
-        # 2. Gemini AI 프로세서 초기화
-        processor = None
-        if gemini_api_key:
-            try:
-                processor = ContentProcessor(api_key=gemini_api_key)
-                logger.info("✅ Gemini AI 프로세서 준비 완료\n")
-            except Exception as e:
-                logger.warning(f"⚠️ Gemini 초기화 실패: {e}")
-                logger.warning("⚠️ 기본 제목/설명 사용\n")
-        else:
-            logger.warning("⚠️ GEMINI_API_KEY 없음 - 기본 제목/설명 사용\n")
-        
-        # 3. AAGAG 콘텐츠 수집
+        # 2. AAGAG 콘텐츠 수집
         logger.info("📥 AAGAG 콘텐츠 수집 시작...\n")
         collector = AAGAGCollector()
         
@@ -87,7 +142,7 @@ def main():
         logger.info(f"\n✅ {len(videos)}개 비디오 수집 완료\n")
         logger.info("="*70 + "\n")
         
-        # 4. 각 비디오 처리 및 업로드
+        # 3. 각 비디오 처리 및 업로드
         upload_results = []
         
         for idx, video in enumerate(videos, 1):
@@ -97,35 +152,26 @@ def main():
             
             video_path = video.get('video_path')
             original_title = video.get('title', '무제')
+            source_url = video.get('source_url', '')
             
             if not video_path or not os.path.exists(video_path):
                 logger.warning(f"⚠️ 비디오 파일 없음: {video_path}\n")
                 continue
             
             try:
-                # 4-1. Gemini AI로 메타데이터 생성
-                if processor:
-                    logger.info("🤖 Gemini AI로 제목/설명 생성 중...")
-                    try:
-                        metadata = processor.generate_metadata(video_path)
-                        title = metadata.get('title', original_title)
-                        description = metadata.get('description', f'AAGAG에서 가져온 재미있는 영상입니다.\n\n{original_title}')
-                        tags = metadata.get('tags', ['shorts', '재미', 'aagag', '한국', '개그'])
-                        logger.info(f"   ✅ 제목: {title}")
-                        logger.info(f"   ✅ 설명: {description[:50]}...")
-                        logger.info(f"   ✅ 태그: {', '.join(tags)}\n")
-                    except Exception as e:
-                        logger.warning(f"   ⚠️ Gemini 생성 실패: {e}")
-                        logger.warning(f"   ⚠️ 기본 메타데이터 사용\n")
-                        title = original_title
-                        description = f'AAGAG에서 가져온 재미있는 영상입니다.\n\n원제: {original_title}\n출처: {video.get("source_url", "")}'
-                        tags = ['shorts', '재미', 'aagag', '한국']
-                else:
-                    title = original_title
-                    description = f'AAGAG에서 가져온 재미있는 영상입니다.\n\n원제: {original_title}\n출처: {video.get("source_url", "")}'
-                    tags = ['shorts', '재미', 'aagag', '한국']
+                # 3-1. 원본 제목 기반 메타데이터 생성 (Gemini 제거)
+                logger.info("📝 원본 제목 기반 메타데이터 생성 중...")
+                metadata = create_metadata_from_title(original_title, source_url)
                 
-                # 4-2. 배경음악 추가 (선택)
+                title = metadata['title']
+                description = metadata['description']
+                tags = metadata['tags']
+                
+                logger.info(f"   ✅ 제목: {title}")
+                logger.info(f"   ✅ 설명: {description[:50]}...")
+                logger.info(f"   ✅ 태그: {', '.join(tags[:5])}...\n")
+                
+                # 3-2. 배경음악 추가 (선택)
                 final_video_path = video_path
                 if enable_bgm and os.path.exists(bgm_path):
                     logger.info("🎵 배경음악 추가 중...")
@@ -140,7 +186,7 @@ def main():
                         logger.warning(f"   ⚠️ 원본 영상 사용\n")
                         final_video_path = video_path
                 
-                # 4-3. YouTube 업로드
+                # 3-3. YouTube 업로드
                 if uploader.authenticated:
                     logger.info("📤 YouTube 업로드 중...")
                     result = uploader.upload_video(
@@ -170,7 +216,7 @@ def main():
         
         logger.info("="*70 + "\n")
         
-        # 5. 결과 이메일 발송
+        # 4. 결과 이메일 발송
         if gmail_user and notification_email:
             success_count = sum(1 for r in upload_results if r.get('success'))
             
