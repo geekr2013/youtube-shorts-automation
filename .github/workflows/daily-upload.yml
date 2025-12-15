@@ -1,8 +1,9 @@
-name: Daily AAGAG Upload
+name: Daily AAGAG Upload (Optimized)
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 자정 (UTC) = 한국 시간 오전 9시
+    # 매일 한국 시간 오후 6시 (UTC 9시)
+    - cron: '0 9 * * *'
   workflow_dispatch:  # 수동 실행 가능
 
 jobs:
@@ -44,7 +45,7 @@ jobs:
           mkdir -p data/videos
           mkdir -p data/music
 
-      - name: Run AAGAG automation
+      - name: Run AAGAG automation (Optimized)
         env:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
