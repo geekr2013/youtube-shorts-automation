@@ -19,10 +19,10 @@ def main():
     # YouTube 업로더 초기화
     uploader = YouTubeUploader()
     
-    # 이메일 알림 초기화 (선택사항)
+    # 이메일 알림 초기화 (현재 Secrets 이름에 맞게 수정)
     email_notifier = None
-    if all([os.getenv('SMTP_SERVER'), os.getenv('SMTP_USERNAME'), 
-            os.getenv('SMTP_PASSWORD'), os.getenv('RECIPIENT_EMAIL')]):
+    if all([os.getenv('SENDER_EMAIL'), os.getenv('GMAIL_PASSWORD'), 
+            os.getenv('RECEIVER_EMAIL')]):
         email_notifier = EmailNotifier()
         print("📧 이메일 알림 활성화")
     
@@ -111,7 +111,7 @@ def main():
     print(f"❌ 실패: {len(failed_videos)}개")
     
     # 이메일 알림 전송
-    if email_notifier:
+    if email_notifier and len(processed_videos) > 0:
         email_body = f"""
 AAGAG 숏폼 자동화 결과
 
