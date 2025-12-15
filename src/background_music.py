@@ -2,17 +2,7 @@ from pathlib import Path
 import subprocess
 
 def add_background_music(video_path, music_path, output_path=None):
-    """
-    비디오에 배경음악 추가
-    
-    Args:
-        video_path: 원본 비디오 파일 경로
-        music_path: 배경음악 파일 경로
-        output_path: 출력 파일 경로 (기본값: 원본_with_music.mp4)
-        
-    Returns:
-        출력 파일 경로
-    """
+    """비디오에 배경음악 추가"""
     video_path = Path(video_path)
     music_path = Path(music_path)
     
@@ -22,7 +12,6 @@ def add_background_music(video_path, music_path, output_path=None):
         output_path = Path(output_path)
     
     try:
-        # 비디오 길이 확인
         result = subprocess.run(
             [
                 'ffprobe', '-v', 'error',
@@ -39,21 +28,20 @@ def add_background_music(video_path, music_path, output_path=None):
         
         print(f"🎬 비디오 길이: {video_duration:.2f}초")
         
-        # 배경음악 추가 (비디오 길이만큼 반복/자르기)
         subprocess.run(
             [
                 'ffmpeg', '-y',
                 '-i', str(video_path),
-                '-stream_loop', '-1',  # 음악 무한 반복
+                '-stream_loop', '-1',
                 '-i', str(music_path),
-                '-t', str(video_duration),  # 비디오 길이만큼만
-                '-c:v', 'copy',  # 비디오 코덱 복사 (재인코딩 안함)
-                '-c:a', 'aac',  # 오디오 AAC 코덱
-                '-b:a', '128k',  # 오디오 비트레이트
-                '-filter_complex', '[1:a]volume=0.3[a]',  # 배경음악 볼륨 30%
-                '-map', '0:v',  # 비디오 스트림
-                '-map', '[a]',  # 오디오 스트림
-                '-shortest',  # 짧은 쪽에 맞춤
+                '-t', str(video_duration),
+                '-c:v', 'copy',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-filter_complex', '[1:a]volume=0.3[a]',
+                '-map', '0:v',
+                '-map', '[a]',
+                '-shortest',
                 str(output_path)
             ],
             stdout=subprocess.PIPE,
@@ -66,7 +54,7 @@ def add_background_music(video_path, music_path, output_path=None):
         
     except subprocess.CalledProcessError as e:
         print(f"❌ FFmpeg 오류: {e.stderr.decode('utf-8', errors='ignore')}")
-        return video_path  # 실패 시 원본 반환
+        return video_path
     except Exception as e:
         print(f"❌ 배경음악 추가 실패: {str(e)}")
-        return video_path  # 실패 시 원본 반환
+        return video_path
