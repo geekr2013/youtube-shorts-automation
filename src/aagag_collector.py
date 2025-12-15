@@ -2,12 +2,13 @@ import os
 import json
 import requests
 import time
+import subprocess
 from playwright.sync_api import sync_playwright
 from urllib.parse import urljoin
 
 
 class AAGAGCollector:
-    """AAGAG 사이트에서 비디오를 수집하는 클래스"""
+    """AAGAG 사이트에서 비디오/GIF를 수집하는 클래스"""
     
     def __init__(self, download_dir="downloads", history_file="data/download_history.json"):
         self.download_dir = download_dir
@@ -42,7 +43,7 @@ class AAGAGCollector:
             max_posts: 수집할 최대 게시물 수
             
         Returns:
-            list: 게시물 정보 리스트 [{"url": "...", "title": "..."}]
+            list: 게시물 정보 리스트 [{"url": "...", "title": "...", "type": "mp4|gif"}]
         """
         print(f"📡 AAGAG 메인 페이지 크롤링 시작...")
         posts = []
@@ -69,18 +70,27 @@ class AAGAGCollector:
                         if href and title:
                             full_url = urljoin(self.base_url, href)
                             
-                            # .mp4 파일만 필터링
-                            if title.lower().endswith('.mp4'):
+                            # .mp4 또는 .gif 파일 필터링
+                            title_lower = title.lower()
+                            if title_lower.endswith('.mp4'):
                                 posts.append({
                                     "url": full_url,
-                                    "title": title
+                                    "title": title,
+                                    "type": "mp4"
                                 })
-                                print(f"  🎬 {title[:50]}... ({full_url})")
+                                print(f"  🎬 [MP4] {title[:50]}... ({full_url})")
+                            elif title_lower.endswith('.gif'):
+                                posts.append({
+                                    "url": full_url,
+                                    "title": title,
+                                    "type": "gif"
+                                })
+                                print(f"  🖼️ [GIF] {title[:50]}... ({full_url})")
                     except Exception as e:
                         print(f"  ⚠️ 게시물 파싱 실패: {e}")
                         continue
                 
-                print(f"✅ .mp4 비디오 게시물 {len(posts)}개 수집 완료")
+                print(f"✅ 비디오/GIF 게시물 {len(posts)}개 수집 완료")
                 
             except Exception as e:
                 print(f"❌ 크롤링 오류: {e}")
@@ -89,15 +99,16 @@ class AAGAGCollector:
         
         return posts
     
-    def get_video_download_url(self, post_url):
+    def get_media_download_url(self, post_url, media_type):
         """
-        개별 게시물 페이지에서 실제 비디오 다운로드 URL 추출
+        개별 게시물 페이지에서 실제 미디어 다운로드 URL 추출
         
         Args:
             post_url: 게시물 페이지 URL
+            media_type: 'mp4' or 'gif'
             
         Returns:
-            str: 비디오 다운로드 URL (없으면 None)
+            str: 미디어 다운로드 URL (없으면 None)
         """
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -108,29 +119,51 @@ class AAGAGCollector:
                 page.goto(post_url, timeout=30000)
                 page.wait_for_load_state("networkidle", timeout=10000)
                 
-                # 다운로드 링크 찾기 (https://i.aagag.com/*.mp4 패턴)
-                # 방법 1: a 태그에서 .mp4 링크 찾기
-                download_links = page.locator("a[href*='i.aagag.com'][href$='.mp4']").all()
-                
-                if download_links:
-                    video_url = download_links[0].get_attribute("href")
-                    print(f"    ✅ 비디오 URL 발견: {video_url}")
-                    browser.close()
-                    return video_url
-                
-                # 방법 2: 페이지 소스에서 i.aagag.com 링크 찾기
-                content = page.content()
-                if "i.aagag.com" in content and ".mp4" in content:
-                    import re
-                    pattern = r'https://i\.aagag\.com/[A-Za-z0-9]+\.mp4'
-                    matches = re.findall(pattern, content)
-                    if matches:
-                        video_url = matches[0]
-                        print(f"    ✅ 비디오 URL 발견 (정규식): {video_url}")
+                if media_type == "mp4":
+                    # MP4: i.aagag.com/*.mp4 패턴
+                    download_links = page.locator("a[href*='i.aagag.com'][href$='.mp4']").all()
+                    
+                    if download_links:
+                        media_url = download_links[0].get_attribute("href")
+                        print(f"    ✅ MP4 URL 발견: {media_url}")
                         browser.close()
-                        return video_url
+                        return media_url
+                    
+                    # 정규식 백업
+                    content = page.content()
+                    if "i.aagag.com" in content and ".mp4" in content:
+                        import re
+                        pattern = r'https://i\.aagag\.com/[A-Za-z0-9]+\.mp4'
+                        matches = re.findall(pattern, content)
+                        if matches:
+                            media_url = matches[0]
+                            print(f"    ✅ MP4 URL 발견 (정규식): {media_url}")
+                            browser.close()
+                            return media_url
                 
-                print(f"    ⚠️ 비디오 URL을 찾을 수 없습니다")
+                elif media_type == "gif":
+                    # GIF: i.aagag.com/*.gif 패턴
+                    download_links = page.locator("a[href*='i.aagag.com'][href$='.gif']").all()
+                    
+                    if download_links:
+                        media_url = download_links[0].get_attribute("href")
+                        print(f"    ✅ GIF URL 발견: {media_url}")
+                        browser.close()
+                        return media_url
+                    
+                    # 정규식 백업
+                    content = page.content()
+                    if "i.aagag.com" in content and ".gif" in content:
+                        import re
+                        pattern = r'https://i\.aagag\.com/[A-Za-z0-9]+\.gif'
+                        matches = re.findall(pattern, content)
+                        if matches:
+                            media_url = matches[0]
+                            print(f"    ✅ GIF URL 발견 (정규식): {media_url}")
+                            browser.close()
+                            return media_url
+                
+                print(f"    ⚠️ {media_type.upper()} URL을 찾을 수 없습니다")
                 
             except Exception as e:
                 print(f"    ❌ 게시물 페이지 파싱 오류: {e}")
@@ -139,29 +172,83 @@ class AAGAGCollector:
         
         return None
     
-    def download_video(self, video_url, title):
+    def convert_gif_to_mp4(self, gif_path):
         """
-        비디오 다운로드
+        GIF 파일을 MP4로 변환
         
         Args:
-            video_url: 비디오 다운로드 URL
-            title: 비디오 제목
+            gif_path: GIF 파일 경로
+            
+        Returns:
+            str: 변환된 MP4 파일 경로 (실패 시 None)
+        """
+        mp4_path = gif_path.replace('.gif', '.mp4')
+        
+        try:
+            print(f"    🔄 GIF → MP4 변환 중...")
+            
+            # ffmpeg로 GIF를 MP4로 변환 (고품질 설정)
+            cmd = [
+                'ffmpeg',
+                '-i', gif_path,
+                '-movflags', 'faststart',
+                '-pix_fmt', 'yuv420p',
+                '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',  # 짝수 크기로 조정
+                '-c:v', 'libx264',
+                '-preset', 'medium',
+                '-crf', '23',
+                '-y',  # 덮어쓰기
+                mp4_path
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=120
+            )
+            
+            if result.returncode == 0 and os.path.exists(mp4_path):
+                file_size = os.path.getsize(mp4_path) / (1024 * 1024)
+                print(f"    ✅ 변환 완료: {os.path.basename(mp4_path)} ({file_size:.2f} MB)")
+                
+                # 원본 GIF 삭제
+                os.remove(gif_path)
+                return mp4_path
+            else:
+                print(f"    ❌ 변환 실패: {result.stderr.decode()[:200]}")
+                return None
+                
+        except Exception as e:
+            print(f"    ❌ GIF 변환 오류: {e}")
+            return None
+    
+    def download_media(self, media_url, title, media_type):
+        """
+        미디어 다운로드 (MP4 또는 GIF)
+        
+        Args:
+            media_url: 미디어 다운로드 URL
+            title: 미디어 제목
+            media_type: 'mp4' or 'gif'
             
         Returns:
             str: 다운로드된 파일 경로 (실패 시 None)
         """
-        # 파일명 정리 (확장자 제거 후 .mp4 추가)
-        clean_title = title.replace('.mp4', '').replace('.MP4', '')
+        # 파일명 정리 (확장자 제거)
+        clean_title = title.replace('.mp4', '').replace('.MP4', '').replace('.gif', '').replace('.GIF', '')
         # 파일명에서 특수문자 제거
         clean_title = "".join(c for c in clean_title if c.isalnum() or c in (' ', '-', '_', '(', ')', '[', ']'))
         clean_title = clean_title.strip()[:100]  # 최대 100자
         
-        filename = f"{clean_title}.mp4"
+        # 원본 확장자로 다운로드
+        extension = '.gif' if media_type == 'gif' else '.mp4'
+        filename = f"{clean_title}{extension}"
         filepath = os.path.join(self.download_dir, filename)
         
         try:
             print(f"    ⬇️ 다운로드 중: {filename}")
-            response = requests.get(video_url, stream=True, timeout=60)
+            response = requests.get(media_url, stream=True, timeout=60)
             response.raise_for_status()
             
             with open(filepath, 'wb') as f:
@@ -170,6 +257,18 @@ class AAGAGCollector:
             
             file_size = os.path.getsize(filepath) / (1024 * 1024)  # MB
             print(f"    ✅ 다운로드 완료: {filename} ({file_size:.2f} MB)")
+            
+            # GIF인 경우 MP4로 변환
+            if media_type == 'gif':
+                mp4_path = self.convert_gif_to_mp4(filepath)
+                if mp4_path:
+                    return mp4_path
+                else:
+                    # 변환 실패 시 원본 GIF 삭제
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                    return None
+            
             return filepath
             
         except Exception as e:
@@ -180,7 +279,7 @@ class AAGAGCollector:
     
     def collect_and_download(self, max_videos=5):
         """
-        게시물 수집 및 비디오 다운로드
+        게시물 수집 및 미디어 다운로드
         
         Args:
             max_videos: 다운로드할 최대 비디오 수
@@ -189,7 +288,7 @@ class AAGAGCollector:
             list: 다운로드된 비디오 정보 [{"path": "...", "title": "..."}]
         """
         print(f"\n{'='*60}")
-        print(f"🚀 AAGAG 비디오 수집 시작 (최대 {max_videos}개)")
+        print(f"🚀 AAGAG 비디오/GIF 수집 시작 (최대 {max_videos}개)")
         print(f"{'='*60}\n")
         
         # 1. 게시물 수집
@@ -199,7 +298,7 @@ class AAGAGCollector:
             print("⚠️ 수집된 게시물이 없습니다.")
             return []
         
-        # 2. 비디오 다운로드
+        # 2. 미디어 다운로드
         downloaded_videos = []
         
         for i, post in enumerate(posts):
@@ -209,6 +308,7 @@ class AAGAGCollector:
             
             post_url = post["url"]
             title = post["title"]
+            media_type = post["type"]
             
             # 이미 다운로드한 게시물인지 확인
             post_id = post_url.split("idx=")[-1] if "idx=" in post_url else post_url
@@ -216,22 +316,23 @@ class AAGAGCollector:
                 print(f"\n[{i+1}/{len(posts)}] ⏭️ 이미 다운로드한 게시물: {title[:50]}...")
                 continue
             
-            print(f"\n[{i+1}/{len(posts)}] 🎬 처리 중: {title[:50]}...")
+            emoji = "🎬" if media_type == "mp4" else "🖼️"
+            print(f"\n[{i+1}/{len(posts)}] {emoji} [{media_type.upper()}] 처리 중: {title[:50]}...")
             
-            # 3. 비디오 다운로드 URL 추출
-            video_url = self.get_video_download_url(post_url)
+            # 3. 미디어 다운로드 URL 추출
+            media_url = self.get_media_download_url(post_url, media_type)
             
-            if not video_url:
-                print(f"    ⏭️ 건너뛰기 (비디오 URL 없음)")
+            if not media_url:
+                print(f"    ⏭️ 건너뛰기 (미디어 URL 없음)")
                 continue
             
-            # 4. 비디오 다운로드
-            filepath = self.download_video(video_url, title)
+            # 4. 미디어 다운로드 (GIF는 자동으로 MP4 변환)
+            filepath = self.download_media(media_url, title, media_type)
             
             if filepath:
                 downloaded_videos.append({
                     "path": filepath,
-                    "title": title.replace('.mp4', '').replace('.MP4', '')
+                    "title": title.replace('.mp4', '').replace('.MP4', '').replace('.gif', '').replace('.GIF', '')
                 })
                 
                 # 히스토리에 추가
