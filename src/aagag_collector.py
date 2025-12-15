@@ -1,11 +1,12 @@
 """
-AAGAG 콘텐츠 수집기 - 갤러리 페이지 지원 버전
+AAGAG 콘텐츠 수집기 - 갤러리 페이지 지원 + 한글 인코딩 강화 버전
 여러 개의 비디오/GIF가 있는 경우 모두 수집
 """
 
 import os
 import re
 import time
+import unicodedata
 from pathlib import Path
 from typing import List, Dict, Optional
 import logging
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class AAGAGCollector:
-    """AAGAG 사이트 크롤러 - 갤러리 지원"""
+    """AAGAG 사이트 크롤러 - 갤러리 지원 + 한글 안전 처리"""
     
     def __init__(self, base_url: str = "https://aagag.com/issue/"):
         self.base_url = base_url
@@ -32,7 +33,7 @@ class AAGAGCollector:
         if self.history_file.exists():
             import json
             try:
-                with open(self.history_file, 'r') as f:
+                with open(self.history_file, 'r', encoding='utf-8') as f:
                     return set(json.load(f))
             except:
                 return set()
@@ -42,8 +43,63 @@ class AAGAGCollector:
         """다운로드 이력 저장"""
         import json
         self.history_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.history_file, 'w') as f:
-            json.dump(list(self.downloaded_urls), f, indent=2)
+        with open(self.history_file, 'w', encoding='utf-8') as f:
+            json.dump(list(self.downloaded_urls), f, indent=2, ensure_ascii=False)
+    
+    def _normalize_korean_text(self, text: str) -> str:
+        """
+        한글 텍스트 정규화 (NFC 정규화 + 안전 처리)
+        
+        Args:
+            text: 원본 텍스트
+            
+        Returns:
+            정규화된 텍스트
+        """
+        if not text:
+            return ""
+        
+        # NFC 정규화 (한글 조합형 통일)
+        normalized = unicodedata.normalize('NFC', text)
+        
+        # 제어 문자 제거
+        normalized = ''.join(char for char in normalized if unicodedata.category(char)[0] != 'C')
+        
+        return normalized.strip()
+    
+    def _safe_filename(self, text: str, max_length: int = 50) -> str:
+        """
+        안전한 파일명 생성 (한글 보존)
+        
+        Args:
+            text: 원본 텍스트
+            max_length: 최대 길이
+            
+        Returns:
+            안전한 파일명
+        """
+        # 1. 한글 정규화
+        text = self._normalize_korean_text(text)
+        
+        # 2. 파일 시스템 금지 문자 제거 (Windows/Linux 호환)
+        forbidden_chars = r'[<>:"/\\|?*\x00-\x1f]'
+        safe_text = re.sub(forbidden_chars, '', text)
+        
+        # 3. 연속 공백을 하나로
+        safe_text = re.sub(r'\s+', ' ', safe_text)
+        
+        # 4. 앞뒤 공백 및 점 제거
+        safe_text = safe_text.strip('. ')
+        
+        # 5. 길이 제한 (바이트 기준이 아닌 문자 기준)
+        if len(safe_text) > max_length:
+            safe_text = safe_text[:max_length].strip()
+        
+        # 6. 빈 문자열 방지
+        if not safe_text:
+            safe_text = f"video_{int(time.time())}"
+        
+        return safe_text
     
     def collect_and_download(self, max_videos: int = 5) -> List[Dict]:
         """
@@ -77,7 +133,7 @@ class AAGAGCollector:
                     'elements => elements.map(e => e.href)'
                 )
                 
-                logger.info(f"✅ 발견한 게시물 링크: {len(post_links)}개")
+                logger.info(f"✅ 발견한 게시물 링크: {len(post_links)}개\n")
                 
                 # 2. 각 게시물 방문하여 모든 다운로드 링크 확인
                 checked_count = 0
@@ -86,7 +142,8 @@ class AAGAGCollector:
                         break
                     
                     checked_count += 1
-                    logger.info(f"🔍 [{checked_count}/{len(post_links)}] 게시물 확인 중: {post_url}")
+                    logger.info(f"🔍 [{checked_count}/{len(post_links)}] 게시물 확인 중")
+                    logger.info(f"   {post_url}")
                     
                     try:
                         # 게시물 상세 페이지 방문
@@ -140,17 +197,19 @@ class AAGAGCollector:
                                         # 이력에 추가
                                         self.downloaded_urls.add(media_url)
                                         self._save_history()
+                            
+                            logger.info("")  # 빈 줄
                         else:
-                            logger.debug(f"   ⏭️ 스킵 (미디어 없음)")
+                            logger.debug(f"   ⏭️ 스킵 (미디어 없음)\n")
                     
                     except Exception as e:
-                        logger.warning(f"   ⚠️ 게시물 처리 실패: {e}")
+                        logger.warning(f"   ⚠️ 게시물 처리 실패: {e}\n")
                         continue
                 
-                logger.info(f"\n✅ 비디오/GIF 게시물 {len(collected_videos)}개 수집 완료")
+                logger.info(f"✅ 비디오/GIF 게시물 {len(collected_videos)}개 수집 완료\n")
                 
             except Exception as e:
-                logger.error(f"❌ 크롤링 오류: {e}")
+                logger.error(f"❌ 크롤링 오류: {e}\n")
             
             finally:
                 browser.close()
@@ -242,16 +301,15 @@ class AAGAGCollector:
         return f".{match.group(1)}" if match else ""
     
     def _extract_title(self, page, download_url: str) -> str:
-        """제목 추출 (페이지 제목 또는 파일명)"""
+        """제목 추출 (페이지 제목 또는 파일명) - 한글 안전 처리"""
         try:
             # 방법 1: 페이지 제목
             title = page.title()
             if title and title != "AAGAG":
                 # 불필요한 접미사 제거
                 title = re.sub(r'\s*-\s*AAGAG.*$', '', title)
-                # 파일명으로 사용 불가능한 문자 제거
-                title = re.sub(r'[<>:"/\\|?*]', '', title)
-                return title.strip()[:50]  # 최대 50자
+                # 안전한 파일명으로 변환
+                return self._safe_filename(title, max_length=50)
             
             # 방법 2: URL에서 파일명 추출
             filename = download_url.split('/')[-1].split('?')[0]
@@ -261,12 +319,12 @@ class AAGAGCollector:
             return f"video_{int(time.time())}"
     
     def _download_file(self, url: str, title: str, ext: str) -> Optional[Path]:
-        """파일 다운로드"""
+        """파일 다운로드 - 한글 안전 처리"""
         try:
             import requests
             
-            # 안전한 파일명 생성
-            safe_title = re.sub(r'[<>:"/\\|?*]', '', title)
+            # 안전한 파일명 생성 (한글 보존)
+            safe_title = self._safe_filename(title)
             filename = f"{safe_title}{ext}"
             filepath = self.download_dir / filename
             
@@ -282,6 +340,7 @@ class AAGAGCollector:
             response = requests.get(url, timeout=30)
             response.raise_for_status()
             
+            # UTF-8로 안전하게 저장
             with open(filepath, 'wb') as f:
                 f.write(response.content)
             
@@ -294,7 +353,7 @@ class AAGAGCollector:
             return None
     
     def _convert_gif_to_mp4(self, gif_path: Path) -> Path:
-        """GIF를 MP4로 변환"""
+        """GIF를 MP4로 변환 - 원본 음성 보존"""
         try:
             import subprocess
             
