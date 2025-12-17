@@ -83,40 +83,63 @@ def get_folder_size(folder_path: str) -> float:
 
 
 def optimize_title(title: str) -> str:
-    """제목 최적화 - 클릭을 유도하는 키워드 자동 삽입"""
+    """
+    제목 최적화 - Shorts 알고리즘 최적화
+    - 감정적 호소력 강화
+    - 호기심 유발 키워드 추가
+    - 클릭률(CTR) 향상 목표
+    """
     import random
     
+    # 감정 유발 접두어 (클릭률 최적화)
     prefix_keywords = [
-        "😱 충격!", "🔥 화제의", "😮 놀라운", "⚡ 실시간",
-        "💥 대박", "🎯 화제", "👀 주목", "🚨 긴급"
+        "😂 웃겨서 터졌다", "😱 충격적인", "🔥 요즘 핫한", "😮 진짜 미친",
+        "💥 역대급", "🎯 꼭 봐야하는", "👀 보면 후회함", "🚨 난리난"
     ]
     
+    # 공감/관심 접미어 (알고리즘 선호)
     suffix_keywords = [
-        "(레전드)", "(실화)", "(충격)", "(화제)",
-        "(대박)", "(ㄷㄷ)", "(공감)", "(웃음)"
+        "#shorts", "#레전드", "#실화냐", "#핵공감",
+        "#개웃김", "#꿀잼", "#진짜웃김", "#개그"
     ]
     
-    if any(char in title for char in "😱🔥😮⚡💥🎯👀🚨"):
+    # 이미 이모지가 있으면 스킵
+    if any(char in title for char in "😱🔥😮⚡💥🎯👀🚨😂"):
         return title
     
-    if random.random() < 0.5:
+    # 70% 확률로 접두어 추가 (더 눈에 띔)
+    if random.random() < 0.7:
         optimized = f"{random.choice(prefix_keywords)} {title}"
     else:
         optimized = f"{title} {random.choice(suffix_keywords)}"
     
-    if len(optimized) > 100:
-        optimized = title[:97] + "..."
+    # 제목 길이 제한 (YouTube 권장: 70자 이하)
+    if len(optimized) > 70:
+        optimized = title[:67] + "..."
     
     return optimized
 
 
-def extract_keywords_from_title(title: str, max_keywords: int = 10) -> list:
-    """제목에서 키워드 추출하여 태그 생성"""
-    base_tags = ['shorts', '숏츠', '쇼츠', '핫이슈', '화제']
+def extract_keywords_from_title(title: str, max_keywords: int = 15) -> list:
+    """
+    제목에서 키워드 추출하여 태그 생성
+    - Shorts 최적화 태그 추가
+    - 한국어 + 영문 태그 혼합 (글로벌 노출 확대)
+    """
+    # Shorts 필수 태그 (알고리즘 최적화)
+    base_tags = [
+        'shorts', 'short', '숏츠', '쇼츠',
+        '개그', '웃긴영상', '꿀잼', 
+        'funny', 'comedy', 'humor',
+        '한국', 'korea', 'korean'
+    ]
+    
+    # 제목에서 키워드 추출
     words = re.findall(r'[가-힣a-zA-Z0-9]+', title)
-    keywords = [word for word in words if len(word) >= 2]
-    keywords = list(dict.fromkeys(keywords))
+    keywords = [word for word in words if len(word) >= 2 and word.lower() not in ['the', 'and', 'for']]
+    keywords = list(dict.fromkeys(keywords))  # 중복 제거
     keywords = keywords[:max_keywords - len(base_tags)]
+    
     return base_tags + keywords
 
 
@@ -132,10 +155,18 @@ def create_metadata_from_title(title: str, source_url: str = "") -> dict:
     
     optimized_title = optimize_title(clean_title)
     
+    # Shorts 최적화 설명 작성
     description = f"{clean_title}\n\n"
+    description += "😂 웃기면 구독 부탁드려요!\n"
+    description += "👍 좋아요와 댓글은 큰 힘이 됩니다\n\n"
+    
     if source_url:
-        description += f"출처: AAGAG\n{source_url}\n\n"
-    description += "#shorts #숏츠 #쇼츠 #핫이슈 #화제의영상"
+        description += f"📌 출처: AAGAG\n{source_url}\n\n"
+    
+    # SEO 최적화 해시태그 (알고리즘 선호)
+    description += "#shorts #short #숏츠 #쇼츠 #개그 #웃긴영상 #꿀잼 "
+    description += "#funny #comedy #humor #핫이슈 #화제의영상 #레전드 "
+    description += "#한국 #korea #korean"
     
     tags = extract_keywords_from_title(clean_title)
     
@@ -190,12 +221,16 @@ def add_subtitle_to_video(video_path: str, subtitle_text: str) -> str:
 
 
 def extract_thumbnail(video_path: str) -> str:
-    """영상에서 중간 프레임을 썸네일로 추출"""
+    """
+    영상에서 최적의 썸네일 추출
+    - 시작 후 2~3초 구간에서 선명한 프레임 추출 (클릭률 최적화)
+    - 고품질 JPEG 생성 (YouTube 썸네일 최적화)
+    """
     try:
         video_path = Path(video_path)
         thumbnail_path = video_path.parent / f"{video_path.stem}_thumb.jpg"
         
-        logger.info(f"   🖼️ 썸네일 추출 중...")
+        logger.info(f"   🖼️ 고품질 썸네일 추출 중...")
         
         probe_cmd = [
             'ffprobe',
@@ -207,21 +242,30 @@ def extract_thumbnail(video_path: str) -> str:
         
         result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
         duration = float(result.stdout.strip())
-        middle_time = duration / 2
         
+        # 썸네일 추출 위치 최적화: 시작 후 2~3초 (가장 중요한 구간)
+        # 너무 처음은 로딩 화면일 수 있고, 중간은 덜 중요함
+        thumbnail_time = min(2.5, duration * 0.3)  # 2.5초 또는 영상의 30% 지점
+        
+        logger.info(f"   ⏱️ 추출 위치: {thumbnail_time:.1f}초 (총 {duration:.1f}초)")
+        
+        # 고품질 썸네일 생성
         ffmpeg_cmd = [
             'ffmpeg',
-            '-ss', str(middle_time),
+            '-ss', str(thumbnail_time),
             '-i', str(video_path),
             '-vframes', '1',
-            '-q:v', '2',
+            '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease',  # Shorts 비율 유지
+            '-q:v', '1',  # 최고 품질 (2 → 1)
             '-y',
             str(thumbnail_path)
         ]
         
         subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
         
-        logger.info(f"   ✅ 썸네일 추출 완료\n")
+        # 썸네일 파일 크기 확인
+        thumb_size = os.path.getsize(thumbnail_path) / 1024  # KB
+        logger.info(f"   ✅ 썸네일 추출 완료 ({thumb_size:.1f} KB)\n")
         return str(thumbnail_path)
         
     except Exception as e:
@@ -230,13 +274,18 @@ def extract_thumbnail(video_path: str) -> str:
 
 
 def convert_to_shorts_format(video_path: str) -> str:
-    """영상을 YouTube Shorts 세로 포맷(1080x1920)으로 변환"""
+    """
+    영상을 YouTube Shorts 세로 포맷(1080x1920)으로 강제 변환
+    - 모든 영상을 정확히 9:16 비율로 변환
+    - 수익화 최적화를 위한 품질 개선
+    """
     try:
         video_path = Path(video_path)
         output_path = video_path.parent / f"{video_path.stem}_shorts{video_path.suffix}"
         
-        logger.info(f"   🎬 Shorts 포맷으로 변환 중...")
+        logger.info(f"   🎬 Shorts 포맷(9:16)으로 변환 중...")
         
+        # 원본 영상 크기 확인
         probe_cmd = [
             'ffprobe',
             '-v', 'error',
@@ -254,61 +303,88 @@ def convert_to_shorts_format(video_path: str) -> str:
         
         target_width = 1080
         target_height = 1920
+        target_ratio = target_width / target_height  # 0.5625 (정확히 9:16)
         
-        if 0.5 <= aspect_ratio <= 0.6:
-            logger.info(f"   ✅ 이미 세로형 영상입니다 (스킵)\n")
+        # 이미 9:16 비율인지 엄격하게 체크 (오차 ±2% 이내)
+        ratio_diff = abs(aspect_ratio - target_ratio)
+        if ratio_diff < 0.01 and width >= 1080 and height >= 1920:
+            logger.info(f"   ✅ 이미 완벽한 Shorts 포맷입니다 (스킵)\n")
             return str(video_path)
         
+        # 변환 필요: 모든 영상을 9:16으로 강제 변환
+        logger.info(f"   🔄 {'가로형' if aspect_ratio > 1 else '비표준 비율'} → Shorts 세로형(9:16) 변환")
+        
         if aspect_ratio > 1:
-            logger.info(f"   🔄 가로형 영상 → 세로형 변환 (블러 배경 추가)")
+            # 가로형 영상: 블러 배경 + 중앙 배치 (시네마틱 효과)
+            logger.info(f"   ✨ 블러 배경 추가 (수익화 최적화)")
             
             ffmpeg_cmd = [
                 'ffmpeg',
                 '-i', str(video_path),
                 '-filter_complex',
-                f'[0:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,'
-                f'boxblur=20:5,'
+                # 배경: 블러 처리 + 약간 어둡게
+                f'[0:v]scale={target_width}:{target_height}:force_original_aspect_ratio=increase,'
+                f'crop={target_width}:{target_height},'
+                f'boxblur=30:5,'
+                f'eq=brightness=-0.15:saturation=1.2,'
                 f'setsar=1[bg];'
+                # 전경: 원본 영상을 적절한 크기로
                 f'[0:v]scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,'
                 f'setsar=1[fg];'
+                # 배경 위에 전경 오버레이
                 f'[bg][fg]overlay=(W-w)/2:(H-h)/2',
                 '-c:v', 'libx264',
                 '-preset', 'medium',
-                '-crf', '23',
+                '-crf', '20',  # 품질 향상 (23 → 20)
+                '-profile:v', 'high',
+                '-level', '4.2',
                 '-c:a', 'aac',
-                '-b:a', '128k',
+                '-b:a', '192k',  # 오디오 품질 향상 (128k → 192k)
+                '-ar', '48000',
                 '-movflags', '+faststart',
                 '-y',
                 str(output_path)
             ]
         else:
-            logger.info(f"   🔄 영상 크기 조정 중...")
+            # 세로형이지만 비율이 맞지 않는 경우: 패딩 추가
+            logger.info(f"   📏 정확한 9:16 비율로 조정")
             
             ffmpeg_cmd = [
                 'ffmpeg',
                 '-i', str(video_path),
                 '-vf', f'scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,'
-                       f'pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black,'
+                       f'pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:color=black,'
                        f'setsar=1',
                 '-c:v', 'libx264',
                 '-preset', 'medium',
-                '-crf', '23',
+                '-crf', '20',  # 품질 향상
+                '-profile:v', 'high',
+                '-level', '4.2',
                 '-c:a', 'aac',
-                '-b:a', '128k',
+                '-b:a', '192k',
+                '-ar', '48000',
                 '-movflags', '+faststart',
                 '-y',
                 str(output_path)
             ]
         
+        # 변환 실행
         subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
         
-        logger.info(f"   ✅ 변환 완료: {output_path.name}\n")
+        # 변환 결과 확인
+        verify_result = subprocess.run(probe_cmd[:-1] + [str(output_path)], 
+                                       capture_output=True, text=True, check=True)
+        new_width, new_height = map(int, verify_result.stdout.strip().split('x'))
+        logger.info(f"   ✅ 변환 완료: {new_width}x{new_height} (9:16 비율)")
+        logger.info(f"   📁 파일: {output_path.name}\n")
+        
         return str(output_path)
         
     except Exception as e:
-        logger.warning(f"   ⚠️ 포맷 변환 실패: {e}")
-        logger.warning(f"   ⚠️ 원본 영상 사용\n")
-        return str(video_path)
+        logger.error(f"   ❌ 포맷 변환 실패: {e}")
+        logger.error(f"   ⚠️ 이 영상은 업로드를 스킵합니다\n")
+        # 변환 실패 시 None 반환 (업로드 스킵)
+        return None
 
 
 def main():
@@ -391,8 +467,13 @@ def main():
                 logger.info(f"   ✅ 최적화 제목: {title}")
                 logger.info(f"   ✅ 태그: {', '.join(tags[:5])}...\n")
                 
-                # 3-2. Shorts 포맷 변환
+                # 3-2. Shorts 포맷 변환 (필수)
                 shorts_video_path = convert_to_shorts_format(video_path)
+                if shorts_video_path is None:
+                    logger.error(f"⚠️ Shorts 포맷 변환 실패 - 이 영상은 스킵합니다\n")
+                    cleanup_video_files(video_path, related_files)
+                    continue
+                
                 if shorts_video_path != video_path:
                     related_files.append(shorts_video_path)
                 
