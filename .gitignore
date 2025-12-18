@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# YouTube Credentials (보안상 중요!)
+data/youtube_token.pickle
+*.pickle
+
+# Video Files (용량 큰 파일 제외)
+data/videos/*.mp4
+data/videos/*.gif
+data/videos/*.webm
+data/videos/*.jpg
+data/videos/*.jpeg
+data/videos/*.png
+
+# Music Files
+data/music/*.mp3
+data/music/*.wav
+
+# Environment Variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Keep directory structure
+!data/videos/.gitkeep
+!data/music/.gitkeep
