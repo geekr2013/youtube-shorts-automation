@@ -164,20 +164,36 @@ class YouTubeUploader:
             title_encoded = title.encode('utf-8').decode('utf-8')
             description_encoded = description.encode('utf-8').decode('utf-8')
             
+            # 태그 검증 및 정리
+            validated_tags = []
+            if tags:
+                tags_text = ','.join(tags)
+                if len(tags_text) <= 500:  # YouTube 태그 총 길이 제한: 500자
+                    validated_tags = tags[:15]  # 최대 15개 태그
+                else:
+                    # 길이 초과 시 일부만 사용
+                    for tag in tags[:15]:
+                        test_text = ','.join(validated_tags + [tag])
+                        if len(test_text) <= 500:
+                            validated_tags.append(tag)
+                        else:
+                            break
+            
+            logger.info(f"   🏷️ 태그 수: {len(validated_tags)}")
+            
             # 업로드 메타데이터
             body = {
                 'snippet': {
                     'title': title_encoded[:100],  # YouTube 제한: 100자
                     'description': description_encoded[:5000],  # YouTube 제한: 5000자
-                    'tags': tags or [],
+                    'tags': validated_tags,
                     'categoryId': category,
                     'defaultLanguage': 'ko',
                     'defaultAudioLanguage': 'ko'
                 },
                 'status': {
                     'privacyStatus': privacy,
-                    'selfDeclaredMadeForKids': False,
-                    'madeForKids': False
+                    'selfDeclaredMadeForKids': False  # madeForKids 필드 제거 (중복 방지)
                 }
             }
             
@@ -241,8 +257,18 @@ class YouTubeUploader:
             }
             
         except HttpError as e:
-            error_msg = f"YouTube API 오류 {e.resp.status}: {e.content.decode('utf-8', errors='ignore')}"
+            error_content = e.content.decode('utf-8', errors='ignore')
+            error_msg = f"YouTube API 오류 {e.resp.status}: {error_content}"
             logger.error(f"❌ {error_msg}")
+            
+            # 400 에러의 경우 상세 정보 출력
+            if e.resp.status == 400:
+                logger.error(f"   📋 업로드 시도한 메타데이터:")
+                logger.error(f"      제목 길이: {len(title)} 자")
+                logger.error(f"      설명 길이: {len(description)} 자")
+                logger.error(f"      태그 수: {len(validated_tags)}")
+                logger.error(f"      파일 크기: {size_mb:.2f} MB")
+            
             return {
                 'success': False,
                 'error': error_msg,
