@@ -70,34 +70,57 @@ def create_metadata_from_title(title: str, source_url: str = "") -> dict:
     return {'title': optimized_title, 'original_title': clean_title, 'description': description, 'tags': tags}
 
 def add_subtitle_to_video(video_path: str, subtitle_text: str) -> str:
-    """사용자 지정 폰트를 사용하여 자막 추가"""
+    """
+    사용자 지정 폰트를 사용하여 자막 추가
+    상단으로 자막의 위치를 변경하고, y=120, 크게 바꿈 fontsize=80, 스타일 검정 반투명 박스배
+    """
     try:
         video_path = Path(video_path)
         output_path = video_path.parent / f"{video_path.stem}_subtitle{video_path.suffix}"
         
-        # 폰트 파일 존재 여부 확인
-        font_arg = CUSTOM_FONT_PATH.replace('\\', '/') # Windows 경로 대응
+        # 폰트 경로 설정 (사용자 지정 폰트 우선)
+        font_arg = CUSTOM_FONT_PATH.replace('\\', '/') 
         if not os.path.exists(CUSTOM_FONT_PATH):
-            logger.warning(f"   ⚠️ 폰트 파일을 찾을 수 없어 기본 설정으로 진행합니다: {CUSTOM_FONT_PATH}")
-            # 시스템 기본 폰트 시도 (리눅스 기준)
+            logger.warning(f"⚠️ 폰트 파일을 찾을 수 없어 기본 설정으로 진행합니다: {CUSTOM_FONT_PATH}")
             font_arg = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
 
-        logger.info(f"   📝 자막 추가 중: '{subtitle_text[:20]}...'")
+        logger.info(f"📝 상단 타이틀 자막 추가 중: '{subtitle_text[:15]}...'")
+        
+        # 특수문자 처리
         escaped_text = subtitle_text.replace("'", "'\\\\\\''").replace(":", "\\:")
         
+        # FFmpeg 옵션 설명:
+        # fontsize=80: 글자 크기를 대폭 키움
+        # y=120: 상단에서 120픽셀 지점에 배치
+        # boxborderw=25: 글자 주변 검정 배경 박스의 여백을 넓혀서 가독성 확보
         ffmpeg_cmd = [
             'ffmpeg', '-i', str(video_path),
-            '-vf', f"drawtext=fontfile='{font_arg}':text='{escaped_text}':fontcolor=white:fontsize=54:box=1:boxcolor=black@0.6:boxborderw=15:x=(w-text_w)/2:y=h-th-80",
-            '-c:a', 'copy', '-y', str(output_path)
+            '-vf', (
+                f"drawtext=fontfile='{font_arg}':"
+                f"text='{escaped_text}':"
+                f"fontcolor=white:"
+                f"fontsize=80:"
+                f"box=1:"
+                f"boxcolor=black@0.4:"
+                f"boxborderw=25:"
+                f"x=(w-text_w)/2:"
+                f"y=120"
+            ),
+            '-c:a', 'copy', 
+            '-y', str(output_path)
         ]
         
         result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        
         if result.returncode == 0:
+            logger.info(f"✅ 상단 자막 추가 완료\n")
             return str(output_path)
         else:
-            logger.warning(f"   ⚠️ 자막 추가 실패 (FFmpeg 오류), 원본 사용")
+            logger.warning(f"⚠️ 자막 추가 실패 (FFmpeg 오류), 원본 사용")
             return str(video_path)
+            
     except Exception as e:
+        logger.warning(f"⚠️ 자막 추가 중 예외 발생: {e}")
         return str(video_path)
 
 def extract_thumbnail(video_path: str) -> str:
