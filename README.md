@@ -1,352 +1,67 @@
-# 🎬 AAGAG YouTube Shorts 자동화
+# 🎬 AAGAG YouTube Shorts Automation (2025 Optimized)
 
-**AAGAG 사이트의 재미있는 짧은 영상을 자동으로 수집하여 YouTube Shorts에 업로드하는 자동화 시스템**
+이 프로젝트는 **AAGAG** 커뮤니티의 핫한 콘텐츠를 자동으로 수집하여, 시청자에게 최적화된 **YouTube Shorts** 포맷으로 가공하고 업로드하는 자동화 파이프라인입니다. 
 
----
-
-## 🎯 **주요 기능**
-
-✅ **AAGAG 자동 크롤링** - Playwright로 최신 개그 영상 수집  
-✅ **갤러리 페이지 지원** - 한 게시물에 여러 영상이 있어도 모두 수집  
-✅ **Gemini AI 제목/설명 생성** - 영상 내용을 분석하여 자동 생성  
-✅ **한글 완벽 지원** - UTF-8 인코딩, NFC 정규화로 한글 깨짐 방지  
-✅ **GIF → MP4 자동 변환** - YouTube Shorts 호환 포맷으로 변환  
-✅ **배경음악 추가** (선택) - ffmpeg로 BGM 삽입  
-✅ **YouTube 자동 업로드** - YouTube Data API v3 실제 연동  
-✅ **Gmail 알림** - 업로드 결과 이메일 발송  
-✅ **GitHub Actions 자동 실행** - 매일 정해진 시간에 자동 실행  
+PO/PM 관점에서 **최소 운영 비용으로 최대의 CTR(클릭률)과 도달율**을 확보할 수 있도록 설계되었습니다.
 
 ---
 
-## 📁 **프로젝트 구조**
+## 🏗 시스템 구조 (Architecture)
 
-```
-youtube-shorts-automation/
-├── .github/
-│   └── workflows/
-│       └── daily-upload.yml        # GitHub Actions 워크플로우
-├── src/
-│   ├── main.py                     # 메인 실행 스크립트
-│   ├── aagag_collector.py          # AAGAG 크롤러 (갤러리 지원)
-│   ├── youtube_uploader.py         # YouTube 업로더 (실제 API)
-│   ├── content_processor_gemini.py # Gemini AI 프로세서
-│   ├── background_music.py         # 배경음악 추가
-│   └── email_notifier.py           # 이메일 알림
-├── data/
-│   ├── videos/                     # 다운로드된 비디오
-│   ├── music/                      # 배경음악 파일
-│   └── download_history.json       # 다운로드 이력
-├── requirements.txt                # Python 패키지 목록
-└── README.md
-```
+본 시스템은 크게 4단계의 모듈형 파이프라인으로 작동합니다.
+
+1. **Content Discovery**: Playwright 기반의 웹 크롤링을 통해 트렌디한 영상/GIF 수집
+2. **Video Engine**: FFmpeg을 활용한 9:16 세로형 변환, 자막 합성, 썸네일 추출
+3. **AI SEO**: 영상 제목을 기반으로 알고리즘에 최적화된 메타데이터(제목, 태그) 생성
+4. **Auto-Publish**: YouTube Data API v3를 통한 자동 업로드 및 알림 발송
 
 ---
 
-## 🚀 **설치 및 실행**
+## 📂 파일 트리 및 역할 설명
 
-### **1. 사전 요구사항**
-
-- Python 3.11 이상
-- ffmpeg (GIF 변환 및 배경음악용)
-- 한글 폰트 (자막 기능용)
-
-### **2. 로컬 설치**
-
-```bash
-# 저장소 클론
-git clone https://github.com/YOUR_USERNAME/youtube-shorts-automation.git
-cd youtube-shorts-automation
-
-# 가상환경 생성 및 활성화
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# 패키지 설치
-pip install -r requirements.txt
-
-# Playwright 브라우저 설치
-playwright install chromium
-
-# ffmpeg 설치 (Ubuntu/Debian)
-sudo apt-get update
-sudo apt-get install -y ffmpeg fonts-nanum
-
-# ffmpeg 설치 (macOS)
-brew install ffmpeg
-
-# ffmpeg 설치 (Windows)
-# https://ffmpeg.org/download.html 에서 다운로드
-```
-
-### **3. 환경 변수 설정**
-
-`.env` 파일 생성 또는 환경 변수 설정:
-
-```bash
-# YouTube API (필수)
-YOUTUBE_CLIENT_SECRET='{"installed":{"client_id":"...","client_secret":"..."}}'
-YOUTUBE_REFRESH_TOKEN="your_refresh_token"
-
-# Gemini API (필수)
-GEMINI_API_KEY="your_gemini_api_key"
-
-# Gmail 알림 (선택)
-GMAIL_USERNAME="your_email@gmail.com"
-GMAIL_PASSWORD="your_app_password"
-NOTIFICATION_EMAIL="receiver@example.com"
-
-# 배경음악 (선택)
-ENABLE_BGM="false"  # true로 설정 시 배경음악 추가
-BGM_PATH="data/music/background.mp3"
-```
-
-### **4. 로컬 실행**
-
-```bash
-python src/main.py
-```
+| 분류 | 파일/폴더 명 | 역할 및 기능 설명 |
+| :--- | :--- | :--- |
+| **Workflow** | `.github/workflows/daily-upload.yml` | **자동화의 심장.** 매일 지정된 시간에 GitHub Actions를 가동시키는 스케줄러. |
+| **Core Source** | `src/main.py` | **메인 관제소.** 모든 모듈을 순서대로 실행하고 파일 삭제 등의 정리를 담당. |
+| | `src/aagag_collector.py` | **콘텐츠 수집기.** 유효한 영상 주소를 추출하고 한글 파일명을 정규화하여 저장. |
+| | `src/youtube_uploader.py` | **배포 관리자.** OAuth 인증을 통해 실제 유튜브 채널에 영상을 업로드. |
+| | `src/background_music.py` | **사운드 편집.** 영상의 분위기를 살려줄 배경음악을 합성 (현재 선택 사항). |
+| | `src/email_notifier.py` | **운영 보고서.** 작업 완료 후 업로드 성공 여부를 이메일로 리포트. |
+| **Assets** | `font/SeoulAlrim-ExtraBold.otf` | **브랜드 가이드.** 자막의 가독성을 높여주는 서울알림체 볼드 폰트. |
+| **Data Storage** | `data/download_history.json` | **중복 방지.** 이미 업로드한 영상의 ID를 기록하여 동일 영상 업로드 방지. |
+| | `data/youtube_token.pickle` | **인증 저장소.** 매번 로그인할 필요 없도록 유지되는 YouTube API 토큰. |
+| **Settings** | `requirements.txt` | **환경 구성.** 프로젝트 실행에 필요한 파이썬 라이브러리 목록. |
 
 ---
 
-## 🔑 **API 키 설정 가이드**
+## ⚙️ 작동 원리 (Workflow)
 
-### **1. Gemini API 키 발급**
 
-1. [Google AI Studio](https://makersuite.google.com/app/apikey) 접속
-2. `Get API Key` 클릭
-3. API 키 복사 → `GEMINI_API_KEY` 환경 변수에 설정
 
-### **2. YouTube Data API v3 설정**
+### 1. 콘텐츠 수집 (Collection)
+`aagag_collector.py`가 AAGAG 사이트의 게시물을 분석합니다. 단순 이미지는 제외하고, MP4 비디오와 GIF(자동 변환) 파일만 골라내어 서버에 임시 저장합니다. 이때 파일명에 포함된 특수문자를 제거하여 FFmpeg 처리 에러를 사전에 방지합니다.
 
-#### **2-1. OAuth 2.0 클라이언트 생성**
+### 2. 쇼츠 최적화 가공 (Processing)
+`main.py`는 수집된 영상을 YouTube Shorts 규격인 **1080x1920 (9:16)**으로 강제 변환합니다. 
+* 가로 영상은 시네마틱 블러 배경을 추가합니다.
+* 영상 **상단**에 제목 자막을 크게(폰트 크기 80) 배치하여 시청자의 이탈을 방지합니다.
+* 가장 흥미로운 지점에서 고품질 썸네일(.jpg)을 자동 추출합니다.
 
-1. [Google Cloud Console](https://console.cloud.google.com/) 접속
-2. 프로젝트 생성 (또는 기존 프로젝트 선택)
-3. **API 및 서비스 > 라이브러리** → "YouTube Data API v3" 검색 및 활성화
-4. **API 및 서비스 > 사용자 인증 정보** → `+ 사용자 인증 정보 만들기` → `OAuth 클라이언트 ID`
-5. 애플리케이션 유형: **데스크톱 앱** 선택
-6. `client_secret.json` 다운로드
+### 3. 유튜브 업로드 (Distribution)
+`youtube_uploader.py`가 Google OAuth 인증을 통해 채널에 접근합니다. 동영상과 썸네일을 함께 전송하며, Shorts 전용 해시태그(#shorts, #개그 등)를 자동으로 추가하여 노출 알고리즘을 태웁니다.
 
-#### **2-2. Refresh Token 발급**
-
-로컬에서 한 번 실행하여 토큰 발급:
-
-```bash
-python src/youtube_uploader.py
-```
-
-- 브라우저가 열리면 Google 계정 로그인
-- YouTube 업로드 권한 승인
-- `data/youtube_token.pickle` 파일 생성됨
-- 파일에서 `refresh_token` 추출하여 환경 변수에 설정
-
-#### **2-3. GitHub Secrets 설정**
-
-```
-YOUTUBE_CLIENT_SECRET: client_secret.json 전체 내용 (JSON 문자열)
-YOUTUBE_REFRESH_TOKEN: 발급받은 refresh_token
-```
-
-### **3. Gmail 앱 비밀번호 (선택)**
-
-1. Google 계정 → 보안 → 2단계 인증 활성화
-2. 앱 비밀번호 생성
-3. 발급받은 16자리 비밀번호를 `GMAIL_PASSWORD`에 설정
+### 4. 사후 관리 (Management)
+작업이 끝나면 서버의 저장 공간 확보를 위해 모든 임시 영상 파일을 삭제하며, 성공한 리스트를 운영자의 이메일로 발송합니다.
 
 ---
 
-## ⚙️ **GitHub Actions 설정**
+## 🛠 필수 설정 사항 (Secrets)
 
-### **1. GitHub Secrets 설정**
+GitHub Actions 환경 변수(Secrets)에 다음 정보가 등록되어 있어야 정상 작동합니다.
 
-Repository → Settings → Secrets and variables → Actions → New repository secret
-
-필수:
-- `YOUTUBE_CLIENT_SECRET`
-- `YOUTUBE_REFRESH_TOKEN`
-- `GEMINI_API_KEY`
-
-선택:
-- `GMAIL_USERNAME`
-- `GMAIL_PASSWORD`
-- `NOTIFICATION_EMAIL`
-
-### **2. 워크플로우 실행**
-
-- **자동 실행**: 매일 UTC 0시 (한국 시간 오전 9시)
-- **수동 실행**: Actions 탭 → "Daily GagConcert Upload" → "Run workflow"
+* `YOUTUBE_CLIENT_SECRET`: Google Cloud 데스크톱 앱용 JSON 전체 내용
+* `YOUTUBE_REFRESH_TOKEN`: 영구 인증용 리프레시 토큰
+* `GMAIL_USERNAME` / `GMAIL_PASSWORD`: 알림 발송용 Gmail 계정 정보
+* `NOTIFICATION_EMAIL`: 보고서를 받을 이메일 주소
 
 ---
-
-## 🛠️ **문제 해결**
-
-### **1. 수집된 게시물이 0개**
-
-**원인**: AAGAG 사이트 HTML 구조 변경
-
-**해결**:
-```bash
-# 최신 코드로 업데이트
-git pull origin main
-
-# 다운로드 이력 초기화
-rm data/download_history.json
-```
-
-### **2. YouTube 업로드 실패: invalid_client**
-
-**원인**: `YOUTUBE_CLIENT_SECRET` JSON 형식 오류
-
-**해결**:
-```bash
-# client_secret.json 파일 내용 전체를 따옴표 없이 그대로 복사
-# GitHub Secrets에 붙여넣기
-```
-
-### **3. 한글 깨짐**
-
-**원인**: 인코딩 문제 또는 폰트 누락
-
-**해결**:
-```bash
-# Ubuntu/Debian
-sudo apt-get install fonts-nanum fonts-nanum-coding
-
-# 폰트 캐시 갱신
-sudo fc-cache -fv
-```
-
-### **4. GIF 변환 실패**
-
-**원인**: ffmpeg 미설치
-
-**해결**:
-```bash
-# ffmpeg 설치
-sudo apt-get install ffmpeg
-
-# 설치 확인
-ffmpeg -version
-```
-
-### **5. Gemini API 할당량 초과**
-
-**원인**: 무료 할당량 초과
-
-**해결**:
-- [Google AI Studio](https://makersuite.google.com/app/apikey)에서 할당량 확인
-- 새 API 키 발급 또는 유료 플랜 고려
-
----
-
-## 📊 **사용 예시**
-
-### **실행 결과 예시**
-
-```
-======================================================================
-🚀 AAGAG YouTube Shorts 자동화 시작
-======================================================================
-
-✅ 모듈 임포트 완료
-✅ YouTube 업로더 준비 완료
-✅ Gemini AI 프로세서 준비 완료
-
-📥 AAGAG 콘텐츠 수집 시작...
-
-============================================================
-🚀 AAGAG 비디오/GIF 수집 시작 (최대 5개)
-============================================================
-
-📡 AAGAG 메인 페이지 크롤링 시작...
-✅ 발견한 게시물 링크: 30개
-
-🔍 [1/30] 게시물 확인 중
-   https://aagag.com/issue/?idx=946713_1
-   📦 발견한 미디어: 7개
-   ✅ [1/7] 남자는_왜_일찍_죽는가_1 (.mp4)
-      📥 다운로드 중: 남자는_왜_일찍_죽는가_1.mp4
-      ✅ 완료: 남자는_왜_일찍_죽는가_1.mp4 (2.34 MB)
-
-✅ 비디오/GIF 게시물 5개 수집 완료
-
-======================================================================
-🎬 [1/5] 비디오 처리 중
-======================================================================
-
-🤖 Gemini AI로 제목/설명 생성 중...
-   ✅ 제목: 😂 남자는 왜 일찍 죽을까?
-   ✅ 설명: 남성의 평균 수명이 여성보다 짧은 이유를 개그로...
-   ✅ 태그: 개그, 재미, 웃음, 남자, 수명
-
-📤 YouTube 업로드 중...
-   📁 파일: 남자는_왜_일찍_죽는가_1.mp4
-   📊 크기: 2.34 MB
-   📺 제목: 😂 남자는 왜 일찍 죽을까?
-   ⏳ 업로드 진행: 100%
-   ✅ 업로드 성공!
-   🔗 URL: https://www.youtube.com/shorts/ABC123xyz
-
-======================================================================
-🎉 모든 작업 완료!
-======================================================================
-```
-
----
-
-## 🔒 **보안 주의사항**
-
-❌ **절대로 커밋하지 말 것**:
-- API 키 (`GEMINI_API_KEY`)
-- OAuth 토큰 (`YOUTUBE_REFRESH_TOKEN`)
-- Gmail 비밀번호 (`GMAIL_PASSWORD`)
-- `client_secret.json`
-- `data/youtube_token.pickle`
-
-✅ **권장 사항**:
-- GitHub Secrets 사용
-- `.gitignore`에 민감 파일 추가
-- API 키 정기적으로 갱신
-
----
-
-## 📚 **기술 스택**
-
-- **Python 3.11+**
-- **Playwright** - 웹 크롤링
-- **ffmpeg** - 비디오/오디오 처리
-- **Google Gemini API** - AI 제목/설명 생성
-- **YouTube Data API v3** - 비디오 업로드
-- **Gmail SMTP** - 이메일 알림
-- **GitHub Actions** - 자동 실행
-
----
-
-## 📝 **최근 업데이트**
-
-### **v2.0.0** (2024-12-15)
-- ✅ YouTube Data API v3 실제 연동 (시뮬레이션 제거)
-- ✅ Gemini AI 제목/설명 생성 기능 통합
-- ✅ 한글 인코딩 강화 (UTF-8, NFC 정규화)
-- ✅ 배경음악 추가 기능 연결
-- ✅ 갤러리 페이지 다중 영상 수집 지원
-- ✅ 중복 다운로드 방지 (download_history.json)
-- ✅ 에러 핸들링 개선
-
----
-
-## 🤝 **기여**
-
-이슈 및 Pull Request 환영합니다!
-
----
-
-## 📧 **문의**
-
-문제가 발생하면 GitHub Issues에 남겨주세요.
-
----
-
-## 📄 **라이센스**
-
-MIT License
