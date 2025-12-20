@@ -1,5 +1,6 @@
 """
-AAGAG 숏폼 자동화 메인 스크립트 - 최적화 및 에러 수정 버전
+AAGAG 숏폼 자동화 메인 스크립트 - 최종 완성 버전
+수정 사항: 자막 자동 줄바꿈, 언더바 제거, 배경음악 합성 로직 추가
 """
 
 import os
@@ -19,7 +20,7 @@ try:
     from aagag_collector import AAGAGCollector
     from youtube_uploader import YouTubeUploader
     from email_notifier import send_email_notification
-    from background_music import add_background_music
+    from background_music import add_background_music # 배경음악 모듈
     logger.info("✅ 모듈 임포트 완료")
 except ImportError as e:
     logger.error(f"❌ 모듈 임포트 실패: {e}")
@@ -27,8 +28,11 @@ except ImportError as e:
 
 # 설정: 사용자 폰트 경로 (루트의 font 폴더)
 CUSTOM_FONT_PATH = str(Path("font/SeoulAlrim-ExtraBold.otf").absolute())
+# 배경음악 설정 (기본 경로)
+BGM_PATH = "data/music/background.mp3" 
 
 def cleanup_video_files(video_path: str, related_files: list = None):
+    """임시 생성된 모든 영상 파일 삭제"""
     try:
         files_to_delete = [video_path]
         if related_files: files_to_delete.extend(related_files)
@@ -72,34 +76,29 @@ def create_metadata_from_title(title: str, source_url: str = "") -> dict:
 
 def add_subtitle_to_video(video_path: str, subtitle_text: str) -> str:
     """
-    사용자 지정 폰트를 사용하여 자막 추가
-    상단으로 자막의 위치를 변경하고, y=120, 크게 바꿈 fontsize=80, 스타일 검정 반투명 박스배
+    영상 상단에 고가독성 자막 추가
+    - 언더바 제거, 자동 줄바꿈, 상단 배치 완료
     """
     try:
         video_path = Path(video_path)
         output_path = video_path.parent / f"{video_path.stem}_subtitle{video_path.suffix}"
         
-        # 1. 언더바를 공백으로 치환하여 가독성 확보
+        # 1. 언더바를 공백으로 치환
         display_text = subtitle_text.replace('_', ' ')
         
-        # 2. 자동 줄바꿈 처리 (한글 기준 약 12~15자 내외가 적당)
-        # fontsize=80 기준 가로 1080px에서 한 줄에 12자 정도가 안전합니다.
-        wrapper = textwrap.TextWrapper(width=12) 
+        # 2. 자동 줄바꿈 처리 (12자 기준)
+        wrapper = textwrap.TextWrapper(width=12, break_long_words=False) 
         wrapped_lines = wrapper.wrap(display_text)
-        display_text = "\n".join(wrapped_lines) # 줄바꿈 문자(\n) 삽입
+        display_text = "\n".join(wrapped_lines)
 
-        # 폰트 경로 설정
         font_arg = CUSTOM_FONT_PATH.replace('\\', '/') 
         if not os.path.exists(CUSTOM_FONT_PATH):
             font_arg = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
 
         logger.info(f"📝 자막 처리 중: {display_text.replace(chr(10), ' ')}")
         
-        # FFmpeg 특수문자 이스케이프 (줄바꿈 포함)
         escaped_text = display_text.replace("'", "'\\\\\\''").replace(":", "\\:")
         
-        # FFmpeg 옵션 설명:
-        # line_spacing=15: 줄 사이의 간격을 조절하여 가독성 향상
         ffmpeg_cmd = [
             'ffmpeg', '-i', str(video_path),
             '-vf', (
@@ -119,32 +118,20 @@ def add_subtitle_to_video(video_path: str, subtitle_text: str) -> str:
         ]
         
         result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            return str(output_path)
-        else:
-            logger.warning(f"⚠️ 자막 추가 실패, 원본 사용")
-            return str(video_path)
+        return str(output_path) if result.returncode == 0 else str(video_path)
             
     except Exception as e:
         logger.warning(f"⚠️ 자막 에러: {e}")
         return str(video_path)
 
 def extract_thumbnail(video_path: str) -> str:
-    """0초 영상 에러 방지 로직 포함"""
     try:
         video_path = Path(video_path)
         thumbnail_path = video_path.parent / f"{video_path.stem}_thumb.jpg"
-        
-        # 영상 길이 확인
         probe_cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(video_path)]
         result = subprocess.run(probe_cmd, capture_output=True, text=True)
         duration = float(result.stdout.strip()) if result.stdout.strip() else 0
-        
-        if duration <= 0:
-            logger.warning("   ⚠️ 영상 길이가 0초로 인식되어 썸네일을 추출할 수 없습니다.")
-            return None
-
+        if duration <= 0: return None
         thumbnail_time = min(2.5, duration * 0.5)
         ffmpeg_cmd = ['ffmpeg', '-ss', str(thumbnail_time), '-i', str(video_path), '-vframes', '1', '-q:v', '2', '-y', str(thumbnail_path)]
         subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
@@ -152,32 +139,18 @@ def extract_thumbnail(video_path: str) -> str:
     except: return None
 
 def convert_to_shorts_format(video_path: str) -> str:
-    """비표준 파일명 및 비율 변환 에러 해결"""
     try:
         video_path = Path(video_path)
         output_path = video_path.parent / f"{video_path.stem}_shorts.mp4"
-        
-        # 원본 크기 확인
         probe_cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=s=x:p=0', str(video_path)]
         res = subprocess.run(probe_cmd, capture_output=True, text=True)
         if not res.stdout.strip(): return None
-        
         width, height = map(int, res.stdout.strip().split('x'))
-        aspect_ratio = width / height
-        
-        # 9:16 강제 변환 명령어 (안전한 필터 사용)
-        if aspect_ratio > 1: # 가로형
-            filter_str = f"scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black"
-        else: # 세로형
-            filter_str = f"scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black"
-
+        filter_str = f"scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black"
         ffmpeg_cmd = ['ffmpeg', '-i', str(video_path), '-vf', f"{filter_str},setsar=1", '-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-c:a', 'aac', '-y', str(output_path)]
-        
         subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
         return str(output_path)
-    except Exception as e:
-        logger.error(f"   ❌ 포맷 변환 실패: {e}")
-        return None
+    except: return None
 
 def main():
     logger.info("\n🚀 AAGAG YouTube Shorts 자동화 시작")
@@ -193,30 +166,47 @@ def main():
         for idx, video in enumerate(videos, 1):
             logger.info(f"\n🎬 [{idx}/{len(videos)}] {video.get('title')}")
             v_path = video.get('video_path')
-            related = []
+            related = [] # 생성된 임시 파일 추적용
             
             try:
                 metadata = create_metadata_from_title(video.get('title'), video.get('source_url'))
                 
-                # 1. 포맷 변환
-                shorts_path = convert_to_shorts_format(v_path)
-                if not shorts_path: continue
-                if shorts_path != v_path: related.append(shorts_path)
+                # 1. 쇼츠 포맷 변환
+                proc_path = convert_to_shorts_format(v_path)
+                if not proc_path: continue
+                if proc_path != v_path: related.append(proc_path)
                 
                 # 2. 자막 추가
-                sub_path = add_subtitle_to_video(shorts_path, metadata['original_title'])
-                if sub_path != shorts_path: related.append(sub_path)
+                proc_path = add_subtitle_to_video(proc_path, metadata['original_title'])
+                if proc_path not in related and proc_path != v_path: related.append(proc_path)
                 
-                # 3. 썸네일
-                thumb_path = extract_thumbnail(sub_path)
+                # 3. 배경음악 추가 (파일이 존재할 때만 실행)
+                if os.path.exists(BGM_PATH):
+                    logger.info("🎵 배경음악 합성 중...")
+                    bgm_video_path = add_background_music(proc_path, BGM_PATH)
+                    if bgm_video_path != proc_path:
+                        proc_path = bgm_video_path
+                        related.append(proc_path)
+
+                # 4. 썸네일 추출
+                thumb_path = extract_thumbnail(proc_path)
                 if thumb_path: related.append(thumb_path)
                 
-                # 4. 업로드
+                # 5. 최종 업로드
                 if uploader.authenticated:
-                    res = uploader.upload_video(video_path=sub_path, title=metadata['title'], description=metadata['description'], tags=metadata['tags'], thumbnail_path=thumb_path)
-                    if res.get('success'): logger.info(f"✅ 업로드 성공: {res.get('video_url')}")
+                    res = uploader.upload_video(
+                        video_path=proc_path, 
+                        title=metadata['title'], 
+                        description=metadata['description'], 
+                        tags=metadata['tags'], 
+                        thumbnail_path=thumb_path
+                    )
+                    if res.get('success'): 
+                        logger.info(f"✅ 업로드 성공: {res.get('video_url')}")
                 
+                # 작업 완료 후 정리
                 cleanup_video_files(v_path, related)
+
             except Exception as e:
                 logger.error(f"❌ 처리 에러: {e}")
                 cleanup_video_files(v_path, related)
