@@ -1,6 +1,7 @@
 """
-AAGAG YouTube Shorts 자동화 - 수익 창출 고도화 버전
-개선 사항: AI 나레이션(TTS), 시청 상태 바(Progress Bar), 제목/자막 가독성 최적화
+AAGAG YouTube Shorts 자동화 - 하이브리드 TTS 및 수익 창출 고도화 버전
+특징: OpenAI TTS 우선 사용 -> 실패 시 무료 gTTS 자동 전환 (Safety Fallback)
+개선: 시청 상태 바(Progress Bar), 자막 줄바꿈, 언더바 제거 반영
 """
 
 import os
@@ -10,7 +11,10 @@ import subprocess
 from pathlib import Path
 import logging
 import textwrap
-from gtts import gTTS # AI 목소리 생성용
+
+# 필요한 라이브러리 임포트
+from openai import OpenAI
+from gtts import gTTS
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -27,11 +31,16 @@ except ImportError as e:
     logger.error(f"❌ 모듈 임포트 실패: {e}")
     sys.exit(1)
 
-# 설정
+# 설정 정보
 CUSTOM_FONT_PATH = str(Path("font/SeoulAlrim-ExtraBold.otf").absolute())
 BGM_PATH = "data/music/background.mp3"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# OpenAI 클라이언트 초기화 (키가 있을 때만)
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 def cleanup_video_files(video_path: str, related_files: list = None):
+    """임시 파일 삭제"""
     try:
         files_to_delete = [video_path]
         if related_files: files_to_delete.extend(related_files)
@@ -42,12 +51,9 @@ def cleanup_video_files(video_path: str, related_files: list = None):
         logger.warning(f"   ⚠️ 파일 삭제 실패: {e}")
 
 def create_metadata_from_title(title: str, source_url: str = "") -> dict:
-    """제목의 언더바를 제거하고 정제된 메타데이터 생성"""
+    """유튜브 제목 및 태그 생성 (언더바 제거)"""
     clean_title = re.sub(r'_\d+$', '', title).strip()
-    clean_title = clean_title.replace('_', ' ') # 언더바 제거
-    
-    if not clean_title or len(clean_title) < 2:
-        clean_title = "오늘의 화제 영상"
+    clean_title = clean_title.replace('_', ' ') # 언더바를 공백으로
     
     youtube_final_title = f"{clean_title} #shorts"
     description = f"{clean_title}\n\n😂 영상이 재밌다면 구독과 좋아요 부탁드려요!\n"
@@ -58,33 +64,52 @@ def create_metadata_from_title(title: str, source_url: str = "") -> dict:
     words = re.findall(r'[가-힣a-zA-Z0-9]+', clean_title)
     tags = ['shorts', '숏츠', '개그'] + [w for w in words if len(w) >= 2][:10]
     
-    return {
-        'title': youtube_final_title, 
-        'original_title': clean_title, 
-        'description': description, 
-        'tags': tags
-    }
+    return {'title': youtube_final_title, 'original_title': clean_title, 'description': description, 'tags': tags}
 
-def generate_tts(text: str, output_path: str):
-    """AI 목소리(TTS) 생성"""
+def generate_voice_safe(text: str, output_path: str):
+    """
+    하이브리드 음성 생성 로직
+    1순위: OpenAI TTS (유료/고품질)
+    2순위: gTTS (무료/백업)
+    """
+    input_text = f"{text}. 끝까지 확인해보세요."
+    
+    # 1. OpenAI TTS 시도
+    if client:
+        try:
+            logger.info(f"🎙️ OpenAI TTS 시도 중 (alloy 보이스)...")
+            response = client.audio.speech.create(
+                model="tts-1",
+                voice="alloy", # 경쾌한 남성 목소리
+                input=input_text
+            )
+            response.stream_to_file(output_path)
+            logger.info(f"✅ OpenAI TTS 생성 완료")
+            return output_path
+        except Exception as e:
+            logger.warning(f"⚠️ OpenAI TTS 실패 (잔액부족 등): {e}")
+            logger.info("🔄 무료 gTTS 엔진으로 전환합니다.")
+    else:
+        logger.info("ℹ️ OpenAI API 키가 설정되지 않았습니다. 무료 엔진을 사용합니다.")
+
+    # 2. gTTS 백업 (OpenAI 실패 시 또는 키가 없을 시)
     try:
-        logger.info(f"🎙️ AI 나레이션 생성 중...")
-        # 짧고 강렬한 첫 문장 생성
-        intro_text = f"{text}. 끝까지 확인해보세요."
-        tts = gTTS(text=intro_text, lang='ko')
+        logger.info(f"🎙️ gTTS(무료) 생성 중...")
+        tts = gTTS(text=input_text, lang='ko')
         tts.save(output_path)
+        logger.info(f"✅ gTTS 생성 완료")
         return output_path
     except Exception as e:
-        logger.error(f"❌ TTS 생성 실패: {e}")
+        logger.error(f"❌ 모든 TTS 엔진이 실패했습니다: {e}")
         return None
 
 def process_video_effects(video_path: str, subtitle_text: str) -> str:
-    """자막 추가 + 상태 바 추가 + FFmpeg 통합 처리"""
+    """자막(상단) + 상태바(하단) 합성"""
     try:
         video_path = Path(video_path)
         output_path = video_path.parent / f"{video_path.stem}_processed{video_path.suffix}"
         
-        # 자막 정제 및 줄바꿈
+        # 자막 줄바꿈 처리
         display_text = subtitle_text.replace('_', ' ')
         wrapper = textwrap.TextWrapper(width=12, break_long_words=False)
         wrapped_lines = wrapper.wrap(display_text)
@@ -94,15 +119,14 @@ def process_video_effects(video_path: str, subtitle_text: str) -> str:
         if not os.path.exists(CUSTOM_FONT_PATH):
             font_arg = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
 
-        # 영상 길이 추출 (상태 바 계산용)
+        # 영상 길이 확인 (상태바 애니메이션용)
         probe_cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(video_path)]
-        duration = float(subprocess.run(probe_cmd, capture_output=True, text=True).stdout.strip())
+        duration_res = subprocess.run(probe_cmd, capture_output=True, text=True).stdout.strip()
+        duration = float(duration_res) if duration_res else 1.0
 
-        logger.info(f"📝 자막 및 상태바 합성 중...")
         escaped_text = display_text.replace("'", "'\\\\\\''").replace(":", "\\:")
         
-        # [상태바 로직] drawbox 필터 사용: 시간이 흐를수록 가로 길이가 늘어남
-        # [자막 로직] 기존 상단 자막 유지
+        # 하단 빨간색 시청 상태바(drawbox) 추가
         ffmpeg_cmd = [
             'ffmpeg', '-i', str(video_path),
             '-vf', (
@@ -117,19 +141,19 @@ def process_video_effects(video_path: str, subtitle_text: str) -> str:
         subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
         return str(output_path)
     except Exception as e:
-        logger.warning(f"⚠️ 영상 가공 에러: {e}")
+        logger.error(f"❌ 영상 가공 실패: {e}")
         return str(video_path)
 
-def merge_audio_all(video_path: str, tts_path: str, bgm_path: str) -> str:
-    """영상 + 나레이션(TTS) + 배경음악(BGM) 최종 믹싱"""
+def merge_audio_final(video_path: str, tts_path: str, bgm_path: str) -> str:
+    """영상 + 나레이션 + 배경음악 믹싱"""
     try:
         video_path = Path(video_path)
         output_path = video_path.parent / f"{video_path.stem}_final.mp4"
         
-        # TTS는 시작하자마자 크게, BGM은 잔잔하게 깔리도록 설정
+        # 볼륨 믹싱: TTS(강하게), BGM(잔잔하게)
         filter_complex = (
-            "[1:a]volume=1.5[tts];" # 나레이션 볼륨 업
-            "[2:a]volume=0.2:loop=-1:size=2[bgm];" # BGM 볼륨 다운 및 루프
+            "[1:a]volume=1.8[tts];" 
+            "[2:a]volume=0.15:loop=-1:size=2[bgm];" 
             "[0:a][tts][bgm]amix=inputs=3:duration=first:dropout_transition=2[a]"
         )
         
@@ -145,10 +169,11 @@ def merge_audio_all(video_path: str, tts_path: str, bgm_path: str) -> str:
         subprocess.run(cmd, capture_output=True, check=True)
         return str(output_path)
     except Exception as e:
-        logger.error(f"❌ 오디오 믹싱 실패: {e}")
+        logger.error(f"❌ 최종 오디오 믹싱 실패: {e}")
         return str(video_path)
 
 def convert_to_shorts_format(video_path: str) -> str:
+    """9:16 비율 변환"""
     try:
         video_path = Path(video_path)
         output_path = video_path.parent / f"{video_path.stem}_shorts.mp4"
@@ -159,53 +184,56 @@ def convert_to_shorts_format(video_path: str) -> str:
     except: return None
 
 def main():
-    logger.info("\n🚀 수익 창출 고도화 시스템 가동")
+    logger.info("\n🚀 하이브리드 자동화 시스템 가동 시작")
     try:
         uploader = YouTubeUploader()
         collector = AAGAGCollector()
         videos = collector.collect_and_download(max_videos=10)
         
         for idx, video in enumerate(videos, 1):
-            logger.info(f"\n🎬 [{idx}/{len(videos)}] {video.get('title')}")
+            logger.info(f"\n🎬 [{idx}/{len(videos)}] 콘텐츠 처리 중...")
             v_path = video.get('video_path')
             related = []
             
             try:
+                # 1. 메타데이터 생성
                 metadata = create_metadata_from_title(video.get('title'), video.get('source_url'))
                 
-                # 1. 쇼츠 규격 변환
+                # 2. 기본 쇼츠 변환
                 proc_path = convert_to_shorts_format(v_path)
                 if not proc_path: continue
                 related.append(proc_path)
                 
-                # 2. 자막 및 하단 상태 바 추가
+                # 3. 자막 및 상태바 추가
                 proc_path = process_video_effects(proc_path, metadata['original_title'])
                 related.append(proc_path)
                 
-                # 3. AI 나레이션(TTS) 파일 생성
-                tts_file = f"data/videos/tts_{idx}.mp3"
-                if generate_tts(metadata['original_title'], tts_file):
+                # 4. 하이브리드 TTS 생성 (OpenAI 우선 -> gTTS 백업)
+                tts_file = f"data/videos/voice_{idx}.mp3"
+                if generate_voice_safe(metadata['original_title'], tts_file):
                     related.append(tts_file)
-                    # 4. 오디오 최종 믹싱 (영상 + TTS + BGM)
+                    # 5. 오디오 최종 합성
                     if os.path.exists(BGM_PATH):
-                        final_path = merge_audio_all(proc_path, tts_file, BGM_PATH)
+                        final_path = merge_audio_final(proc_path, tts_file, BGM_PATH)
                         if final_path != proc_path:
                             proc_path = final_path
                             related.append(proc_path)
 
-                # 5. 썸네일 추출 및 업로드
-                thumb_path = video.get('video_path').replace('.mp4', '_thumb.jpg') # 간소화
+                # 6. 업로드
                 if uploader.authenticated:
                     uploader.upload_video(video_path=proc_path, title=metadata['title'], 
                                         description=metadata['description'], tags=metadata['tags'])
                 
-                cleanup_video_files(v_path, related)
-            except Exception as e:
-                logger.error(f"❌ 처리 실패: {e}")
+                # 임시 파일 정리
                 cleanup_video_files(v_path, related)
                 
+            except Exception as e:
+                logger.error(f"❌ 개별 영상 처리 중 오류: {e}")
+                cleanup_video_files(v_path, related)
+                
+        logger.info("\n🎉 모든 자동 업로드 작업이 완료되었습니다!")
     except Exception as e:
-        logger.error(f"❌ 실행 오류: {e}")
+        logger.error(f"❌ 시스템 오류: {e}")
 
 if __name__ == "__main__":
     main()
