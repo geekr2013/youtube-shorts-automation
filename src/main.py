@@ -1,6 +1,5 @@
 """
-AAGAG 숏폼 자동화 메인 스크립트 - 최종 완성 버전
-수정 사항: 자막 자동 줄바꿈, 언더바 제거, 배경음악 합성 로직 추가
+AAGAG 숏폼 자동화 메인 스크립트 - 제목 가독성 및 원본 중심 최적화 버전
 """
 
 import os
@@ -20,7 +19,7 @@ try:
     from aagag_collector import AAGAGCollector
     from youtube_uploader import YouTubeUploader
     from email_notifier import send_email_notification
-    from background_music import add_background_music # 배경음악 모듈
+    from background_music import add_background_music
     logger.info("✅ 모듈 임포트 완료")
 except ImportError as e:
     logger.error(f"❌ 모듈 임포트 실패: {e}")
@@ -32,7 +31,7 @@ CUSTOM_FONT_PATH = str(Path("font/SeoulAlrim-ExtraBold.otf").absolute())
 BGM_PATH = "data/music/background.mp3" 
 
 def cleanup_video_files(video_path: str, related_files: list = None):
-    """임시 생성된 모든 영상 파일 삭제"""
+    """임시 생성된 파일 삭제"""
     try:
         files_to_delete = [video_path]
         if related_files: files_to_delete.extend(related_files)
@@ -42,52 +41,52 @@ def cleanup_video_files(video_path: str, related_files: list = None):
     except Exception as e:
         logger.warning(f"   ⚠️ 파일 삭제 실패: {e}")
 
-def get_folder_size(folder_path: str) -> float:
-    total_size = 0
-    try:
-        for dirpath, _, filenames in os.walk(folder_path):
-            for f in filenames:
-                fp = os.path.join(dirpath, f)
-                if os.path.exists(fp): total_size += os.path.getsize(fp)
-        return total_size / (1024 * 1024)
-    except: return 0
-
-def optimize_title(title: str) -> str:
-    import random
-    prefix_keywords = ["😂 웃겨서 터졌다", "😱 충격적인", "🔥 요즘 핫한", "👀 보면 후회함", "🚨 난리난"]
-    suffix_keywords = ["#shorts", "#레전드", "#핵공감", "#개그"]
-    if any(char in title for char in "😱🔥😮⚡💥🎯👀🚨😂"): return title
-    optimized = f"{random.choice(prefix_keywords)} {title}" if random.random() < 0.7 else f"{title} {random.choice(suffix_keywords)}"
-    return optimized[:70]
-
 def create_metadata_from_title(title: str, source_url: str = "") -> dict:
+    """
+    원본 제목을 정제하여 유튜브 메타데이터 생성
+    - 언더바(_)를 공백으로 치환
+    - 부자연스러운 수식어 제거 및 원본 제목 유지
+    """
+    # 1. 파일명/수집 제목에서 중복 번호(_1, _2 등) 제거
     clean_title = re.sub(r'_\d+$', '', title).strip()
-    if not clean_title: clean_title = "오늘의 핫 이슈 영상"
-    optimized_title = optimize_title(clean_title)
-    description = f"{clean_title}\n\n😂 웃기면 구독 부탁드려요!\n"
-    if source_url: description += f"📌 출처: {source_url}\n"
-    description += "\n#shorts #short #숏츠 #개그 #웃긴영상"
     
-    base_tags = ['shorts', 'short', '숏츠', '개그', 'funny']
+    # 2. 언더바를 공백으로 치환 (유튜브 제목 가독성 개선)
+    clean_title = clean_title.replace('_', ' ')
+    
+    if not clean_title or len(clean_title) < 2:
+        clean_title = "오늘의 이슈 영상"
+    
+    # 3. 유튜브 알고리즘을 위한 최소한의 해시태그만 추가 (제목 본문은 원본 유지)
+    youtube_final_title = f"{clean_title} #shorts"
+    
+    # Shorts 최적화 설명 작성
+    description = f"{clean_title}\n\n😂 재밌게 보셨다면 구독과 좋아요 부탁드려요!\n"
+    if source_url:
+        description += f"📌 출처: {source_url}\n"
+    
+    description += "\n#shorts #숏츠 #개그 #꿀잼 #레전드"
+    
+    # 태그 추출 (공백 기반)
     words = re.findall(r'[가-힣a-zA-Z0-9]+', clean_title)
+    base_tags = ['shorts', '숏츠', '개그', '레전드']
     tags = base_tags + [w for w in words if len(w) >= 2][:10]
     
-    return {'title': optimized_title, 'original_title': clean_title, 'description': description, 'tags': tags}
+    return {
+        'title': youtube_final_title, 
+        'original_title': clean_title, 
+        'description': description, 
+        'tags': tags
+    }
 
 def add_subtitle_to_video(video_path: str, subtitle_text: str) -> str:
-    """
-    영상 상단에 고가독성 자막 추가
-    - 언더바 제거, 자동 줄바꿈, 상단 배치 완료
-    """
+    """영상 내 상단 자막 추가 (줄바꿈 및 언더바 처리 포함)"""
     try:
         video_path = Path(video_path)
         output_path = video_path.parent / f"{video_path.stem}_subtitle{video_path.suffix}"
         
-        # 1. 언더바를 공백으로 치환
+        # 언더바 제거 및 줄바꿈 처리
         display_text = subtitle_text.replace('_', ' ')
-        
-        # 2. 자동 줄바꿈 처리 (12자 기준)
-        wrapper = textwrap.TextWrapper(width=12, break_long_words=False) 
+        wrapper = textwrap.TextWrapper(width=12, break_long_words=False)
         wrapped_lines = wrapper.wrap(display_text)
         display_text = "\n".join(wrapped_lines)
 
@@ -104,17 +103,11 @@ def add_subtitle_to_video(video_path: str, subtitle_text: str) -> str:
             '-vf', (
                 f"drawtext=fontfile='{font_arg}':"
                 f"text='{escaped_text}':"
-                f"fontcolor=white:"
-                f"fontsize=80:"
-                f"line_spacing=15:"
-                f"box=1:"
-                f"boxcolor=black@0.4:"
-                f"boxborderw=25:"
-                f"x=(w-text_w)/2:"
-                f"y=120"
+                f"fontcolor=white:fontsize=80:line_spacing=15:"
+                f"box=1:boxcolor=black@0.4:boxborderw=25:"
+                f"x=(w-text_w)/2:y=120"
             ),
-            '-c:a', 'copy', 
-            '-y', str(output_path)
+            '-c:a', 'copy', '-y', str(output_path)
         ]
         
         result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
@@ -166,33 +159,33 @@ def main():
         for idx, video in enumerate(videos, 1):
             logger.info(f"\n🎬 [{idx}/{len(videos)}] {video.get('title')}")
             v_path = video.get('video_path')
-            related = [] # 생성된 임시 파일 추적용
+            related = []
             
             try:
+                # 1. 메타데이터 생성 (언더바 제거 및 원본 제목 반영)
                 metadata = create_metadata_from_title(video.get('title'), video.get('source_url'))
                 
-                # 1. 쇼츠 포맷 변환
+                # 2. 쇼츠 포맷 변환
                 proc_path = convert_to_shorts_format(v_path)
                 if not proc_path: continue
                 if proc_path != v_path: related.append(proc_path)
                 
-                # 2. 자막 추가
+                # 3. 자막 추가
                 proc_path = add_subtitle_to_video(proc_path, metadata['original_title'])
                 if proc_path not in related and proc_path != v_path: related.append(proc_path)
                 
-                # 3. 배경음악 추가 (파일이 존재할 때만 실행)
+                # 4. 배경음악 추가
                 if os.path.exists(BGM_PATH):
-                    logger.info("🎵 배경음악 합성 중...")
                     bgm_video_path = add_background_music(proc_path, BGM_PATH)
                     if bgm_video_path != proc_path:
                         proc_path = bgm_video_path
                         related.append(proc_path)
 
-                # 4. 썸네일 추출
+                # 5. 썸네일 추출
                 thumb_path = extract_thumbnail(proc_path)
                 if thumb_path: related.append(thumb_path)
                 
-                # 5. 최종 업로드
+                # 6. 유튜브 업로드
                 if uploader.authenticated:
                     res = uploader.upload_video(
                         video_path=proc_path, 
@@ -204,7 +197,6 @@ def main():
                     if res.get('success'): 
                         logger.info(f"✅ 업로드 성공: {res.get('video_url')}")
                 
-                # 작업 완료 후 정리
                 cleanup_video_files(v_path, related)
 
             except Exception as e:
