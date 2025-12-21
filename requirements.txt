@@ -1,15 +1,13 @@
-# 웹 크롤링
+# 웹 크롤링 및 통신
 playwright>=1.40.0
 requests>=2.31.0
 
-# YouTube API
+# YouTube API 및 인증
 google-api-python-client>=2.100.0
 google-auth-oauthlib>=1.1.0
 google-auth-httplib2>=0.1.1
-
-# Gemini AI
 google-generativeai>=0.3.0
 
-# 비디오 처리 (선택사항 - 자막 기능용)
-# moviepy>=1.0.3
-# imagemagick는 시스템 패키지로 설치 필요
+# AI 목소리 (TTS) - 새로 추가된 부분
+openai>=1.3.0
+gTTS>=2.3.2
