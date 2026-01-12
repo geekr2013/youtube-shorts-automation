@@ -64,10 +64,10 @@ def create_metadata_from_title(title: str, source_url: str = "") -> dict:
     youtube_final_title = f"{clean_title} #shorts"
     description = f"{clean_title}\n\n😂 영상이 재밌다면 구독과 좋아요 부탁드려요!\n"
     if source_url: description += f"📌 출처: {source_url}\n"
-    description += "\n#shorts #숏츠 #개그 #레전드"
+    description += "\n#핫이슈 #숏츠 #개그 #레전드"
     
     words = re.findall(r'[가-힣a-zA-Z0-9]+', clean_title)
-    tags = ['shorts', '숏츠', '개그'] + [w for w in words if len(w) >= 2][:10]
+    tags = ['이슈', '숏츠', '개그'] + [w for w in words if len(w) >= 2][:10]
     return {'title': youtube_final_title, 'original_title': clean_title, 'description': description, 'tags': tags}
 
 def generate_voice_safe(text: str, output_path: str):
