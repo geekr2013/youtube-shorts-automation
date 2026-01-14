@@ -61,7 +61,7 @@ def cleanup_video_files(video_path: str, related_files: list = None):
 def create_metadata_from_title(title: str, source_url: str = "") -> dict:
     """유튜브 메타데이터 생성"""
     clean_title = re.sub(r'_\d+$', '', title).strip().replace('_', ' ')
-    youtube_final_title = f"{clean_title} #shorts"
+    youtube_final_title = f"{clean_title} #hot #이슈 #재미"
     description = f"{clean_title}\n\n😂 영상이 재밌다면 구독과 좋아요 부탁드려요!\n"
     if source_url: description += f"📌 출처: {source_url}\n"
     description += "\n#핫이슈 #숏츠 #개그 #레전드"
