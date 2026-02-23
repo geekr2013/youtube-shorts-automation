@@ -1,8 +1,8 @@
 """
-AAGAG YouTube Shorts 자동화 - 최종 최적화 버전 (오디오 감지 및 UI 정돈)
-1. 무음 영상 시 배경음악 자동 적용
-2. 하단 진행바 제거 (가독성 증대)
-3. OpenAI TTS 우선 -> gTTS 백업 (하이브리드 유지)
+AAGAG YouTube Shorts 자동화 - 수익화 최적화 버전
+1. GPT 기반 나레이션 대본 자동 생성
+2. 시각적 차별화를 위한 블러 배경 효과 추가
+3. 파일명 정규화 및 0초 영상 에러 방지 로직 포함
 """
 
 import os
@@ -19,12 +19,11 @@ try:
     from gtts import gTTS
     from aagag_collector import AAGAGCollector
     from youtube_uploader import YouTubeUploader
-    from email_notifier import send_email_notification
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO, format='%(message)s')
-    logger.info("✅ 모든 핵심 모듈 임포트 완료")
+    logger.info("✅ 수익화 대응 모듈 로드 완료")
 except ImportError as e:
-    print(f"❌ 라이브러리 로드 실패: {e}")
+    print(f"❌ 라이브러리 로드 실패: {e}. pip install openai gtts 등을 확인하세요.")
     sys.exit(1)
 
 # 설정 정보
@@ -35,179 +34,181 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # OpenAI 클라이언트 초기화
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-def has_audio(file_path: str) -> bool:
-    """영상에 오디오 스트림이 존재하는지 확인"""
+def sanitize_filename(filename: str) -> str:
+    """파일명 에러 방지를 위한 정규화"""
+    base, ext = os.path.splitext(filename)
+    clean_base = re.sub(r'[^\w\s\d가-힣]', '', base).replace(' ', '_')
+    return f"{clean_base[:50]}{ext}"
+
+def get_video_duration(file_path: str) -> float:
+    """영상의 실제 길이를 측정"""
     try:
-        cmd = [
-            'ffprobe', '-v', 'error', '-select_streams', 'a',
-            '-show_entries', 'stream=index', '-of', 'csv=p=0', str(file_path)
-        ]
+        cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(file_path)]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return float(result.stdout.strip())
+    except: return 0.0
+
+def has_audio(file_path: str) -> bool:
+    try:
+        cmd = ['ffprobe', '-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', str(file_path)]
         result = subprocess.run(cmd, capture_output=True, text=True)
         return len(result.stdout.strip()) > 0
-    except:
-        return False
+    except: return False
 
 def cleanup_video_files(video_path: str, related_files: list = None):
-    """임시 파일 삭제"""
     try:
         files_to_delete = [video_path]
         if related_files: files_to_delete.extend(related_files)
-        for file_path in files_to_delete:
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-    except Exception as e:
-        logger.warning(f"   ⚠️ 파일 삭제 실패: {e}")
+        for f in files_to_delete:
+            if f and os.path.exists(f): os.remove(f)
+    except: pass
 
-def create_metadata_from_title(title: str, source_url: str = "") -> dict:
-    """유튜브 메타데이터 생성"""
+def generate_ai_script(title: str) -> str:
+    """GPT를 사용하여 수익화용 나레이션 대본 생성"""
+    if not client: return title
+    try:
+        prompt = f"이 유튜브 쇼츠 영상 제목을 바탕으로 시청자의 호기심을 자극하는 10초 내외의 짧은 나레이션 대본을 써줘. 문장은 ~네요, ~일까요? 처럼 친근하게. 제목: {title}"
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=150
+        )
+        return response.choices[0].message.content.strip()
+    except:
+        return f"오늘 소개할 내용은 {title} 입니다. 정말 흥미롭지 않나요?"
+
+def create_metadata(title: str, source_url: str = "") -> dict:
     clean_title = re.sub(r'_\d+$', '', title).strip().replace('_', ' ')
-    youtube_final_title = f"{clean_title} #hot #이슈 #재미"
-    description = f"{clean_title}\n\n😂 영상이 재밌다면 구독과 좋아요 부탁드려요!\n"
+    ai_script = generate_ai_script(clean_title)
+    
+    youtube_final_title = f"{clean_title} #shorts #이슈 #재미"
+    description = f"{ai_script}\n\n😂 영상이 재밌다면 구독과 좋아요 부탁드려요!\n"
     if source_url: description += f"📌 출처: {source_url}\n"
-    description += "\n#핫이슈 #숏츠 #개그 #레전드"
     
     words = re.findall(r'[가-힣a-zA-Z0-9]+', clean_title)
     tags = ['이슈', '숏츠', '개그'] + [w for w in words if len(w) >= 2][:10]
-    return {'title': youtube_final_title, 'original_title': clean_title, 'description': description, 'tags': tags}
+    return {'title': youtube_final_title, 'script': ai_script, 'original_title': clean_title, 'description': description, 'tags': tags}
 
 def generate_voice_safe(text: str, output_path: str):
-    """하이브리드 TTS 생성"""
-    input_text = f"{text}. 끝까지 확인해보세요."
+    """나레이션 생성"""
     if client:
         try:
-            response = client.audio.speech.create(model="tts-1", voice="alloy", input=input_text)
+            response = client.audio.speech.create(model="tts-1", voice="alloy", input=text)
             response.stream_to_file(output_path)
             return output_path
-        except:
-            logger.warning("⚠️ OpenAI TTS 실패, gTTS로 전환합니다.")
+        except: pass
     try:
-        tts = gTTS(text=input_text, lang='ko')
+        tts = gTTS(text=text, lang='ko')
         tts.save(output_path)
         return output_path
-    except:
-        return None
+    except: return None
 
-def process_video_effects(video_path: str, subtitle_text: str) -> str:
-    """자막(상단) 추가 - 진행바 로직 제거됨"""
+def convert_to_monetizable_format(video_path: str, title_text: str) -> str:
+    """수익화를 위한 시각적 가공: 블러 배경 + 9:16 + 자막"""
     try:
         video_path = Path(video_path)
-        output_path = video_path.parent / f"{video_path.stem}_processed{video_path.suffix}"
+        output_path = video_path.parent / f"{video_path.stem}_final_prod.mp4"
         
-        display_text = subtitle_text.replace('_', ' ')
-        wrapper = textwrap.TextWrapper(width=12, break_long_words=False)
-        display_text = "\n".join(wrapper.wrap(display_text))
-
         font_arg = CUSTOM_FONT_PATH.replace('\\', '/')
         if not os.path.exists(CUSTOM_FONT_PATH):
             font_arg = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
 
-        logger.info(f"📝 상단 타이틀 자막 합성 중...")
-        escaped_text = display_text.replace("'", "'\\\\\\''").replace(":", "\\:")
-        
-        ffmpeg_cmd = [
-            'ffmpeg', '-i', str(video_path),
-            '-vf', (
-                f"drawtext=fontfile='{font_arg}':text='{escaped_text}':"
-                f"fontcolor=white:fontsize=80:line_spacing=15:"
-                f"box=1:boxcolor=black@0.4:boxborderw=25:x=(w-text_w)/2:y=120"
-            ),
-            '-c:a', 'copy', '-y', str(output_path)
-        ]
-        
-        subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
-        return str(output_path)
-    except Exception as e:
-        logger.error(f"❌ 영상 가공 실패: {e}")
-        return str(video_path)
+        # 블러 배경 효과 + 중앙 영상 배치 + 상단 자막 필터
+        # 1. 배경을 크게 키워 블러 처리, 2. 원본을 비율에 맞게 중앙 배치, 3. 자막 추가
+        filter_complex = (
+            f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg];"
+            f"[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,"
+            f"drawtext=fontfile='{font_arg}':text='{title_text}':fontcolor=white:fontsize=80:"
+            f"box=1:boxcolor=black@0.5:boxborderw=30:x=(w-text_w)/2:y=150"
+        )
 
-def merge_audio_final(video_path: str, tts_path: str, bgm_path: str) -> str:
-    """최종 오디오 믹싱 (원본 소리 유무에 따른 가변 믹싱)"""
-    try:
-        video_path = Path(video_path)
-        output_path = video_path.parent / f"{video_path.stem}_final.mp4"
-        
-        video_has_audio = has_audio(video_path)
-        
-        if video_has_audio:
-            logger.info("🔊 원본 소리 감지: 원본+나레이션+배경음(약하게) 믹싱")
-            filter_complex = (
-                "[0:a]volume=1.0[orig];"
-                "[1:a]volume=1.8[tts];"
-                "[2:a]volume=0.12:loop=-1:size=2[bgm];" # 원본 소리가 있으면 BGM은 아주 작게
-                "[orig][tts][bgm]amix=inputs=3:duration=first:dropout_transition=2[a]"
-            )
-        else:
-            logger.info("🔇 원본 소리 없음: 나레이션+배경음(정상) 믹싱")
-            filter_complex = (
-                "[1:a]volume=1.8[tts];"
-                "[2:a]volume=0.3:loop=-1:size=2[bgm];" # 원본 소리가 없으면 BGM을 적절히 높임
-                "[tts][bgm]amix=inputs=2:duration=first:dropout_transition=2[a]"
-            )
-        
         cmd = [
             'ffmpeg', '-i', str(video_path),
-            '-i', str(tts_path),
-            '-i', str(bgm_path),
-            '-filter_complex', filter_complex,
-            '-map', '0:v', '-map', '[a]',
-            '-c:v', 'copy', '-c:a', 'aac', '-y', str(output_path)
+            '-vf', filter_complex,
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
+            '-c:a', 'aac', '-y', str(output_path)
         ]
         
         subprocess.run(cmd, capture_output=True, check=True)
         return str(output_path)
     except Exception as e:
-        logger.error(f"❌ 오디오 믹싱 실패: {e}")
-        return str(video_path)
+        logger.error(f"❌ 영상 가공 에러: {e}")
+        return None
 
-def convert_to_shorts_format(video_path: str) -> str:
-    """9:16 포맷 변환"""
+def merge_audio_final(video_path: str, tts_path: str, bgm_path: str) -> str:
     try:
         video_path = Path(video_path)
-        output_path = video_path.parent / f"{video_path.stem}_shorts.mp4"
-        filter_str = "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black"
-        cmd = ['ffmpeg', '-i', str(video_path), '-vf', f"{filter_str},setsar=1", '-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-c:a', 'aac', '-y', str(output_path)]
+        output_path = video_path.parent / f"final_upload_{video_path.name}"
+        has_v_audio = has_audio(str(video_path))
+        
+        if has_v_audio:
+            filter_audio = "[0:a]volume=0.8[orig];[1:a]volume=2.0[tts];[2:a]volume=0.1:loop=-1:size=2[bgm];[orig][tts][bgm]amix=inputs=3:duration=first[a]"
+        else:
+            filter_audio = "[1:a]volume=2.0[tts];[2:a]volume=0.3:loop=-1:size=2[bgm];[tts][bgm]amix=inputs=2:duration=first[a]"
+            
+        cmd = [
+            'ffmpeg', '-i', str(video_path), '-i', str(tts_path), '-i', str(bgm_path),
+            '-filter_complex', filter_audio, '-map', '0:v', '-map', '[a]',
+            '-c:v', 'copy', '-c:a', 'aac', '-y', str(output_path)
+        ]
         subprocess.run(cmd, capture_output=True, check=True)
         return str(output_path)
-    except: return None
+    except: return str(video_path)
 
 def main():
-    logger.info("\n🚀 최적화 자동화 시스템 가동 시작")
+    logger.info("\n🚀 수익화 대응 자동화 시스템 시작")
     try:
         uploader = YouTubeUploader()
         collector = AAGAGCollector()
         videos = collector.collect_and_download(max_videos=10)
         
         for idx, video in enumerate(videos, 1):
-            logger.info(f"\n🎬 [{idx}/{len(videos)}] {video.get('title')}")
             v_path = video.get('video_path')
+            if not v_path or get_video_duration(v_path) <= 0:
+                logger.warning(f"⚠️ 건너뜀 (파일 없음 혹은 0초): {video.get('title')}")
+                continue
+
+            # 파일명 안전하게 변경
+            safe_v_path = os.path.join(os.path.dirname(v_path), sanitize_filename(os.path.basename(v_path)))
+            os.rename(v_path, safe_v_path)
+            v_path = safe_v_path
+
+            logger.info(f"\n🎬 [{idx}/{len(videos)}] 처리 중: {video.get('title')}")
             related = []
             
             try:
-                metadata = create_metadata_from_title(video.get('title'), video.get('source_url'))
-                proc_path = convert_to_shorts_format(v_path)
+                # 1. 메타데이터 및 AI 대본 생성
+                metadata = create_metadata(video.get('title'), video.get('source_url'))
+                
+                # 2. 영상 포맷 변환 (블러 배경 + 자막)
+                proc_path = convert_to_monetizable_format(v_path, metadata['original_title'])
                 if not proc_path: continue
                 related.append(proc_path)
                 
-                proc_path = process_video_effects(proc_path, metadata['original_title'])
-                related.append(proc_path)
-                
+                # 3. AI 나레이션 생성
                 tts_file = f"data/videos/voice_{idx}.mp3"
-                if generate_voice_safe(metadata['original_title'], tts_file):
+                if generate_voice_safe(metadata['script'], tts_file):
                     related.append(tts_file)
+                    # 4. 오디오 믹싱
                     if os.path.exists(BGM_PATH):
                         final_path = merge_audio_final(proc_path, tts_file, BGM_PATH)
                         if final_path != proc_path:
                             proc_path = final_path
                             related.append(proc_path)
 
+                # 5. 업로드
                 if uploader.authenticated:
                     uploader.upload_video(video_path=proc_path, title=metadata['title'], 
                                         description=metadata['description'], tags=metadata['tags'])
+                
                 cleanup_video_files(v_path, related)
+                logger.info(f"✅ 처리 및 업로드 완료")
             except Exception as e:
-                logger.error(f"❌ 처리 오류: {e}")
+                logger.error(f"❌ 개별 영상 처리 오류: {e}")
                 cleanup_video_files(v_path, related)
-        logger.info("\n🎉 모든 자동 업로드 작업 완료!")
+
+        logger.info("\n🎉 모든 작업이 완료되었습니다!")
     except Exception as e:
         logger.error(f"❌ 시스템 오류: {e}")
 
