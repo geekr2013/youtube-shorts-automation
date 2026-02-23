@@ -19,28 +19,21 @@ logger = logging.getLogger(__name__)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ENABLE_BGM = os.getenv("ENABLE_BGM", "false").lower() == "true"
 ROOT_DIR = Path.cwd()
-BGM_PATH = ROOT_DIR / "data/music" / "background.mp3"
-LOCAL_FONT_NAME = "font_res.ttf" # 로컬로 복사될 폰트 이름
+BGM_PATH = ROOT_DIR / "data" / "music" / "background.mp3"
+LOCAL_FONT_NAME = "font_res.ttf"
 
 def prepare_font():
-    """시스템 폰트를 로컬 작업 디렉토리로 복사하여 경로 문제를 해결합니다."""
+    """시스템 폰트를 현재 폴더로 복사 (경로 문제 원천 차단)"""
     if os.path.exists(LOCAL_FONT_NAME):
         return LOCAL_FONT_NAME
-        
-    system_fonts = [
+    fonts = [
         "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
     ]
-    
-    for f in system_fonts:
+    for f in fonts:
         if os.path.exists(f):
-            try:
-                shutil.copy(f, LOCAL_FONT_NAME)
-                logger.info(f"✅ 폰트 준비 완료: {f} -> {LOCAL_FONT_NAME}")
-                return LOCAL_FONT_NAME
-            except:
-                continue
+            shutil.copy(f, LOCAL_FONT_NAME)
+            return LOCAL_FONT_NAME
     return None
 
 def sanitize_filename(filename):
@@ -76,42 +69,43 @@ def generate_ai_script(title):
         response = model.generate_content(prompt)
         return response.text.strip()
     except:
-        return f"오늘 영상은 {title} 입니다. 끝까지 봐주세요!"
+        return f"오늘 영상은 {title} 입니다. 정말 흥미롭네요!"
 
 def convert_to_monetizable_format(video_path, title_text):
-    """경로 문제를 완벽히 해결한 로컬 파일 기반 가공 로직"""
+    """[핵심 수정] -filter_complex를 사용하여 수익화 포맷 가공"""
     v_path = Path(video_path)
     output_path = v_path.parent / f"{v_path.stem}_monetized.mp4"
-    
-    # 경로 없는 순수 파일명만 사용 (FFmpeg 에러 방지 핵심)
     text_file_name = "render_text.txt"
     font_file = prepare_font()
     
-    # 제목 줄바꿈 처리
     wrapped_text = "\n".join(textwrap.wrap(title_text, width=15))
     
     try:
         with open(text_file_name, "w", encoding="utf-8") as f:
             f.write(wrapped_text)
         
-        # 필터 구성: 모든 경로를 제거하고 파일명만 사용
-        filter_str = (
-            f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg];"
-            f"[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
-            f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
+        # [핵심 변경] -vf 대신 -filter_complex를 사용해야 status 234 에러가 발생하지 않습니다.
+        filter_complex_str = (
+            f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg]; "
+            f"[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]; "
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2[outv]"
         )
         
         if font_file:
-            # fontfile='이름', textfile='이름' 형태로 슬래시(/)를 완전히 제거
-            filter_str += (
-                f",drawtext=fontfile='{font_file}':textfile='{text_file_name}':"
+            filter_complex_str += (
+                f";[outv]drawtext=fontfile='{font_file}':textfile='{text_file_name}':"
                 f"fontcolor=white:fontsize=80:line_spacing=20:box=1:boxcolor=black@0.5:"
-                f"boxborderw=30:x=(w-text_w)/2:y=150"
+                f"boxborderw=30:x=(w-text_w)/2:y=150[finalv]"
             )
+            map_label = "[finalv]"
+        else:
+            map_label = "[outv]"
 
         cmd = [
             'ffmpeg', '-i', str(v_path),
-            '-vf', filter_str,
+            '-filter_complex', filter_complex_str,
+            '-map', map_label,
+            '-map', '0:a?', # 오디오가 있으면 가져오고 없으면 무시
             '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
             '-c:a', 'aac', '-y', str(output_path)
         ]
@@ -122,11 +116,10 @@ def convert_to_monetizable_format(video_path, title_text):
         logger.error(f"❌ 영상 가공 실패: {e}")
         return None
     finally:
-        if os.path.exists(text_file_name):
-            os.remove(text_file_name)
+        if os.path.exists(text_file_name): os.remove(text_file_name)
 
 def main():
-    logger.info("🚀 수익화 대응 시스템 가동 (최종 경로 문제 해결 버전)")
+    logger.info("🚀 수익화 대응 시스템 가동 (Final: filter_complex fix)")
     success_count = 0
     try:
         uploader = YouTubeUploader()
@@ -137,7 +130,6 @@ def main():
             v_path = video.get('video_path')
             if not v_path or get_video_duration(v_path) <= 0: continue
 
-            # 파일명 정규화
             safe_name = sanitize_filename(os.path.basename(v_path))
             safe_path = os.path.join(os.path.dirname(v_path), safe_name)
             os.rename(v_path, safe_path)
@@ -150,17 +142,14 @@ def main():
                 clean_title = re.sub(r'_\d+$', '', video.get('title')).strip().replace('_', ' ')
                 script = generate_ai_script(clean_title)
                 
-                # 1. 영상 가공
                 proc_path = convert_to_monetizable_format(v_path, clean_title)
                 if not proc_path: continue
                 temp_files.append(proc_path)
                 
-                # 2. TTS 생성
                 tts_file = f"data/videos/voice_{idx}.mp3"
                 gTTS(text=script, lang='ko').save(tts_file)
                 temp_files.append(tts_file)
 
-                # 3. 오디오 믹싱
                 final_output = proc_path.replace('.mp4', '_final.mp4')
                 use_bgm = ENABLE_BGM and BGM_PATH.exists()
                 
@@ -174,13 +163,11 @@ def main():
                 subprocess.run(cmd, capture_output=True)
                 temp_files.append(final_output)
 
-                # 4. 유튜브 업로드
                 if uploader.authenticated:
                     uploader.upload_video(video_path=final_output, title=f"{clean_title} #shorts", description=f"{script}\n#이슈 #유머", tags=["shorts"])
                     success_count += 1
                     logger.info("✅ 업로드 완료")
                 
-                # 정리
                 for f in temp_files + [v_path]:
                     if os.path.exists(f): os.remove(f)
 
@@ -188,7 +175,6 @@ def main():
                 logger.error(f"❌ 개별 처리 실패: {e}")
 
         logger.info(f"🎉 최종 업로드 성공: {success_count}개")
-        # 폰트 정리
         if os.path.exists(LOCAL_FONT_NAME): os.remove(LOCAL_FONT_NAME)
         if success_count == 0 and len(videos) > 0: sys.exit(1)
 
