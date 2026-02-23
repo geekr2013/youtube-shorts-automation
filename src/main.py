@@ -23,9 +23,9 @@ BGM_PATH = ROOT_DIR / "data" / "music" / "background.mp3"
 LOCAL_FONT_NAME = "font_res.ttf"
 
 def prepare_font():
-    """시스템 폰트를 현재 폴더로 복사 (경로 문제 원천 차단)"""
+    """시스템 폰트를 현재 작업 폴더로 복사해옵니다."""
     if os.path.exists(LOCAL_FONT_NAME):
-        return LOCAL_FONT_NAME
+        return os.path.abspath(LOCAL_FONT_NAME)
     fonts = [
         "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -33,7 +33,7 @@ def prepare_font():
     for f in fonts:
         if os.path.exists(f):
             shutil.copy(f, LOCAL_FONT_NAME)
-            return LOCAL_FONT_NAME
+            return os.path.abspath(LOCAL_FONT_NAME)
     return None
 
 def sanitize_filename(filename):
@@ -55,9 +55,14 @@ def has_audio(file_path):
         return len(result.stdout.strip()) > 0
     except: return False
 
+def is_valid_file(file_path):
+    """파일이 존재하고, 용량이 0보다 큰지(정상인지) 확인합니다."""
+    return os.path.exists(file_path) and os.path.getsize(file_path) > 0
+
 # Gemini 초기화
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+    # 구버전 API 경고 해결을 위해 명시적으로 모델 지정
     model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     model = None
@@ -69,13 +74,13 @@ def generate_ai_script(title):
         response = model.generate_content(prompt)
         return response.text.strip()
     except:
-        return f"오늘 영상은 {title} 입니다. 정말 흥미롭네요!"
+        return f"오늘 영상은 {title} 입니다. 끝까지 봐주세요!"
 
 def convert_to_monetizable_format(video_path, title_text):
-    """[핵심 수정] -filter_complex를 사용하여 수익화 포맷 가공"""
-    v_path = Path(video_path)
-    output_path = v_path.parent / f"{v_path.stem}_monetized.mp4"
-    text_file_name = "render_text.txt"
+    """FFmpeg 234 에러를 방지하는 가장 안전한 변환 로직"""
+    v_path = os.path.abspath(video_path)
+    output_path = v_path.replace('.mp4', '_monetized.mp4')
+    text_file_name = os.path.abspath("render_text.txt")
     font_file = prepare_font()
     
     wrapped_text = "\n".join(textwrap.wrap(title_text, width=15))
@@ -84,34 +89,44 @@ def convert_to_monetizable_format(video_path, title_text):
         with open(text_file_name, "w", encoding="utf-8") as f:
             f.write(wrapped_text)
         
-        # [핵심 변경] -vf 대신 -filter_complex를 사용해야 status 234 에러가 발생하지 않습니다.
+        # FFmpeg 내에서 텍스트 파일 경로를 안전하게 이스케이프 처리
+        safe_text_path = text_file_name.replace('\\', '/').replace(':', '\\:')
+        safe_font_path = font_file.replace('\\', '/').replace(':', '\\:') if font_file else ""
+
         filter_complex_str = (
             f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg]; "
             f"[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]; "
             f"[bg][fg]overlay=(W-w)/2:(H-h)/2[outv]"
         )
         
-        if font_file:
+        if safe_font_path:
             filter_complex_str += (
-                f";[outv]drawtext=fontfile='{font_file}':textfile='{text_file_name}':"
+                f";[outv]drawtext=fontfile='{safe_font_path}':textfile='{safe_text_path}':"
                 f"fontcolor=white:fontsize=80:line_spacing=20:box=1:boxcolor=black@0.5:"
                 f"boxborderw=30:x=(w-text_w)/2:y=150[finalv]"
             )
-            map_label = "[finalv]"
+            map_v = "[finalv]"
         else:
-            map_label = "[outv]"
+            map_v = "[outv]"
 
         cmd = [
-            'ffmpeg', '-i', str(v_path),
+            'ffmpeg', '-i', v_path,
             '-filter_complex', filter_complex_str,
-            '-map', map_label,
-            '-map', '0:a?', # 오디오가 있으면 가져오고 없으면 무시
+            '-map', map_v,
+            '-map', '0:a?', 
             '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
-            '-c:a', 'aac', '-y', str(output_path)
+            '-c:a', 'aac', '-y', output_path
         ]
         
-        subprocess.run(cmd, capture_output=True, check=True)
-        return str(output_path)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"FFmpeg 가공 에러: {result.stderr}")
+            return None
+            
+        if not is_valid_file(output_path):
+            return None
+            
+        return output_path
     except Exception as e:
         logger.error(f"❌ 영상 가공 실패: {e}")
         return None
@@ -119,7 +134,7 @@ def convert_to_monetizable_format(video_path, title_text):
         if os.path.exists(text_file_name): os.remove(text_file_name)
 
 def main():
-    logger.info("🚀 수익화 대응 시스템 가동 (Final: filter_complex fix)")
+    logger.info("🚀 수익화 대응 시스템 가동 (최종 방어 로직 적용)")
     success_count = 0
     try:
         uploader = YouTubeUploader()
@@ -142,16 +157,21 @@ def main():
                 clean_title = re.sub(r'_\d+$', '', video.get('title')).strip().replace('_', ' ')
                 script = generate_ai_script(clean_title)
                 
+                # 1. 영상 가공 및 검증
                 proc_path = convert_to_monetizable_format(v_path, clean_title)
-                if not proc_path: continue
+                if not proc_path: 
+                    logger.warning(f"⚠️ 영상 가공 실패로 스킵: {clean_title}")
+                    continue
                 temp_files.append(proc_path)
                 
-                tts_file = f"data/videos/voice_{idx}.mp3"
+                # 2. TTS 생성
+                tts_file = os.path.abspath(f"data/videos/voice_{idx}.mp3")
                 gTTS(text=script, lang='ko').save(tts_file)
                 temp_files.append(tts_file)
 
+                # 3. 오디오 믹싱 및 검증
                 final_output = proc_path.replace('.mp4', '_final.mp4')
-                use_bgm = ENABLE_BGM and BGM_PATH.exists()
+                use_bgm = ENABLE_BGM and os.path.exists(BGM_PATH)
                 
                 if use_bgm:
                     mix = "[0:a]volume=0.8[orig];[1:a]volume=2.5[tts];[2:a]volume=0.1:loop=-1[bgm];[orig][tts][bgm]amix=inputs=3:duration=first[a]"
@@ -161,13 +181,20 @@ def main():
                     cmd = ['ffmpeg', '-i', proc_path, '-i', tts_file, '-filter_complex', mix, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-y', final_output]
                 
                 subprocess.run(cmd, capture_output=True)
+                
+                if not is_valid_file(final_output):
+                    logger.warning(f"⚠️ 오디오 믹싱 실패 (파일 없음): {clean_title}")
+                    continue
+                    
                 temp_files.append(final_output)
 
+                # 4. 유튜브 업로드 (진짜 파일이 있을 때만)
                 if uploader.authenticated:
                     uploader.upload_video(video_path=final_output, title=f"{clean_title} #shorts", description=f"{script}\n#이슈 #유머", tags=["shorts"])
                     success_count += 1
                     logger.info("✅ 업로드 완료")
                 
+                # 임시 파일 정리
                 for f in temp_files + [v_path]:
                     if os.path.exists(f): os.remove(f)
 
