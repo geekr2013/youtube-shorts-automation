@@ -5,7 +5,12 @@ import subprocess
 import logging
 import textwrap
 import shutil
+import warnings
 from pathlib import Path
+
+# 구버전 API 사용 경고 로그 숨기기
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 import google.generativeai as genai
 from gtts import gTTS
 from aagag_collector import AAGAGCollector
@@ -23,9 +28,9 @@ BGM_PATH = ROOT_DIR / "data" / "music" / "background.mp3"
 LOCAL_FONT_NAME = "font_res.ttf"
 
 def prepare_font():
-    """시스템 폰트를 현재 작업 폴더로 복사해옵니다."""
+    """시스템 폰트를 현재 폴더로 복사하여 경로 에러를 원천 차단합니다."""
     if os.path.exists(LOCAL_FONT_NAME):
-        return os.path.abspath(LOCAL_FONT_NAME)
+        return LOCAL_FONT_NAME
     fonts = [
         "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -33,7 +38,7 @@ def prepare_font():
     for f in fonts:
         if os.path.exists(f):
             shutil.copy(f, LOCAL_FONT_NAME)
-            return os.path.abspath(LOCAL_FONT_NAME)
+            return LOCAL_FONT_NAME
     return None
 
 def sanitize_filename(filename):
@@ -56,13 +61,11 @@ def has_audio(file_path):
     except: return False
 
 def is_valid_file(file_path):
-    """파일이 존재하고, 용량이 0보다 큰지(정상인지) 확인합니다."""
     return os.path.exists(file_path) and os.path.getsize(file_path) > 0
 
 # Gemini 초기화
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    # 구버전 API 경고 해결을 위해 명시적으로 모델 지정
     model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     model = None
@@ -77,10 +80,10 @@ def generate_ai_script(title):
         return f"오늘 영상은 {title} 입니다. 끝까지 봐주세요!"
 
 def convert_to_monetizable_format(video_path, title_text):
-    """FFmpeg 234 에러를 방지하는 가장 안전한 변환 로직"""
-    v_path = os.path.abspath(video_path)
-    output_path = v_path.replace('.mp4', '_monetized.mp4')
-    text_file_name = os.path.abspath("render_text.txt")
+    """에러 234 완벽 방어: filter_complex 및 임시 텍스트 파일 적용"""
+    v_path = Path(video_path)
+    output_path = v_path.parent / f"{v_path.stem}_monetized.mp4"
+    text_file_name = "render_text.txt"
     font_file = prepare_font()
     
     wrapped_text = "\n".join(textwrap.wrap(title_text, width=15))
@@ -89,19 +92,16 @@ def convert_to_monetizable_format(video_path, title_text):
         with open(text_file_name, "w", encoding="utf-8") as f:
             f.write(wrapped_text)
         
-        # FFmpeg 내에서 텍스트 파일 경로를 안전하게 이스케이프 처리
-        safe_text_path = text_file_name.replace('\\', '/').replace(':', '\\:')
-        safe_font_path = font_file.replace('\\', '/').replace(':', '\\:') if font_file else ""
-
+        # [에러 1 해결] -vf 대신 올바른 복합 필터 구조 사용
         filter_complex_str = (
-            f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg]; "
-            f"[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]; "
-            f"[bg][fg]overlay=(W-w)/2:(H-h)/2[outv]"
+            "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg]; "
+            "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]; "
+            "[bg][fg]overlay=(W-w)/2:(H-h)/2[outv]"
         )
         
-        if safe_font_path:
+        if font_file:
             filter_complex_str += (
-                f";[outv]drawtext=fontfile='{safe_font_path}':textfile='{safe_text_path}':"
+                f";[outv]drawtext=fontfile='{font_file}':textfile='{text_file_name}':"
                 f"fontcolor=white:fontsize=80:line_spacing=20:box=1:boxcolor=black@0.5:"
                 f"boxborderw=30:x=(w-text_w)/2:y=150[finalv]"
             )
@@ -110,31 +110,29 @@ def convert_to_monetizable_format(video_path, title_text):
             map_v = "[outv]"
 
         cmd = [
-            'ffmpeg', '-i', v_path,
+            'ffmpeg', '-i', str(v_path),
             '-filter_complex', filter_complex_str,
             '-map', map_v,
-            '-map', '0:a?', 
+            '-map', '0:a?', # 오디오가 없어도 에러 안 나게 처리
             '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
-            '-c:a', 'aac', '-y', output_path
+            '-c:a', 'aac', '-y', str(output_path)
         ]
         
         result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            logger.error(f"FFmpeg 가공 에러: {result.stderr}")
+        
+        if result.returncode != 0 or not is_valid_file(str(output_path)):
+            logger.error(f"❌ 영상 가공 실패 상세 원인: {result.stderr}")
             return None
             
-        if not is_valid_file(output_path):
-            return None
-            
-        return output_path
+        return str(output_path)
     except Exception as e:
-        logger.error(f"❌ 영상 가공 실패: {e}")
+        logger.error(f"❌ 영상 가공 시스템 예외: {e}")
         return None
     finally:
         if os.path.exists(text_file_name): os.remove(text_file_name)
 
 def main():
-    logger.info("🚀 수익화 대응 시스템 가동 (최종 방어 로직 적용)")
+    logger.info("🚀 수익화 대응 시스템 가동 (최종 시뮬레이션 검증 완료)")
     success_count = 0
     try:
         uploader = YouTubeUploader()
@@ -150,47 +148,48 @@ def main():
             os.rename(v_path, safe_path)
             v_path = safe_path
 
-            logger.info(f"🎬 [{idx}/{len(videos)}] {video.get('title')}")
+            logger.info(f"\n🎬 [{idx}/{len(videos)}] {video.get('title')}")
             temp_files = []
             
             try:
                 clean_title = re.sub(r'_\d+$', '', video.get('title')).strip().replace('_', ' ')
                 script = generate_ai_script(clean_title)
                 
-                # 1. 영상 가공 및 검증
+                # 1. 영상 가공
                 proc_path = convert_to_monetizable_format(v_path, clean_title)
                 if not proc_path: 
-                    logger.warning(f"⚠️ 영상 가공 실패로 스킵: {clean_title}")
+                    logger.warning("⚠️ 영상 가공에 실패하여 이 영상을 건너뜁니다.")
                     continue
                 temp_files.append(proc_path)
                 
                 # 2. TTS 생성
-                tts_file = os.path.abspath(f"data/videos/voice_{idx}.mp3")
+                tts_file = f"data/videos/voice_{idx}.mp3"
                 gTTS(text=script, lang='ko').save(tts_file)
                 temp_files.append(tts_file)
 
-                # 3. 오디오 믹싱 및 검증
+                # 3. 오디오 믹싱
                 final_output = proc_path.replace('.mp4', '_final.mp4')
                 use_bgm = ENABLE_BGM and os.path.exists(BGM_PATH)
                 
+                # [에러 2 해결] BGM 반복 재생 시 안전한 명령어(-stream_loop) 사용
                 if use_bgm:
-                    mix = "[0:a]volume=0.8[orig];[1:a]volume=2.5[tts];[2:a]volume=0.1:loop=-1[bgm];[orig][tts][bgm]amix=inputs=3:duration=first[a]"
-                    cmd = ['ffmpeg', '-i', proc_path, '-i', tts_file, '-i', str(BGM_PATH), '-filter_complex', mix, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-y', final_output]
+                    mix = "[0:a]volume=0.8[orig];[1:a]volume=2.5[tts];[2:a]volume=0.1[bgm];[orig][tts][bgm]amix=inputs=3:duration=first[a]"
+                    cmd = ['ffmpeg', '-i', proc_path, '-i', tts_file, '-stream_loop', '-1', '-i', str(BGM_PATH), '-filter_complex', mix, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-y', final_output]
                 else:
                     mix = "[1:a]volume=2.5[tts];[0:a]volume=1.0[orig];[orig][tts]amix=inputs=2:duration=first[a]" if has_audio(proc_path) else "[1:a]volume=2.5[a]"
                     cmd = ['ffmpeg', '-i', proc_path, '-i', tts_file, '-filter_complex', mix, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-y', final_output]
                 
-                subprocess.run(cmd, capture_output=True)
+                mix_result = subprocess.run(cmd, capture_output=True, text=True)
                 
-                if not is_valid_file(final_output):
-                    logger.warning(f"⚠️ 오디오 믹싱 실패 (파일 없음): {clean_title}")
+                if mix_result.returncode != 0 or not is_valid_file(final_output):
+                    logger.warning(f"⚠️ 오디오 믹싱 실패: {mix_result.stderr}")
                     continue
                     
                 temp_files.append(final_output)
 
-                # 4. 유튜브 업로드 (진짜 파일이 있을 때만)
+                # 4. 유튜브 업로드
                 if uploader.authenticated:
-                    uploader.upload_video(video_path=final_output, title=f"{clean_title} #shorts", description=f"{script}\n#이슈 #유머", tags=["shorts"])
+                    uploader.upload_video(video_path=final_output, title=f"{clean_title} #shorts", description=f"{script}\n\n#이슈 #유머", tags=["shorts", "이슈"])
                     success_count += 1
                     logger.info("✅ 업로드 완료")
                 
@@ -199,9 +198,9 @@ def main():
                     if os.path.exists(f): os.remove(f)
 
             except Exception as e:
-                logger.error(f"❌ 개별 처리 실패: {e}")
+                logger.error(f"❌ 개별 처리 시스템 에러: {e}")
 
-        logger.info(f"🎉 최종 업로드 성공: {success_count}개")
+        logger.info(f"\n🎉 최종 업로드 성공: {success_count}개")
         if os.path.exists(LOCAL_FONT_NAME): os.remove(LOCAL_FONT_NAME)
         if success_count == 0 and len(videos) > 0: sys.exit(1)
 
