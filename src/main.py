@@ -3,6 +3,7 @@ import sys
 import re
 import subprocess
 import logging
+import textwrap
 from pathlib import Path
 import google.generativeai as genai
 from gtts import gTTS
@@ -13,34 +14,23 @@ from youtube_uploader import YouTubeUploader
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
-# 경로 및 설정
+# 경로 설정
 ROOT_DIR = Path(__file__).parent.parent
+# Ubuntu(GitHub Actions) 환경의 나눔고딕 폰트 경로
+FONT_PATH = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
+BGM_PATH = str((ROOT_DIR / "data/music/background.mp3").absolute())
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ENABLE_BGM = os.getenv("ENABLE_BGM", "false").lower() == "true"
-BGM_PATH = str((ROOT_DIR / "data/music/background.mp3").absolute())
 
-# [중요] GitHub Actions 환경에서 폰트 경로 자동 탐색
-def get_safe_font_path():
-    """시스템에 설치된 나눔고딕 혹은 기본 폰트를 찾습니다."""
-    system_fonts = [
-        "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-        "/usr/share/fonts/truetype/nanum/NanumSquareB.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
-    ]
-    for font in system_fonts:
-        if os.path.exists(font):
-            return font
-    return None
-
-def escape_ffmpeg_text(text):
-    """FFmpeg 자막 필터에서 에러를 방지하기 위해 특수문자를 정규화합니다."""
-    if not text: return ""
-    # 콜론, 따옴표, 백슬래시 등을 FFmpeg이 인식할 수 있게 변환
-    text = text.replace('\\', '/').replace("'", "'\\\\\\''").replace(':', '\\:')
-    return text
+# Gemini 초기화
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    model = None
 
 def sanitize_filename(filename):
+    """파일명 정규화"""
     base, ext = os.path.splitext(filename)
     clean_base = re.sub(r'[^\w\s\d가-힣]', '', base).replace(' ', '_')
     return f"{clean_base[:50]}{ext}"
@@ -59,41 +49,42 @@ def has_audio(file_path):
         return len(result.stdout.strip()) > 0
     except: return False
 
-# Gemini 초기화
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-else:
-    model = None
-
 def generate_ai_script(title):
     if not model: return title
     try:
-        prompt = f"쇼츠 제목 '{title}'에 어울리는 10초 내외의 흥미로운 나레이션 한 문장을 구어체로 써줘."
+        prompt = f"유튜브 쇼츠 제목 '{title}'을 보고 시청자가 흥미를 느낄 수 있게 10초 내외의 구어체 나레이션 대본을 한 문장으로 써줘."
         response = model.generate_content(prompt)
         return response.text.strip()
     except:
-        return f"오늘 소개할 영상은 {title} 입니다. 함께 보시죠!"
+        return f"오늘 영상은 {title} 입니다. 정말 흥미롭네요!"
 
 def convert_to_monetizable_format(video_path, title_text):
-    """수익화를 위한 가공 (블러 배경 + 9:16 + 자막)"""
+    """임시 텍스트 파일을 사용하여 안전하게 영상 가공 (에러 234 방지)"""
+    v_path = Path(video_path)
+    output_path = v_path.parent / f"{v_path.stem}_monetized.mp4"
+    text_file_path = v_path.parent / "temp_title.txt"
+    
     try:
-        v_path = Path(video_path)
-        output_path = v_path.parent / f"{v_path.stem}_monetized.mp4"
+        # 1. 긴 제목 줄바꿈 처리 (가독성 증대)
+        wrapped_text = "\n".join(textwrap.wrap(title_text, width=15))
         
-        font_file = get_safe_font_path()
-        safe_title = escape_ffmpeg_text(title_text)
+        # 2. 제목을 임시 텍스트 파일로 저장 (명령어 길이를 줄여 에러 방지)
+        with open(text_file_path, "w", encoding="utf-8") as f:
+            f.write(wrapped_text)
+        
+        # 3. 폰트 존재 여부 최종 확인
+        font_arg = FONT_PATH
+        if not os.path.exists(font_arg):
+            font_arg = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-        # 블러 배경 효과 + 중앙 배치 + 상단 자막 (폰트 설정 보강)
+        # FFmpeg 필터: 텍스트를 파일(textfile)에서 읽어오도록 설정
         filter_complex = (
             f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg];"
             f"[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
-            f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,"
+            f"drawtext=fontfile='{font_arg}':textfile='{text_file_path}':fontcolor=white:fontsize=80:line_spacing=20:"
+            f"box=1:boxcolor=black@0.5:boxborderw=30:x=(w-text_w)/2:y=150"
         )
-        
-        # 폰트가 있을 경우에만 drawtext 추가
-        if font_file:
-            filter_complex += f",drawtext=fontfile='{font_file}':text='{safe_title}':fontcolor=white:fontsize=75:box=1:boxcolor=black@0.5:boxborderw=25:x=(w-text_w)/2:y=150"
 
         cmd = [
             'ffmpeg', '-i', str(v_path),
@@ -103,17 +94,23 @@ def convert_to_monetizable_format(video_path, title_text):
         ]
         
         subprocess.run(cmd, capture_output=True, check=True)
+        
+        # 임시 텍스트 파일 삭제
+        if os.path.exists(text_file_path): os.remove(text_file_path)
         return str(output_path)
+        
     except Exception as e:
         logger.error(f"❌ 영상 가공 실패: {e}")
+        if os.path.exists(text_file_path): os.remove(text_file_path)
         return None
 
 def main():
-    logger.info("🚀 수익화 대응 시스템 가동 (폰트/특수문자 패치 완료)")
+    logger.info("🚀 수익화 자동화 시스템 가동 (Patch: TextFile Mode)")
     success_count = 0
     try:
         uploader = YouTubeUploader()
         collector = AAGAGCollector()
+        # 안정적인 테스트를 위해 5개로 유지
         videos = collector.collect_and_download(max_videos=5)
         
         for idx, video in enumerate(videos, 1):
@@ -125,24 +122,24 @@ def main():
             os.rename(v_path, safe_path)
             v_path = safe_path
 
-            logger.info(f"🎬 [{idx}/{len(videos)}] 처리 중: {video.get('title')}")
+            logger.info(f"🎬 [{idx}/{len(videos)}] {video.get('title')}")
             temp_files = []
             
             try:
                 clean_title = re.sub(r'_\d+$', '', video.get('title')).strip().replace('_', ' ')
                 script = generate_ai_script(clean_title)
                 
-                # 1. 영상 가공 (폰트 경로 에러 해결 지점)
+                # 영상 가공 (임시 파일 방식 적용)
                 proc_path = convert_to_monetizable_format(v_path, clean_title)
                 if not proc_path: continue
                 temp_files.append(proc_path)
                 
-                # 2. TTS 음성 생성
+                # TTS 음성 생성
                 tts_file = f"data/videos/voice_{idx}.mp3"
                 gTTS(text=script, lang='ko').save(tts_file)
                 temp_files.append(tts_file)
 
-                # 3. 오디오 믹싱
+                # 오디오 믹싱
                 final_output = proc_path.replace('.mp4', '_final.mp4')
                 use_bgm = ENABLE_BGM and os.path.exists(BGM_PATH)
                 
@@ -156,23 +153,29 @@ def main():
                 subprocess.run(cmd, capture_output=True)
                 temp_files.append(final_output)
 
-                # 4. 유튜브 업로드
+                # 유튜브 업로드
                 if uploader.authenticated:
-                    uploader.upload_video(video_path=final_output, title=f"{clean_title} #shorts", description=f"{script}\n#유머 #개그", tags=["shorts"])
+                    uploader.upload_video(
+                        video_path=final_output, 
+                        title=f"{clean_title} #shorts", 
+                        description=f"{script}\n\n#유머 #개그 #이슈", 
+                        tags=["shorts", "이슈"]
+                    )
                     success_count += 1
+                    logger.info("✅ 업로드 완료")
                 
-                # 임시 파일 삭제
+                # 사용 완료 파일 정리
                 for f in temp_files + [v_path]:
                     if os.path.exists(f): os.remove(f)
 
             except Exception as e:
-                logger.error(f"❌ 개별 실패: {e}")
+                logger.error(f"❌ 개별 처리 실패: {e}")
 
         logger.info(f"🎉 최종 업로드 성공: {success_count}개")
         if success_count == 0 and len(videos) > 0: sys.exit(1)
 
     except Exception as e:
-        logger.error(f"❌ 메인 오류: {e}")
+        logger.error(f"❌ 시스템 종료: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
