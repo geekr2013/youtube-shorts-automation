@@ -4,6 +4,7 @@ import re
 import subprocess
 import logging
 import textwrap
+import shutil
 from pathlib import Path
 import google.generativeai as genai
 from gtts import gTTS
@@ -19,17 +20,27 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ENABLE_BGM = os.getenv("ENABLE_BGM", "false").lower() == "true"
 ROOT_DIR = Path.cwd()
 BGM_PATH = ROOT_DIR / "data/music" / "background.mp3"
+LOCAL_FONT_NAME = "font_res.ttf" # 로컬로 복사될 폰트 이름
 
-def get_safe_font_path():
-    """시스템 폰트 경로를 찾고 FFmpeg용으로 이스케이프 처리합니다."""
-    fonts = [
+def prepare_font():
+    """시스템 폰트를 로컬 작업 디렉토리로 복사하여 경로 문제를 해결합니다."""
+    if os.path.exists(LOCAL_FONT_NAME):
+        return LOCAL_FONT_NAME
+        
+    system_fonts = [
         "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
     ]
-    for f in fonts:
+    
+    for f in system_fonts:
         if os.path.exists(f):
-            # FFmpeg 필터 내에서 콜론(:)은 특수문자이므로 \: 로 바꿔야 합니다.
-            return f.replace(":", "\\:")
+            try:
+                shutil.copy(f, LOCAL_FONT_NAME)
+                logger.info(f"✅ 폰트 준비 완료: {f} -> {LOCAL_FONT_NAME}")
+                return LOCAL_FONT_NAME
+            except:
+                continue
     return None
 
 def sanitize_filename(filename):
@@ -61,38 +72,39 @@ else:
 def generate_ai_script(title):
     if not model: return title
     try:
-        prompt = f"쇼츠 제목 '{title}'을 보고 시청자가 흥미를 느낄 수 있게 10초 내외의 구어체 나레이션 대본을 한 문장으로 써줘."
+        prompt = f"유튜브 쇼츠 제목 '{title}'을 보고 시청자가 흥미를 느낄 수 있게 10초 내외의 구어체 나레이션 대본을 한 문장으로 써줘."
         response = model.generate_content(prompt)
         return response.text.strip()
     except:
-        return f"오늘 영상은 {title} 입니다. 정말 흥미롭네요!"
+        return f"오늘 영상은 {title} 입니다. 끝까지 봐주세요!"
 
 def convert_to_monetizable_format(video_path, title_text):
-    """에러 234 방지를 위한 경로 최적화 가공 로직"""
+    """경로 문제를 완벽히 해결한 로컬 파일 기반 가공 로직"""
     v_path = Path(video_path)
     output_path = v_path.parent / f"{v_path.stem}_monetized.mp4"
     
-    # [핵심] 경로 문제를 피하기 위해 현재 작업 디렉토리에 임시 파일 생성
-    text_file_name = "temp_title_render.txt"
+    # 경로 없는 순수 파일명만 사용 (FFmpeg 에러 방지 핵심)
+    text_file_name = "render_text.txt"
+    font_file = prepare_font()
+    
+    # 제목 줄바꿈 처리
     wrapped_text = "\n".join(textwrap.wrap(title_text, width=15))
     
     try:
         with open(text_file_name, "w", encoding="utf-8") as f:
             f.write(wrapped_text)
         
-        font_path_escaped = get_safe_font_path()
-        
-        # 필터 설명: 배경 블러 + 원본 중앙 + 텍스트 파일(경로 없이 이름만) 읽기
+        # 필터 구성: 모든 경로를 제거하고 파일명만 사용
         filter_str = (
             f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg];"
             f"[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
             f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
         )
         
-        if font_path_escaped:
-            # textfile='파일명' 형식으로 경로 구분자(/) 사용을 최소화
+        if font_file:
+            # fontfile='이름', textfile='이름' 형태로 슬래시(/)를 완전히 제거
             filter_str += (
-                f",drawtext=fontfile='{font_path_escaped}':textfile='{text_file_name}':"
+                f",drawtext=fontfile='{font_file}':textfile='{text_file_name}':"
                 f"fontcolor=white:fontsize=80:line_spacing=20:box=1:boxcolor=black@0.5:"
                 f"boxborderw=30:x=(w-text_w)/2:y=150"
             )
@@ -114,7 +126,7 @@ def convert_to_monetizable_format(video_path, title_text):
             os.remove(text_file_name)
 
 def main():
-    logger.info("🚀 수익화 자동화 시스템 가동 (Fix: Path Escape Logic)")
+    logger.info("🚀 수익화 대응 시스템 가동 (최종 경로 문제 해결 버전)")
     success_count = 0
     try:
         uploader = YouTubeUploader()
@@ -138,7 +150,7 @@ def main():
                 clean_title = re.sub(r'_\d+$', '', video.get('title')).strip().replace('_', ' ')
                 script = generate_ai_script(clean_title)
                 
-                # 1. 영상 가공 (에러 234 방지 로직 적용됨)
+                # 1. 영상 가공
                 proc_path = convert_to_monetizable_format(v_path, clean_title)
                 if not proc_path: continue
                 temp_files.append(proc_path)
@@ -176,10 +188,13 @@ def main():
                 logger.error(f"❌ 개별 처리 실패: {e}")
 
         logger.info(f"🎉 최종 업로드 성공: {success_count}개")
+        # 폰트 정리
+        if os.path.exists(LOCAL_FONT_NAME): os.remove(LOCAL_FONT_NAME)
         if success_count == 0 and len(videos) > 0: sys.exit(1)
 
     except Exception as e:
         logger.error(f"❌ 메인 시스템 에러: {e}")
+        if os.path.exists(LOCAL_FONT_NAME): os.remove(LOCAL_FONT_NAME)
         sys.exit(1)
 
 if __name__ == "__main__":
