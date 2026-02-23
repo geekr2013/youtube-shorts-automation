@@ -1,38 +1,39 @@
-name: Daily AAGAG Upload (Optimized)
+name: Daily AAGAG Upload (Monetization Optimized)
 
 on:
   schedule:
-    # 매일 한국 시간 오후 6시 (UTC 9시)
+    # 매일 한국 시간 오후 6시 (UTC 9시) 실행
     - cron: '0 9 * * *'
-  workflow_dispatch:  # 수동 실행 가능
+  workflow_dispatch:  # 수동 실행 버튼 활성화
 
 jobs:
   run-upload:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Git push 권한
+      contents: write  # 데이터 업데이트 권한
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-nanum fonts-nanum-coding
+          # FFmpeg(영상 가공) 및 나눔 폰트(자막용) 설치
+          sudo apt-get install -y ffmpeg fonts-nanum
           sudo fc-cache -fv
 
       - name: Install Python dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Install Playwright browsers
@@ -45,21 +46,24 @@ jobs:
           mkdir -p data/videos
           mkdir -p data/music
 
-      - name: Run AAGAG automation (Optimized)
+      - name: Run AAGAG automation (Monetized Version)
         env:
+          # GitHub Secrets에서 가져올 변수들
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
-          ENABLE_BGM: 'false'
+          # 배경음악 사용 여부
+          ENABLE_BGM: 'true' 
         run: python src/main.py
 
       - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          # 바뀐 데이터(히스토리 등)를 깃허브에 다시 저장
           git add data/download_history.json || true
           git add data/youtube_token.pickle || true
           git diff --staged --quiet || git commit -m "Update automation data [skip ci]" || true
