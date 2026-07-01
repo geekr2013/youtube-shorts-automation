@@ -1,6 +1,6 @@
 name: Daily AAGAG Upload (Monetization Optimized)
 
-on:
+off:
   schedule:
     - cron: '0 9 * * *'
   workflow_dispatch:
