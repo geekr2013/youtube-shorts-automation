@@ -28,7 +28,7 @@ def fetch_youtube_trends(api_key: str, region: str = "KR") -> List[Dict[str, Any
     if not api_key:
         return []
     results: List[Dict[str, Any]] = []
-    for category_id in ("27", "28"):  # 교육, 과학/기술
+    for category_id in ("0", "28", "27"):  # 전체, 과학/기술, 교육
         try:
             response = requests.get(
                 YOUTUBE_VIDEOS_ENDPOINT,

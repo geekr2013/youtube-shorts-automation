@@ -12,6 +12,11 @@ from models import KnowledgeSource, ScriptPackage, TopicPlan
 
 LOGGER = logging.getLogger(__name__)
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+DEFAULT_MODELS = (
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+)
 
 
 class GeminiError(RuntimeError):
@@ -20,49 +25,24 @@ class GeminiError(RuntimeError):
 
 class GeminiWriter:
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
-        if not self.api_key:
-            raise GeminiError("GEMINI_API_KEY가 없습니다.")
+        self.api_keys = list(
+            dict.fromkeys(
+                key
+                for key in (
+                    api_key or os.getenv("GEMINI_API_KEY", ""),
+                    os.getenv("GOOGLE_API_KEY", ""),
+                )
+                if key
+            )
+        )
+        if not self.api_keys:
+            raise GeminiError("GEMINI_API_KEY 또는 GOOGLE_API_KEY가 없습니다.")
         self.requested_model = model or os.getenv("GEMINI_MODEL", "")
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "OriginalShortsMVP/1.0"})
-        self._model_candidates: Optional[List[str]] = None
 
-    def _discover_models(self) -> List[str]:
-        if self._model_candidates is not None:
-            return self._model_candidates
-
-        available: List[str] = []
-        try:
-            response = self.session.get(
-                f"{API_BASE}/models", params={"key": self.api_key}, timeout=20
-            )
-            response.raise_for_status()
-            for item in response.json().get("models", []):
-                methods = item.get("supportedGenerationMethods", [])
-                if "generateContent" not in methods:
-                    continue
-                name = item.get("name", "").replace("models/", "")
-                if "flash" in name and "image" not in name and "tts" not in name:
-                    available.append(name)
-        except Exception as exc:
-            LOGGER.warning("Gemini 모델 목록 조회 실패, 기본 후보를 사용합니다: %s", exc)
-
-        preferred = [
-            self.requested_model,
-            "gemini-3.5-flash",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-2.0-flash",
-        ]
-        ordered: List[str] = []
-        for name in preferred + available:
-            if name and name not in ordered and (not available or name in available):
-                ordered.append(name)
-        if not ordered:
-            ordered = [name for name in preferred if name]
-        self._model_candidates = ordered[:6]
-        return self._model_candidates
+    def _model_candidates(self) -> List[str]:
+        return list(dict.fromkeys(name for name in (self.requested_model, *DEFAULT_MODELS) if name))
 
     @staticmethod
     def _parse_json(text: str) -> Dict[str, Any]:
@@ -77,35 +57,71 @@ class GeminiWriter:
                 raise GeminiError("Gemini 응답에서 JSON을 찾지 못했습니다.")
             return json.loads(match.group(0))
 
+    @staticmethod
+    def _extract_interaction_text(data: Dict[str, Any]) -> str:
+        if isinstance(data.get("output_text"), str):
+            return data["output_text"].strip()
+        for step in reversed(data.get("steps") or []):
+            if step.get("type") != "model_output":
+                continue
+            text = "".join(
+                part.get("text", "")
+                for part in step.get("content") or []
+                if part.get("type") == "text"
+            ).strip()
+            if text:
+                return text
+        return ""
+
+    @staticmethod
+    def _error_message(response: Any) -> str:
+        try:
+            message = response.json().get("error", {}).get("message", "")
+        except (ValueError, AttributeError):
+            message = ""
+        return (message or response.text or response.reason)[:300]
+
     def _generate(self, prompt: str, schema: Dict[str, Any], temperature: float) -> Dict[str, Any]:
         errors: List[str] = []
         payload = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": temperature,
-                "responseMimeType": "application/json",
-                "responseSchema": schema,
+            "input": prompt,
+            "response_format": {
+                "type": "text",
+                "mime_type": "application/json",
+                "schema": schema,
             },
+            "generation_config": {"temperature": temperature},
         }
-        for model in self._discover_models():
-            try:
-                response = self.session.post(
-                    f"{API_BASE}/models/{model}:generateContent",
-                    params={"key": self.api_key},
-                    json=payload,
-                    timeout=90,
-                )
-                response.raise_for_status()
-                candidates = response.json().get("candidates") or []
-                parts = candidates[0]["content"]["parts"] if candidates else []
-                text = "".join(part.get("text", "") for part in parts)
-                if not text:
-                    raise GeminiError("빈 응답")
-                LOGGER.info("Gemini 모델 사용: %s", model)
-                return self._parse_json(text)
-            except Exception as exc:
-                errors.append(f"{model}: {exc}")
-                LOGGER.warning("Gemini 후보 모델 실패: %s", model)
+        for key_number, api_key in enumerate(self.api_keys, start=1):
+            for model in self._model_candidates():
+                try:
+                    payload["model"] = model
+                    response = self.session.post(
+                        f"{API_BASE}/interactions",
+                        headers={
+                            "x-goog-api-key": api_key,
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                        timeout=90,
+                    )
+                    if not response.ok:
+                        raise GeminiError(
+                            f"HTTP {response.status_code}: {self._error_message(response)}"
+                        )
+                    text = self._extract_interaction_text(response.json())
+                    if not text:
+                        raise GeminiError("빈 응답")
+                    LOGGER.info("Gemini 모델 사용: %s", model)
+                    return self._parse_json(text)
+                except Exception as exc:
+                    errors.append(f"key#{key_number}/{model}: {exc}")
+                    LOGGER.warning(
+                        "Gemini 후보 실패(key=%s, model=%s): %s",
+                        key_number,
+                        model,
+                        exc,
+                    )
         raise GeminiError("Gemini 생성 실패 - " + " | ".join(errors[-3:]))
 
     def select_topic(
@@ -134,13 +150,13 @@ class GeminiWriter:
 - trend_reason에는 선택 이유를 과장 없이 한 문장으로 쓴다.
 """
         schema = {
-            "type": "OBJECT",
+            "type": "object",
             "properties": {
-                "topic": {"type": "STRING"},
-                "wiki_query": {"type": "STRING"},
-                "stock_queries": {"type": "ARRAY", "items": {"type": "STRING"}},
-                "category": {"type": "STRING"},
-                "trend_reason": {"type": "STRING"},
+                "topic": {"type": "string"},
+                "wiki_query": {"type": "string"},
+                "stock_queries": {"type": "array", "items": {"type": "string"}},
+                "category": {"type": "string"},
+                "trend_reason": {"type": "string"},
             },
             "required": ["topic", "wiki_query", "stock_queries", "category", "trend_reason"],
         }
@@ -181,13 +197,13 @@ class GeminiWriter:
 - 기계적 목록 낭독이 아니라 관찰과 해설이 있는 이야기로 쓴다.
 """
         schema = {
-            "type": "OBJECT",
+            "type": "object",
             "properties": {
-                "title": {"type": "STRING"},
-                "hook": {"type": "STRING"},
-                "narration": {"type": "STRING"},
-                "description_intro": {"type": "STRING"},
-                "tags": {"type": "ARRAY", "items": {"type": "STRING"}},
+                "title": {"type": "string"},
+                "hook": {"type": "string"},
+                "narration": {"type": "string"},
+                "description_intro": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["title", "hook", "narration", "description_intro", "tags"],
         }
@@ -218,3 +234,4 @@ class GeminiWriter:
             description_intro=str(result["description_intro"]).strip(),
             tags=tags[:8],
         )
+
