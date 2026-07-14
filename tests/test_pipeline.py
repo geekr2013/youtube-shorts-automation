@@ -33,7 +33,7 @@ class PipelineTests(unittest.TestCase):
         )
         hook = "깊은 바다의 생물은 왜 스스로 빛을 낼까요?"
         midpoint_hook = "그런데 같은 빛도 생물마다 쓰임이 다릅니다."
-        closing_loop = "깊은 바다에서 다시 빛을 본다면, 그 생물은 왜 빛나는 걸까요?"
+        closing_loop = "이 빛의 쓰임을 알고 처음 장면을 다시 보면…"
         narration = (
             hook
             + " 생물발광은 생물의 몸속 화학 반응이 빛 에너지로 바뀌는 현상입니다. "
