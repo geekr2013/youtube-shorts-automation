@@ -1,6 +1,13 @@
 name: Daily Original Knowledge Short
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/daily-upload.yml'
+      - 'requirements.txt'
+      - 'src/**'
+      - 'tests/**'
   schedule:
     # 매일 한국 시간 19:35 (UTC 10:35)
     - cron: '35 10 * * *'
@@ -65,15 +72,15 @@ jobs:
           python -m unittest discover -s tests -v
 
       - name: 영상 생성만 테스트
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
         run: python src/main.py --dry-run
 
       - name: 영상 생성 및 공개 업로드
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true) }}
         run: python src/main.py
 
       - name: 운영 기록 저장
-        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
+        if: ${{ success() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true)) }}
         run: |
           git config user.email "action@github.com"
           git config user.name "Original Shorts Bot"
@@ -92,3 +99,4 @@ jobs:
             data/work/render/final_short.mp4
           if-no-files-found: ignore
           retention-days: 3
+
