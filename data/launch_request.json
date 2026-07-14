@@ -1,4 +1,6 @@
 {
-  "requested_at": "2026-07-14T03:29:59.305Z",
-  "reason": "Publish one validated test Short with UI-safe captions, natural narration, and original BGM"
+  "requested_at": "2026-07-14T04:21:16.564Z",
+  "preview_run_id": "29305397429",
+  "artifact_name": "short-preview-29305397429",
+  "reason": "Publish the validated Aurora Short exactly as tested"
 }

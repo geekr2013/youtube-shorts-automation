@@ -21,6 +21,7 @@ on:
         type: boolean
 
 permissions:
+  actions: read
   contents: write
   models: read
 
@@ -59,6 +60,21 @@ jobs:
           python-version: '3.11'
           cache: pip
 
+      - name: 검증 영상 선택
+        id: preview
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[publish-preview]') }}
+        run: |
+          python -c "import json; print('run_id=' + str(json.load(open('data/launch_request.json', encoding='utf-8'))['preview_run_id']))" >> "$GITHUB_OUTPUT"
+
+      - name: 검증 영상 받기
+        if: ${{ steps.preview.outcome == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: short-preview-${{ steps.preview.outputs.run_id }}
+          path: data/preview-promotion
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.preview.outputs.run_id }}
+
       - name: 영상 도구 설치
         run: |
           sudo apt-get update
@@ -77,13 +93,20 @@ jobs:
 
       - name: 영상 생성만 테스트
         id: dry_run
-        if: ${{ (github.event_name == 'push' && !contains(github.event.head_commit.message, '[launch-upload]')) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
+        if: ${{ (github.event_name == 'push' && !contains(github.event.head_commit.message, '[launch-upload]') && !contains(github.event.head_commit.message, '[publish-preview]')) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
         run: python src/main.py --dry-run
 
       - name: 영상 생성 및 공개 업로드
         id: upload
         if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[launch-upload]')) }}
         run: python src/main.py
+
+      - name: 검증 영상 공개 업로드
+        id: preview_upload
+        if: ${{ steps.preview.outcome == 'success' }}
+        env:
+          PREVIEW_RUN_ID: ${{ steps.preview.outputs.run_id }}
+        run: python src/publish_preview.py data/preview-promotion
 
       - name: 실행 상태 작성
         if: always()
@@ -92,6 +115,7 @@ jobs:
           DRY_RUN_REQUESTED: ${{ inputs.dry_run }}
           DRY_RUN_OUTCOME: ${{ steps.dry_run.outcome }}
           UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          PREVIEW_UPLOAD_OUTCOME: ${{ steps.preview_upload.outcome }}
           RUN_ID: ${{ github.run_id }}
           RUN_SHA: ${{ github.sha }}
         run: python src/run_status.py
