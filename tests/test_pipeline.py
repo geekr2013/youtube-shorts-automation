@@ -11,6 +11,7 @@ from ai_writer import GeminiWriter
 from models import KnowledgeSource, ScriptPackage, TopicPlan
 from quality import QualityGateError, validate_package
 from run_status import build_status
+from secret_utils import clean_secret
 from video_renderer import caption_timeline, split_caption_chunks
 
 
@@ -120,6 +121,12 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertEqual(value["mode"], "upload")
         self.assertEqual(value["outcome"], "success")
+
+    def test_youtube_secret_format_is_cleaned(self):
+        self.assertEqual(
+            clean_secret('  YOUTUBE_CLIENT_SECRET="GOCSPX-example"  '),
+            "GOCSPX-example",
+        )
 
 
 if __name__ == "__main__":

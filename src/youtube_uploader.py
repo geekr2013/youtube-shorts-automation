@@ -14,6 +14,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
+from secret_utils import clean_secret
+
 LOGGER = logging.getLogger(__name__)
 UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 RETRIABLE_STATUS_CODES = {500, 502, 503, 504}
@@ -30,9 +32,13 @@ class YouTubeUploader:
         client_secret: Optional[str] = None,
         refresh_token: Optional[str] = None,
     ):
-        self.client_id = client_id or os.getenv("YOUTUBE_CLIENT_ID", "")
-        self.client_secret = client_secret or os.getenv("YOUTUBE_CLIENT_SECRET", "")
-        self.refresh_token = refresh_token or os.getenv("YOUTUBE_REFRESH_TOKEN", "")
+        self.client_id = clean_secret(client_id or os.getenv("YOUTUBE_CLIENT_ID", ""))
+        self.client_secret = clean_secret(
+            client_secret or os.getenv("YOUTUBE_CLIENT_SECRET", "")
+        )
+        self.refresh_token = clean_secret(
+            refresh_token or os.getenv("YOUTUBE_REFRESH_TOKEN", "")
+        )
         self.youtube = self._authenticate()
 
     def _normalize_client(self) -> tuple[str, str, str]:
@@ -41,13 +47,13 @@ class YouTubeUploader:
             try:
                 payload = json.loads(self.client_secret)
                 config = payload.get("installed") or payload.get("web") or {}
-                client_id = self.client_id or config.get("client_id", "")
-                client_secret = config.get("client_secret", "")
+                client_id = clean_secret(config.get("client_id") or self.client_id)
+                client_secret = clean_secret(config.get("client_secret", ""))
                 token_uri = config.get("token_uri", token_uri)
                 return client_id, client_secret, token_uri
             except json.JSONDecodeError as exc:
                 raise YouTubeAuthError("YOUTUBE_CLIENT_SECRET JSON 형식이 잘못되었습니다.") from exc
-        return self.client_id, self.client_secret, token_uri
+        return clean_secret(self.client_id), clean_secret(self.client_secret), token_uri
 
     def _authenticate(self):
         client_id, client_secret, token_uri = self._normalize_client()
@@ -123,3 +129,4 @@ class YouTubeUploader:
         }
         LOGGER.info("YouTube 업로드 완료: %s", result["video_url"])
         return result
+
