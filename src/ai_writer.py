@@ -12,6 +12,7 @@ from models import KnowledgeSource, ScriptPackage, TopicPlan
 
 LOGGER = logging.getLogger(__name__)
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+GITHUB_MODELS_ENDPOINT = "https://models.github.ai/inference/chat/completions"
 DEFAULT_MODELS = (
     "gemini-3.5-flash",
     "gemini-2.5-flash",
@@ -35,8 +36,10 @@ class GeminiWriter:
                 if key
             )
         )
-        if not self.api_keys:
-            raise GeminiError("GEMINI_API_KEY 또는 GOOGLE_API_KEY가 없습니다.")
+        self.github_token = os.getenv("GITHUB_MODELS_TOKEN", "")
+        self.github_model = os.getenv("GITHUB_MODELS_MODEL", "openai/gpt-4.1")
+        if not self.api_keys and not self.github_token:
+            raise GeminiError("사용 가능한 AI 인증 정보가 없습니다.")
         self.requested_model = model or os.getenv("GEMINI_MODEL", "")
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "OriginalShortsMVP/1.0"})
@@ -74,6 +77,13 @@ class GeminiWriter:
         return ""
 
     @staticmethod
+    def _extract_chat_text(data: Dict[str, Any]) -> str:
+        choices = data.get("choices") or []
+        if not choices:
+            return ""
+        return str(choices[0].get("message", {}).get("content", "")).strip()
+
+    @staticmethod
     def _error_message(response: Any) -> str:
         try:
             message = response.json().get("error", {}).get("message", "")
@@ -83,6 +93,44 @@ class GeminiWriter:
 
     def _generate(self, prompt: str, schema: Dict[str, Any], temperature: float) -> Dict[str, Any]:
         errors: List[str] = []
+        if self.github_token:
+            try:
+                response = self.session.post(
+                    GITHUB_MODELS_ENDPOINT,
+                    headers={
+                        "Authorization": f"Bearer {self.github_token}",
+                        "Accept": "application/vnd.github+json",
+                        "Content-Type": "application/json",
+                        "X-GitHub-Api-Version": "2026-03-10",
+                    },
+                    json={
+                        "model": self.github_model,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "Return only one valid JSON object that follows the user's requested fields.",
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                        "temperature": temperature,
+                        "max_tokens": 1800,
+                        "response_format": {"type": "json_object"},
+                    },
+                    timeout=90,
+                )
+                if not response.ok:
+                    raise GeminiError(
+                        f"HTTP {response.status_code}: {self._error_message(response)}"
+                    )
+                text = self._extract_chat_text(response.json())
+                if not text:
+                    raise GeminiError("빈 응답")
+                LOGGER.info("GitHub Models 사용: %s", self.github_model)
+                return self._parse_json(text)
+            except Exception as exc:
+                errors.append(f"github/{self.github_model}: {exc}")
+                LOGGER.warning("GitHub Models 실패, Gemini로 전환: %s", exc)
+
         payload = {
             "input": prompt,
             "response_format": {
