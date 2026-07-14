@@ -1,5 +1,23 @@
 {
   "version": 1,
-  "videos": []
+  "videos": [
+    {
+      "published_at": "2026-07-14T02:59:47.391393+00:00",
+      "topic": "생물발광은 왜 빛날까",
+      "title": "갯반디는 왜 파란 빛을 내는가? 생물발광의 비밀",
+      "video_id": "aJciUm2e6jo",
+      "video_url": "https://www.youtube.com/shorts/aJciUm2e6jo",
+      "source_url": "https://ko.wikipedia.org/wiki/%EA%B0%AF%EB%B0%98%EB%94%94",
+      "asset_urls": [
+        "https://www.pexels.com/video/mesmerizing-underwater-jellyfish-dance-31314196/",
+        "https://www.pexels.com/video/girl-looking-at-jellyfishes-in-an-aquarium-8837845/",
+        "https://www.pexels.com/video/jellyfish-swimming-underwater-12860646/"
+      ],
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
+    }
+  ]
 }
-
