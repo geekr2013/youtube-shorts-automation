@@ -81,6 +81,12 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertEqual(value, '{"topic":"오로라"}')
 
+    def test_github_models_schema_rejects_extra_fields(self):
+        value = GeminiWriter._strict_schema(
+            {"type": "object", "properties": {"topic": {"type": "string"}}}
+        )
+        self.assertFalse(value["additionalProperties"])
+
     def test_push_event_is_recorded_as_dry_run(self):
         value = build_status(
             {
