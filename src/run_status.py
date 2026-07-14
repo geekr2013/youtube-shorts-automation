@@ -13,7 +13,10 @@ STATUS_PATH = ROOT / "data" / "automation_status.json"
 def build_status(env: Dict[str, str]) -> Dict[str, str]:
     event = env.get("RUN_EVENT", "unknown")
     dry_requested = env.get("DRY_RUN_REQUESTED", "").lower() == "true"
-    is_dry_run = event == "push" or (event == "workflow_dispatch" and dry_requested)
+    upload_outcome = env.get("UPLOAD_OUTCOME", "")
+    is_dry_run = upload_outcome == "skipped" and (
+        event == "push" or (event == "workflow_dispatch" and dry_requested)
+    )
     mode = "dry-run" if is_dry_run else "upload"
     outcome = env.get("DRY_RUN_OUTCOME" if is_dry_run else "UPLOAD_OUTCOME", "unknown")
     return {
