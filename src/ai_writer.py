@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import requests
 
@@ -22,6 +22,25 @@ DEFAULT_MODELS = (
 
 class GeminiError(RuntimeError):
     pass
+
+
+def normalize_loop_ending(narration: str, closing_loop: str) -> Tuple[str, str]:
+    """AI가 형식을 놓쳐도 마지막 장면이 첫 질문으로 이어지게 보정한다."""
+    narration = re.sub(r"\s+", " ", narration).strip()
+    closing_loop = re.sub(r"\s+", " ", closing_loop).strip()
+    valid_suffixes = ("처음 장면을 다시 보면…", "처음 장면을 다시 보면...")
+    if closing_loop.endswith(valid_suffixes) and narration.endswith(closing_loop):
+        return narration, closing_loop
+
+    fallback = "이 사실을 알고 처음 장면을 다시 보면…"
+    if closing_loop and narration.endswith(closing_loop):
+        prefix = narration[: -len(closing_loop)].rstrip()
+    else:
+        prefix = narration
+        last_break = max(prefix.rfind(mark) for mark in (". ", "? ", "! ", "。 "))
+        if last_break >= int(len(prefix) * 0.65):
+            prefix = prefix[: last_break + 1].rstrip()
+    return f"{prefix} {fallback}".strip(), fallback
 
 
 class GeminiWriter:
@@ -298,6 +317,10 @@ class GeminiWriter:
         }
         result = self._generate(prompt, schema, temperature=0.72)
         narration = re.sub(r"\s+", " ", str(result["narration"])).strip()
+        narration, closing_loop = normalize_loop_ending(
+            narration,
+            str(result["closing_loop"]),
+        )
         hook = re.sub(r"\s+", " ", str(result["hook"])).strip()
         if not narration.startswith(hook.rstrip(". ")):
             first_sentence = re.split(r"(?<=[.!?？])\s+", narration, maxsplit=1)[0].strip()
@@ -322,7 +345,7 @@ class GeminiWriter:
             narration=narration,
             description_intro=str(result["description_intro"]).strip(),
             midpoint_hook=re.sub(r"\s+", " ", str(result["midpoint_hook"])).strip(),
-            closing_loop=re.sub(r"\s+", " ", str(result["closing_loop"])).strip(),
+            closing_loop=closing_loop,
             engagement_question=re.sub(
                 r"\s+", " ", str(result["engagement_question"])
             ).strip(),
