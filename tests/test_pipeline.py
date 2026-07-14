@@ -14,7 +14,13 @@ from models import KnowledgeSource, ScriptPackage, TopicPlan
 from quality import QualityGateError, validate_package
 from run_status import build_status
 from secret_utils import clean_secret
-from video_renderer import caption_lines, caption_timeline, split_caption_chunks, write_ass
+from video_renderer import (
+    background_music_frequencies,
+    caption_lines,
+    caption_timeline,
+    split_caption_chunks,
+    write_ass,
+)
 
 
 class PipelineTests(unittest.TestCase):
@@ -69,7 +75,7 @@ class PipelineTests(unittest.TestCase):
         for chunk in chunks:
             lines = caption_lines(chunk)
             self.assertLessEqual(len(lines), 2)
-            self.assertTrue(all(len(line) <= 11 for line in lines))
+            self.assertTrue(all(len(line) <= 10 for line in lines))
             self.assertEqual(
                 re.sub(r"\s", "", chunk),
                 re.sub(r"\s", "", "".join(lines)),
@@ -85,6 +91,14 @@ class PipelineTests(unittest.TestCase):
             content = path.read_text(encoding="utf-8-sig")
         self.assertNotIn("오늘의 60초 호기심", content)
         self.assertIn(r"\N", content)
+        self.assertIn("Noto Sans CJK KR,68", content)
+        self.assertIn(r"{\an5\pos(470,1260)}", content)
+
+    def test_background_music_changes_with_topic_style(self):
+        self.assertNotEqual(
+            background_music_frequencies("과학"),
+            background_music_frequencies("역사"),
+        )
 
     def test_gemini_json_parser_accepts_code_fence(self):
         value = GeminiWriter._parse_json('```json\n{"topic":"구름"}\n```')
