@@ -38,7 +38,9 @@ def validate_package(
         raise QualityGateError("중간 반전 훅이 대본 중앙에 포함되지 않았습니다.")
     if len(script.closing_loop) < 8 or not script.narration.endswith(script.closing_loop):
         raise QualityGateError("마지막 문장이 시작 훅으로 이어지는 루프 구조가 아닙니다.")
-    if not 10 <= len(script.engagement_question) <= 60 or not script.engagement_question.endswith(("?", "？")):
+    if not script.closing_loop.endswith(("처음 장면을 다시 보면…", "처음 장면을 다시 보면...")):
+        raise QualityGateError("루프 문장이 첫 장면으로 자연스럽게 연결되지 않습니다.")
+    if not 15 <= len(script.engagement_question) <= 45 or not script.engagement_question.endswith(("?", "？")):
         raise QualityGateError("댓글 참여 질문이 자연스러운 질문형 문장이 아닙니다.")
     if not 8 <= len(script.title) <= 44:
         raise QualityGateError("제목 길이가 기준 밖입니다.")
