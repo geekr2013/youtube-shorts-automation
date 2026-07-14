@@ -18,6 +18,24 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-07-14T03:33:10.483067+00:00",
+      "topic": "구름의 무게는 얼마나 될까",
+      "title": "구름의 무게, 하늘을 떠다니는 물방울의 비밀",
+      "video_id": "k4t9C1SSNGE",
+      "video_url": "https://www.youtube.com/shorts/k4t9C1SSNGE",
+      "source_url": "https://ko.wikipedia.org/wiki/%EA%B5%AC%EB%A6%84",
+      "asset_urls": [
+        "https://www.pexels.com/video/dramatic-aerial-view-of-cumulus-clouds-28699828/",
+        "https://www.pexels.com/video/clear-blue-sky-with-white-clouds-30098016/",
+        "https://www.pexels.com/video/overcast-on-sky-12460328/"
+      ],
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
