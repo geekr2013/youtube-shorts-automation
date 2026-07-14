@@ -1,67 +1,76 @@
-# 🎬 AAGAG YouTube Shorts Automation (2025 Optimized)
+# Original Knowledge Shorts Automation
 
-이 프로젝트는 **AAGAG** 커뮤니티의 핫한 콘텐츠를 자동으로 수집하여, 시청자에게 최적화된 **YouTube Shorts** 포맷으로 가공하고 업로드하는 자동화 파이프라인입니다. 
+타인의 인기 영상을 다시 올리던 기존 방식을 중단하고, **원본 한국어 지식 쇼츠를 하루 1편 자동 제작·업로드**하는 무료 MVP입니다.
 
-PO/PM 관점에서 **최소 운영 비용으로 최대의 CTR(클릭률)과 도달율**을 확보할 수 있도록 설계되었습니다.
+## 무엇이 달라졌나
 
----
+1. 한국 YouTube의 교육·과학 인기 신호를 참고합니다. 다른 영상의 제목이나 화면은 복제하지 않습니다.
+2. Gemini가 안전하고 반복되지 않는 주제를 고릅니다.
+3. 위키백과 공개 API에서 검증 자료를 가져오고, 그 범위 안에서 새 대본을 씁니다.
+4. Pexels 또는 Pixabay의 스톡 영상, 한국어 AI 내레이션, 직접 만든 자막으로 9:16 영상을 만듭니다.
+5. YouTube에 하루 1편 공개하고, 기존 영상의 조회·좋아요·댓글 성과를 다음 주제 선택에 반영합니다.
+6. 출처와 영상 제공자를 설명란에 자동 표시하고, 합성 콘텐츠 여부도 YouTube에 공개합니다.
 
-## 🏗 시스템 구조 (Architecture)
+이 구조는 저작권 위험과 재사용 콘텐츠 위험을 크게 낮추지만, 조회수·수익·수익화 승인을 보장하지는 않습니다. 실제 수익 발생에는 YouTube 파트너 프로그램 조건 충족과 채널 심사가 별도로 필요합니다.
 
-본 시스템은 크게 4단계의 모듈형 파이프라인으로 작동합니다.
+## 운영 시간
 
-1. **Content Discovery**: Playwright 기반의 웹 크롤링을 통해 트렌디한 영상/GIF 수집
-2. **Video Engine**: FFmpeg을 활용한 9:16 세로형 변환, 자막 합성, 썸네일 추출
-3. **AI SEO**: 영상 제목을 기반으로 알고리즘에 최적화된 메타데이터(제목, 태그) 생성
-4. **Auto-Publish**: YouTube Data API v3를 통한 자동 업로드 및 알림 발송
+- 매일 한국 시간 오후 7시 35분
+- GitHub Actions에서 실행되므로 개인 PC가 꺼져 있어도 동작
+- 한 번에 1편만 올려 반복·대량 업로드 위험을 줄임
+- 실패 시 GitHub Actions가 빨간색으로 표시되고, 이메일 설정이 있으면 알림 발송
 
----
+## 사용 중인 GitHub Secrets
 
-## 📂 파일 트리 및 역할 설명
+현재 저장소에 등록된 아래 이름을 그대로 사용합니다. 비밀값은 코드나 로그에 저장하지 않습니다.
 
-| 분류 | 파일/폴더 명 | 역할 및 기능 설명 |
-| :--- | :--- | :--- |
-| **Workflow** | `.github/workflows/daily-upload.yml` | **자동화의 심장.** 매일 지정된 시간에 GitHub Actions를 가동시키는 스케줄러. |
-| **Core Source** | `src/main.py` | **메인 관제소.** 모든 모듈을 순서대로 실행하고 파일 삭제 등의 정리를 담당. |
-| | `src/aagag_collector.py` | **콘텐츠 수집기.** 유효한 영상 주소를 추출하고 한글 파일명을 정규화하여 저장. |
-| | `src/youtube_uploader.py` | **배포 관리자.** OAuth 인증을 통해 실제 유튜브 채널에 영상을 업로드. |
-| | `src/background_music.py` | **사운드 편집.** 영상의 분위기를 살려줄 배경음악을 합성 (현재 선택 사항). |
-| | `src/email_notifier.py` | **운영 보고서.** 작업 완료 후 업로드 성공 여부를 이메일로 리포트. |
-| **Assets** | `font/SeoulAlrim-ExtraBold.otf` | **브랜드 가이드.** 자막의 가독성을 높여주는 서울알림체 볼드 폰트. |
-| **Data Storage** | `data/download_history.json` | **중복 방지.** 이미 업로드한 영상의 ID를 기록하여 동일 영상 업로드 방지. |
-| | `data/youtube_token.pickle` | **인증 저장소.** 매번 로그인할 필요 없도록 유지되는 YouTube API 토큰. |
-| **Settings** | `requirements.txt` | **환경 구성.** 프로젝트 실행에 필요한 파이썬 라이브러리 목록. |
+| 이름 | 용도 |
+| --- | --- |
+| `GEMINI_API_KEY` | 주제 선정과 원본 대본 작성 |
+| `YOUTUBE_DATA_API_KEY` | 인기 신호와 영상 성과 확인 |
+| `PEXELS_API_KEY` | 스톡 영상 검색 |
+| `PIXABAY_API_KEY` | Pexels 실패 시 대체 영상 검색 |
+| `YOUTUBE_CLIENT_ID` | YouTube OAuth 인증 |
+| `YOUTUBE_CLIENT_SECRET` | YouTube OAuth 인증 |
+| `YOUTUBE_REFRESH_TOKEN` | 자동 업로드 권한 갱신 |
+| `SENDER_EMAIL` | 선택 사항: 알림 발신 주소 |
+| `GMAIL_PASSWORD` | 선택 사항: Gmail 앱 비밀번호 |
+| `RECEIVER_EMAIL` | 선택 사항: 알림 수신 주소 |
 
----
+## 자동 안전장치
 
-## ⚙️ 작동 원리 (Workflow)
+- 최근 주제와 78% 이상 유사하면 업로드 중단
+- 정치, 사건사고, 연예인, 의료·투자 조언 등 고위험 주제 차단
+- 과장 표현, 출처 없는 내용, 너무 짧거나 긴 대본 차단
+- 서로 다른 스톡 영상이 2개 미만이면 업로드 중단
+- 검증 자료와 출처 URL이 없으면 업로드 중단
+- 내레이션과 최종 영상 길이를 자동 확인
+- AI 음성 사용을 `containsSyntheticMedia`로 공개
 
+## 수동 점검 방법
 
+GitHub 저장소의 **Actions → Daily Original Knowledge Short → Run workflow**에서 실행할 수 있습니다.
 
-### 1. 콘텐츠 수집 (Collection)
-`aagag_collector.py`가 AAGAG 사이트의 게시물을 분석합니다. 단순 이미지는 제외하고, MP4 비디오와 GIF(자동 변환) 파일만 골라내어 서버에 임시 저장합니다. 이때 파일명에 포함된 특수문자를 제거하여 FFmpeg 처리 에러를 사전에 방지합니다.
+- `dry_run = true`: 영상만 만들고 업로드하지 않음
+- `dry_run = false`: 실제 공개 업로드
 
-### 2. 쇼츠 최적화 가공 (Processing)
-`main.py`는 수집된 영상을 YouTube Shorts 규격인 **1080x1920 (9:16)**으로 강제 변환합니다. 
-* 가로 영상은 시네마틱 블러 배경을 추가합니다.
-* 영상 **상단**에 제목 자막을 크게(폰트 크기 80) 배치하여 시청자의 이탈을 방지합니다.
-* 가장 흥미로운 지점에서 고품질 썸네일(.jpg)을 자동 추출합니다.
+실행 결과의 `short-preview-...` 파일은 3일 동안만 보관됩니다. 공개된 영상 기록과 성과는 `data/published_topics.json`에 남습니다.
 
-### 3. 유튜브 업로드 (Distribution)
-`youtube_uploader.py`가 Google OAuth 인증을 통해 채널에 접근합니다. 동영상과 썸네일을 함께 전송하며, Shorts 전용 해시태그(#shorts, #개그 등)를 자동으로 추가하여 노출 알고리즘을 태웁니다.
+## 주요 정책·라이선스
 
-### 4. 사후 관리 (Management)
-작업이 끝나면 서버의 저장 공간 확보를 위해 모든 임시 영상 파일을 삭제하며, 성공한 리스트를 운영자의 이메일로 발송합니다.
+- [YouTube 채널 수익화 정책](https://support.google.com/youtube/answer/1311392)
+- [YouTube AI 콘텐츠 공개 안내](https://support.google.com/youtube/answer/14328491)
+- [Pexels 라이선스](https://www.pexels.com/license/)
+- [Pixabay 콘텐츠 라이선스](https://pixabay.com/service/license-summary/)
+- [Wikipedia 저작권 안내](https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use)
 
----
+## 개발자용 확인
 
-## 🛠 필수 설정 사항 (Secrets)
+```bash
+pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python src/main.py --check-config
+python src/main.py --dry-run
+```
 
-GitHub Actions 환경 변수(Secrets)에 다음 정보가 등록되어 있어야 정상 작동합니다.
-
-* `YOUTUBE_CLIENT_SECRET`: Google Cloud 데스크톱 앱용 JSON 전체 내용
-* `YOUTUBE_REFRESH_TOKEN`: 영구 인증용 리프레시 토큰
-* `GMAIL_USERNAME` / `GMAIL_PASSWORD`: 알림 발송용 Gmail 계정 정보
-* `NOTIFICATION_EMAIL`: 보고서를 받을 이메일 주소
-
----
+영상 생성에는 FFmpeg와 나눔 글꼴이 필요합니다. GitHub Actions에서는 자동으로 설치됩니다.

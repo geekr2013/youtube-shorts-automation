@@ -1,193 +1,215 @@
-import os
-import sys
-import re
-import subprocess
+"""원본 한국어 지식 쇼츠를 매일 한 편 생성하고 업로드한다."""
+
+import argparse
+import json
 import logging
-import textwrap
+import os
 import shutil
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
-from aagag_collector import AAGAGCollector
-from youtube_uploader import YouTubeUploader
+from typing import Any, Dict, List
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO, format='%(message)s')
-logger = logging.getLogger(__name__)
+from ai_writer import GeminiWriter
+from knowledge import research_topic
+from media_provider import StockMediaProvider
+from metrics import fetch_video_metrics, update_records
+from notifier import send_notification
+from quality import validate_package
+from trend_scout import EVERGREEN_SEEDS, fetch_youtube_trends, top_performing_topics
+from video_renderer import media_duration, render_short
 
-# 환경 변수 및 경로 설정
-# GEMINI_API_KEY는 이제 필요 없지만, 다른 용도를 위해 남겨둘 수 있습니다.
-ENABLE_BGM = os.getenv("ENABLE_BGM", "false").lower() == "true"
-ROOT_DIR = Path.cwd()
-BGM_PATH = ROOT_DIR / "data" / "music" / "background.mp3"
-LOCAL_FONT_NAME = "font_res.ttf"
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "data"
+STATE_PATH = DATA_DIR / "published_topics.json"
+WORK_DIR = DATA_DIR / "work"
 
-def prepare_font():
-    """시스템 폰트를 현재 작업 폴더로 복사해옵니다."""
-    if os.path.exists(LOCAL_FONT_NAME):
-        return os.path.abspath(LOCAL_FONT_NAME)
-    fonts = [
-        "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-    ]
-    for f in fonts:
-        if os.path.exists(f):
-            shutil.copy(f, LOCAL_FONT_NAME)
-            return os.path.abspath(LOCAL_FONT_NAME)
-    return None
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+LOGGER = logging.getLogger("original-shorts")
 
-def sanitize_filename(filename):
-    base, ext = os.path.splitext(filename)
-    clean_base = re.sub(r'[^\w\s\d가-힣]', '', base).replace(' ', '_')
-    return f"{clean_base[:50]}{ext}"
 
-def get_video_duration(file_path):
+def load_state() -> Dict[str, Any]:
+    if not STATE_PATH.exists():
+        return {"version": 1, "videos": []}
     try:
-        cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(file_path)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return float(result.stdout.strip())
-    except: return 0.0
+        data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
+        if not isinstance(data.get("videos"), list):
+            raise ValueError("videos가 목록이 아님")
+        return data
+    except Exception as exc:
+        raise RuntimeError(f"운영 상태 파일을 읽지 못했습니다: {exc}") from exc
 
-def is_valid_file(file_path):
-    return os.path.exists(file_path) and os.path.getsize(file_path) > 0
 
-def convert_to_visual_optimized_format(video_path, title_text):
-    """
-    [핵심 변경] AI 음성은 빼고, 시각적 가공(블러 배경)과 원본 오디오만 살립니다.
-    """
-    v_path = os.path.abspath(video_path)
-    output_path = v_path.replace('.mp4', '_final.mp4')
-    text_file_name = os.path.abspath("render_text.txt")
-    font_file = prepare_font()
-    
-    # 제목 줄바꿈 처리
-    wrapped_text = "\n".join(textwrap.wrap(title_text, width=15))
-    
-    try:
-        with open(text_file_name, "w", encoding="utf-8") as f:
-            f.write(wrapped_text)
-        
-        # 1. 텍스트 파일 경로 이스케이프
-        safe_text_path = text_file_name.replace('\\', '/').replace(':', '\\:')
-        safe_font_path = font_file.replace('\\', '/').replace(':', '\\:') if font_file else ""
+def save_state(state: Dict[str, Any]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text(
+        json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
-        # 2. 비디오 필터: 배경 블러 + 중앙 배치 + 자막
-        # (이 부분은 유지하여 '재사용 콘텐츠' 탐지를 방어합니다)
-        filter_complex = (
-            f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg]; "
-            f"[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]; "
-            f"[bg][fg]overlay=(W-w)/2:(H-h)/2[outv]"
+
+def check_configuration(for_upload: bool) -> List[str]:
+    missing = []
+    required = ["GEMINI_API_KEY", "YOUTUBE_DATA_API_KEY"]
+    if not (os.getenv("PEXELS_API_KEY") or os.getenv("PIXABAY_API_KEY")):
+        missing.append("PEXELS_API_KEY 또는 PIXABAY_API_KEY")
+    if for_upload:
+        required.extend(
+            ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"]
         )
-        
-        if safe_font_path:
-            filter_complex += (
-                f";[outv]drawtext=fontfile='{safe_font_path}':textfile='{safe_text_path}':"
-                f"fontcolor=white:fontsize=80:line_spacing=20:box=1:boxcolor=black@0.5:"
-                f"boxborderw=30:x=(w-text_w)/2:y=150[finalv]"
-            )
-            map_v = "[finalv]"
-        else:
-            map_v = "[outv]"
+    missing.extend(name for name in required if not os.getenv(name))
+    return missing
 
-        # 3. 오디오 처리: 원본 오디오(0:a) + 배경음악(BGM) 믹싱
-        # 나레이션(TTS) 입력은 완전히 제거되었습니다.
-        inputs = ['ffmpeg', '-i', v_path]
-        audio_filter = ""
-        map_a = ""
-        
-        use_bgm = ENABLE_BGM and os.path.exists(BGM_PATH)
-        if use_bgm:
-            inputs.extend(['-stream_loop', '-1', '-i', str(BGM_PATH)])
-            # 원본 소리(1.0) + 배경음악(0.1 ~ 0.2) 섞기
-            audio_filter = f";[0:a]volume=1.0[orig];[1:a]volume=0.1[bgm];[orig][bgm]amix=inputs=2:duration=first[finala]"
-            map_a = "-map [finala]"
-        else:
-            # BGM 없으면 원본 소리만 사용
-            map_a = "-map 0:a?" 
 
-        # 최종 명령어 조립
-        cmd = inputs + [
-            '-filter_complex', filter_complex + audio_filter,
-            '-map', map_v,
-        ]
-        
-        if map_a:
-            cmd.extend(map_a.split())
-            
-        cmd.extend([
-            '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
-            '-c:a', 'aac', '-y', output_path
-        ])
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode != 0 or not is_valid_file(output_path):
-            logger.error(f"❌ 가공 실패 (FFmpeg 에러): {result.stderr}")
-            return None
-            
-        return output_path
+def build_description(script, source, clips) -> str:
+    credits = []
+    seen = set()
+    for clip in clips:
+        key = (clip.provider, clip.source_url)
+        if key in seen:
+            continue
+        seen.add(key)
+        creator = f" / {clip.creator}" if clip.creator else ""
+        credits.append(f"- {clip.provider}{creator}: {clip.source_url}")
+    hashtags = " ".join(f"#{tag.replace(' ', '')}" for tag in script.tags[:5])
+    return (
+        f"{script.description_intro}\n\n"
+        f"검증 자료: {source.title}\n{source.url}\n"
+        f"위키백과 텍스트 라이선스: {source.license_name}\n\n"
+        "영상 자료 출처(각 제공처 라이선스 적용):\n"
+        + "\n".join(credits)
+        + "\n\nAI 도구를 주제 정리, 대본 작성 보조, 내레이션 제작에 사용했으며 "
+        "공개된 검증 자료 범위와 안전 기준을 자동 확인했습니다.\n\n"
+        f"#shorts #지식쇼츠 {hashtags}"
+    )
 
-    except Exception as e:
-        logger.error(f"❌ 시스템 예외 발생: {e}")
-        return None
-    finally:
-        if os.path.exists(text_file_name): os.remove(text_file_name)
 
-def main():
-    logger.info("🚀 수익화 대응 시스템 가동 (Visual Only Mode)")
-    success_count = 0
+def write_preview_metadata(path: Path, payload: Dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def run(dry_run: bool = False) -> Dict[str, Any]:
+    missing = check_configuration(for_upload=not dry_run)
+    if missing:
+        raise RuntimeError("GitHub Secrets 누락: " + ", ".join(missing))
+
+    state = load_state()
+    records: List[Dict[str, Any]] = state["videos"]
+    data_api_key = os.environ["YOUTUBE_DATA_API_KEY"]
+
+    metrics = fetch_video_metrics(data_api_key, [item.get("video_id", "") for item in records])
+    if update_records(records, metrics):
+        save_state(state)
+        LOGGER.info("기존 영상 성과를 갱신했습니다.")
+
+    if WORK_DIR.exists():
+        resolved = WORK_DIR.resolve()
+        if DATA_DIR.resolve() not in resolved.parents:
+            raise RuntimeError("작업 폴더 안전 확인에 실패했습니다.")
+        shutil.rmtree(WORK_DIR)
+    media_dir = WORK_DIR / "media"
+    render_dir = WORK_DIR / "render"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    render_dir.mkdir(parents=True, exist_ok=True)
+
+    recent_topics = [item.get("topic", "") for item in records[-40:] if item.get("topic")]
+    trends = fetch_youtube_trends(data_api_key)
+    writer = GeminiWriter()
+    plan = writer.select_topic(
+        trends,
+        recent_topics,
+        top_performing_topics(records),
+        EVERGREEN_SEEDS,
+    )
+    LOGGER.info("선정 주제: %s (%s)", plan.topic, plan.trend_reason)
+
     try:
-        uploader = YouTubeUploader()
-        collector = AAGAGCollector()
-        # 하루 제한을 고려해 3개 정도로 조정 추천
-        videos = collector.collect_and_download(max_videos=3)
-        
-        for idx, video in enumerate(videos, 1):
-            v_path = video.get('video_path')
-            if not v_path or get_video_duration(v_path) <= 0: continue
+        source = research_topic(plan.wiki_query)
+    except Exception:
+        source = research_topic(plan.topic)
+    script = writer.write_script(plan, source)
+    validate_package(plan, script, source, recent_topics)
 
-            safe_name = sanitize_filename(os.path.basename(v_path))
-            safe_path = os.path.join(os.path.dirname(v_path), safe_name)
-            os.rename(v_path, safe_path)
-            v_path = safe_path
+    provider = StockMediaProvider()
+    clips = provider.fetch_clips(plan.stock_queries, media_dir, limit=4)
+    final_video = render_short(clips, script.narration, render_dir)
+    duration = media_duration(final_video)
+    description = build_description(script, source, clips)
+    metadata = {
+        "topic": plan.topic,
+        "title": script.title,
+        "hook": script.hook,
+        "duration_seconds": round(duration, 2),
+        "source": {"title": source.title, "url": source.url, "license": source.license_name},
+        "stock_assets": [
+            {"provider": item.provider, "creator": item.creator, "url": item.source_url}
+            for item in clips
+        ],
+        "tags": script.tags,
+        "dry_run": dry_run,
+    }
+    write_preview_metadata(WORK_DIR / "metadata.json", metadata)
 
-            logger.info(f"\n🎬 [{idx}/{len(videos)}] 처리 중: {video.get('title')}")
-            
-            try:
-                # 불필요한 _\d 접미사 제거
-                clean_title = re.sub(r'_\d+$', '', video.get('title')).strip().replace('_', ' ')
-                
-                # [변경] AI 대본 생성 및 TTS 과정 생략 -> 바로 영상 가공
-                final_output = convert_to_visual_optimized_format(v_path, clean_title)
-                
-                if not final_output:
-                    logger.warning("⚠️ 영상 가공 실패. 건너뜁니다.")
-                    if os.path.exists(v_path): os.remove(v_path)
-                    continue
+    if dry_run:
+        LOGGER.info("건식 실행 완료: 업로드하지 않았습니다.")
+        return metadata
 
-                # 유튜브 업로드
-                if uploader.authenticated:
-                    # 설명란도 심플하게 변경
-                    desc = f"{clean_title}\n\n재밌게 보셨다면 구독과 좋아요 부탁드립니다!\n#이슈 #유머 #영상"
-                    uploader.upload_video(video_path=final_output, title=f"{clean_title} #shorts", description=desc, tags=["shorts", "이슈"])
-                    success_count += 1
-                    logger.info("✅ 업로드 완료")
-                
-                # 파일 정리
-                if os.path.exists(v_path): os.remove(v_path)
-                if os.path.exists(final_output): os.remove(final_output)
+    # 설정 점검과 건식 실행은 YouTube 인증 패키지를 불러오지 않아도 된다.
+    from youtube_uploader import YouTubeUploader
 
-            except Exception as e:
-                logger.error(f"❌ 개별 처리 중 에러: {e}")
-                # 에러 나도 다음 영상으로 진행
+    uploader = YouTubeUploader()
+    result = uploader.upload_video(
+        final_video,
+        title=f"{script.title} #shorts",
+        description=description,
+        tags=["shorts", "지식쇼츠", *script.tags],
+        privacy=os.getenv("YOUTUBE_PRIVACY", "public"),
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    record = {
+        "published_at": now,
+        "topic": plan.topic,
+        "title": script.title,
+        "video_id": result["video_id"],
+        "video_url": result["video_url"],
+        "source_url": source.url,
+        "asset_urls": [item.source_url for item in clips],
+        "metrics": {"views": 0, "likes": 0, "comments": 0},
+    }
+    records.append(record)
+    state["videos"] = records[-365:]
+    save_state(state)
+    write_preview_metadata(WORK_DIR / "metadata.json", {**metadata, **result, "dry_run": False})
+    send_notification(
+        f"[지식 쇼츠] 업로드 완료 - {script.title}",
+        f"주제: {plan.topic}\n영상: {result['video_url']}\n출처: {source.url}",
+    )
+    return {**metadata, **result}
 
-        logger.info(f"\n🎉 최종 업로드 성공: {success_count}개")
-        if os.path.exists(LOCAL_FONT_NAME): os.remove(LOCAL_FONT_NAME)
-        # 하나도 성공 못하면 실패 처리 (로그 확인용)
-        if success_count == 0 and len(videos) > 0: sys.exit(1)
 
-    except Exception as e:
-        logger.error(f"❌ 메인 시스템 에러: {e}")
-        if os.path.exists(LOCAL_FONT_NAME): os.remove(LOCAL_FONT_NAME)
-        sys.exit(1)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="원본 AI 지식 쇼츠 자동화")
+    parser.add_argument("--dry-run", action="store_true", help="영상만 만들고 업로드하지 않음")
+    parser.add_argument("--check-config", action="store_true", help="비밀키 이름만 점검")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        if args.check_config:
+            missing = check_configuration(for_upload=not args.dry_run)
+            if missing:
+                raise RuntimeError("GitHub Secrets 누락: " + ", ".join(missing))
+            LOGGER.info("필수 GitHub Secrets 이름 확인 완료")
+            return 0
+        result = run(dry_run=args.dry_run)
+        LOGGER.info("작업 완료: %s", result.get("video_url", "건식 실행"))
+        return 0
+    except Exception as exc:
+        LOGGER.exception("자동화 실패: %s", exc)
+        send_notification("[지식 쇼츠] 자동화 실패", str(exc))
+        return 1
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

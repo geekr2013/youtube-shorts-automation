@@ -62,3 +62,6 @@ Thumbs.db
 # Keep directory structure
 !data/videos/.gitkeep
 !data/music/.gitkeep
+
+# 매 실행마다 생성되는 임시 결과
+data/work/
