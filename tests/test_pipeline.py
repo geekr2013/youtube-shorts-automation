@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from ai_writer import GeminiWriter
 from models import KnowledgeSource, ScriptPackage, TopicPlan
 from quality import QualityGateError, validate_package
+from run_status import build_status
 from video_renderer import caption_timeline, split_caption_chunks
 
 
@@ -59,6 +60,18 @@ class PipelineTests(unittest.TestCase):
     def test_gemini_json_parser_accepts_code_fence(self):
         value = GeminiWriter._parse_json('```json\n{"topic":"구름"}\n```')
         self.assertEqual(value, {"topic": "구름"})
+
+    def test_push_event_is_recorded_as_dry_run(self):
+        value = build_status(
+            {
+                "RUN_EVENT": "push",
+                "DRY_RUN_OUTCOME": "success",
+                "UPLOAD_OUTCOME": "skipped",
+                "RUN_ID": "123",
+            }
+        )
+        self.assertEqual(value["mode"], "dry-run")
+        self.assertEqual(value["outcome"], "success")
 
 
 if __name__ == "__main__":
