@@ -1,6 +1,7 @@
 import json
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +49,15 @@ class PipelineTests(unittest.TestCase):
     def test_duplicate_topic_is_blocked(self):
         with self.assertRaises(QualityGateError):
             validate_package(self.plan, self.script, self.source, ["생물 발광의 원리"])
+
+    def test_incidental_history_term_is_allowed_in_science_narration(self):
+        script = replace(
+            self.script,
+            narration=self.script.narration.replace(
+                "결국 이 빛은", "전쟁 시기에도 연구됐지만, 결국 이 빛은"
+            ),
+        )
+        validate_package(self.plan, script, self.source, [])
 
     def test_caption_chunks_stay_readable(self):
         chunks = split_caption_chunks(self.script.narration, max_chars=16)
