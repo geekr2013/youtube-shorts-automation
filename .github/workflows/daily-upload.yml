@@ -8,6 +8,7 @@ on:
       - 'requirements.txt'
       - 'src/**'
       - 'tests/**'
+      - 'data/launch_request.json'
   schedule:
     # 매일 한국 시간 19:35 (UTC 10:35)
     - cron: '35 10 * * *'
@@ -76,12 +77,12 @@ jobs:
 
       - name: 영상 생성만 테스트
         id: dry_run
-        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
+        if: ${{ (github.event_name == 'push' && !contains(github.event.head_commit.message, '[launch-upload]')) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
         run: python src/main.py --dry-run
 
       - name: 영상 생성 및 공개 업로드
         id: upload
-        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true) }}
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[launch-upload]')) }}
         run: python src/main.py
 
       - name: 실행 상태 작성
