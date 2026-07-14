@@ -44,23 +44,44 @@ def media_duration(path: Path) -> float:
         return 0.0
 
 
-def split_caption_chunks(text: str, max_chars: int = 16) -> List[str]:
+def split_caption_chunks(text: str, max_chars: int = 20) -> List[str]:
     words = re.findall(r"\S+", text)
     chunks: List[str] = []
     current = ""
     for word in words:
-        candidate = f"{current} {word}".strip()
-        if current and len(candidate) > max_chars:
-            chunks.append(current)
-            current = word
-        else:
-            current = candidate
-        while len(current) > max_chars * 2:
-            chunks.append(current[:max_chars])
-            current = current[max_chars:]
+        parts = [word[index : index + max_chars] for index in range(0, len(word), max_chars)]
+        for part in parts:
+            candidate = f"{current} {part}".strip()
+            if current and len(candidate) > max_chars:
+                chunks.append(current)
+                current = part
+            else:
+                current = candidate
     if current:
         chunks.append(current)
     return chunks
+
+
+def caption_lines(text: str, max_line_chars: int = 11) -> List[str]:
+    """세로 영상 안전 폭 안에서 한글 자막을 최대 두 줄로 나눈다."""
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    if not cleaned or len(cleaned) <= max_line_chars:
+        return [cleaned] if cleaned else []
+
+    midpoint = len(cleaned) / 2
+    valid_spaces = [
+        index
+        for index, character in enumerate(cleaned)
+        if character == " "
+        and len(cleaned[:index].rstrip()) <= max_line_chars
+        and len(cleaned[index + 1 :].lstrip()) <= max_line_chars
+    ]
+    if valid_spaces:
+        split_at = min(valid_spaces, key=lambda index: abs(index - midpoint))
+        return [cleaned[:split_at].rstrip(), cleaned[split_at + 1 :].lstrip()]
+
+    split_at = math.ceil(len(cleaned) / 2)
+    return [cleaned[:split_at].rstrip(), cleaned[split_at:].lstrip()]
 
 
 def caption_timeline(text: str, duration: float) -> List[Tuple[float, float, str]]:
@@ -101,19 +122,16 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,NanumGothic,76,&H00FFFFFF,&H000000FF,&H00111111,&H78000000,-1,0,0,0,100,100,0,0,1,5,2,2,75,75,315,1
-Style: Brand,NanumGothic,38,&H00FFFFFF,&H000000FF,&H00111111,&H78000000,-1,0,0,0,100,100,0,0,1,3,1,8,60,60,120,1
+Style: Caption,NanumGothic,72,&H00FFFFFF,&H000000FF,&H00111111,&H78000000,-1,0,0,0,100,100,0,0,1,5,2,2,120,120,340,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = [header]
-    lines.append(
-        f"Dialogue: 0,0:00:00.00,{_ass_time(duration)},Brand,,0,0,0,,오늘의 60초 호기심\n"
-    )
     for start, end, text in caption_timeline(narration, duration):
+        wrapped = "\n".join(caption_lines(text))
         lines.append(
-            f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Caption,,0,0,0,,{_ass_escape(text)}\n"
+            f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Caption,,0,0,0,,{_ass_escape(wrapped)}\n"
         )
     path.write_text("".join(lines), encoding="utf-8-sig")
 
@@ -222,3 +240,4 @@ def render_short(
         raise RenderError("최종 영상 파일이 생성되지 않았습니다.")
     LOGGER.info("최종 영상 생성: %.1f초 / %.1fMB", duration, final_path.stat().st_size / 1024 / 1024)
     return final_path
+
