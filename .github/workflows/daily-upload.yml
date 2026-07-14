@@ -72,19 +72,32 @@ jobs:
           python -m unittest discover -s tests -v
 
       - name: 영상 생성만 테스트
+        id: dry_run
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
         run: python src/main.py --dry-run
 
       - name: 영상 생성 및 공개 업로드
+        id: upload
         if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true) }}
         run: python src/main.py
 
+      - name: 실행 상태 작성
+        if: always()
+        env:
+          RUN_EVENT: ${{ github.event_name }}
+          DRY_RUN_REQUESTED: ${{ inputs.dry_run }}
+          DRY_RUN_OUTCOME: ${{ steps.dry_run.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_SHA: ${{ github.sha }}
+        run: python src/run_status.py
+
       - name: 운영 기록 저장
-        if: ${{ success() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true)) }}
+        if: always()
         run: |
           git config user.email "action@github.com"
           git config user.name "Original Shorts Bot"
-          git add data/published_topics.json
+          git add data/published_topics.json data/automation_status.json
           git diff --cached --quiet || git commit -m "Update Shorts performance data [skip ci]"
           git pull --rebase origin main
           git push origin HEAD:main
