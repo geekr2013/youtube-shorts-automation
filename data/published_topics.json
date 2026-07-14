@@ -36,6 +36,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-07-14T04:23:08.006025+00:00",
+      "topic": "오로라가 생기는 과정",
+      "title": "오로라가 생기는 과정과 극지방에서 잘 보이는 이유",
+      "video_id": "JS-wOO93nX0",
+      "video_url": "https://www.youtube.com/shorts/JS-wOO93nX0",
+      "source_url": "https://ko.wikipedia.org/wiki/%EC%98%A4%EB%A1%9C%EB%9D%BC",
+      "asset_urls": [
+        "https://www.pexels.com/video/the-aurora-bore-is-shown-in-this-photo-25988225/",
+        "https://www.pexels.com/video/stunning-aurora-borealis-over-rocky-seashore-35206733/",
+        "https://www.pexels.com/video/time-lapse-of-cloud-formations-6707366/"
+      ],
+      "engagement_comment": "💬 여러분이 직접 본 가장 아름다운 하늘빛은 무엇이었나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "preview_run_id": "29305397429",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
