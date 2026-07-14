@@ -15,7 +15,7 @@ from knowledge import research_topic
 from media_provider import StockMediaProvider
 from metrics import fetch_video_metrics, update_records
 from notifier import send_notification
-from quality import validate_package
+from quality import QualityGateError, validate_package
 from trend_scout import EVERGREEN_SEEDS, fetch_youtube_trends, top_performing_topics
 from video_renderer import media_duration, render_short
 
@@ -138,8 +138,18 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         source = research_topic(plan.wiki_query)
     except Exception:
         source = research_topic(plan.topic)
-    script = writer.write_script(plan, source)
-    validate_package(plan, script, source, recent_topics)
+    script = None
+    for attempt in range(2):
+        try:
+            script = writer.write_script(plan, source)
+            validate_package(plan, script, source, recent_topics)
+            break
+        except QualityGateError as exc:
+            if attempt == 1:
+                raise
+            LOGGER.warning("대본 품질 기준 미달로 한 번 다시 작성합니다: %s", exc)
+    if script is None:
+        raise RuntimeError("검증된 대본을 만들지 못했습니다.")
 
     provider = StockMediaProvider()
     clips = provider.fetch_clips(plan.stock_queries, media_dir, limit=4)
