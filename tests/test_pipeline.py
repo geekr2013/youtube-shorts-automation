@@ -75,6 +75,12 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertEqual(value, '{"topic":"번개"}')
 
+    def test_github_models_text_is_extracted(self):
+        value = GeminiWriter._extract_chat_text(
+            {"choices": [{"message": {"content": '{"topic":"오로라"}'}}]}
+        )
+        self.assertEqual(value, '{"topic":"오로라"}')
+
     def test_push_event_is_recorded_as_dry_run(self):
         value = build_status(
             {
