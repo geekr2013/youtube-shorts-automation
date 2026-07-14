@@ -1,66 +1,94 @@
-name: Daily AAGAG Upload (Monetization Optimized)
+name: Daily Original Knowledge Short
 
-off:
+on:
   schedule:
-    - cron: '0 9 * * *'
+    # 매일 한국 시간 19:35 (UTC 10:35)
+    - cron: '35 10 * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '영상만 만들고 YouTube에는 올리지 않기'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-original-knowledge-short
+  cancel-in-progress: false
 
 jobs:
-  run-upload:
+  generate-and-upload:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
+    timeout-minutes: 35
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      YOUTUBE_DATA_API_KEY: ${{ secrets.YOUTUBE_DATA_API_KEY }}
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+      GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+      RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+      YOUTUBE_PRIVACY: public
+
     steps:
-      - name: Checkout repository
+      - name: 저장소 준비
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true
+          fetch-depth: 0
 
-      - name: Set up Python
+      - name: Python 준비
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
 
-      - name: Install system dependencies
+      - name: 영상 도구 설치
         run: |
           sudo apt-get update
-          # FFmpeg 및 나눔 폰트 설치
           sudo apt-get install -y ffmpeg fonts-nanum
-          sudo fc-cache -fv
+          sudo fc-cache -f
 
-      - name: Install Python dependencies
+      - name: Python 패키지 설치
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install Playwright browsers
+      - name: 자동 검사
         run: |
-          playwright install chromium
-          playwright install-deps
+          python -m compileall -q src
+          python -m unittest discover -s tests -v
 
-      - name: Create directories
-        run: |
-          mkdir -p data/videos
-          mkdir -p data/music
+      - name: 영상 생성만 테스트
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+        run: python src/main.py --dry-run
 
-      - name: Run AAGAG automation (Monetized)
-        env:
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
-          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
-          NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
-          ENABLE_BGM: 'true' 
+      - name: 영상 생성 및 공개 업로드
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
         run: python src/main.py
 
-      - name: Commit and push changes
+      - name: 운영 기록 저장
+        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add data/download_history.json || true
-          git add data/youtube_token.pickle || true
-          git diff --staged --quiet || git commit -m "Update automation data [skip ci]" || true
-          git push || true
+          git config user.email "action@github.com"
+          git config user.name "Original Shorts Bot"
+          git add data/published_topics.json
+          git diff --cached --quiet || git commit -m "Update Shorts performance data [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: 확인용 결과 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: short-preview-${{ github.run_id }}
+          path: |
+            data/work/metadata.json
+            data/work/render/final_short.mp4
+          if-no-files-found: ignore
+          retention-days: 3
