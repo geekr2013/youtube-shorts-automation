@@ -14,11 +14,16 @@ def build_status(env: Dict[str, str]) -> Dict[str, str]:
     event = env.get("RUN_EVENT", "unknown")
     dry_requested = env.get("DRY_RUN_REQUESTED", "").lower() == "true"
     upload_outcome = env.get("UPLOAD_OUTCOME", "")
-    is_dry_run = upload_outcome == "skipped" and (
+    preview_upload_outcome = env.get("PREVIEW_UPLOAD_OUTCOME", "")
+    is_preview_upload = preview_upload_outcome not in ("", "skipped")
+    is_dry_run = not is_preview_upload and upload_outcome == "skipped" and (
         event == "push" or (event == "workflow_dispatch" and dry_requested)
     )
     mode = "dry-run" if is_dry_run else "upload"
-    outcome = env.get("DRY_RUN_OUTCOME" if is_dry_run else "UPLOAD_OUTCOME", "unknown")
+    if is_preview_upload:
+        outcome = preview_upload_outcome
+    else:
+        outcome = env.get("DRY_RUN_OUTCOME" if is_dry_run else "UPLOAD_OUTCOME", "unknown")
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "mode": mode,
