@@ -99,6 +99,18 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(value["mode"], "dry-run")
         self.assertEqual(value["outcome"], "success")
 
+    def test_launch_push_is_recorded_as_upload(self):
+        value = build_status(
+            {
+                "RUN_EVENT": "push",
+                "DRY_RUN_OUTCOME": "skipped",
+                "UPLOAD_OUTCOME": "success",
+                "RUN_ID": "456",
+            }
+        )
+        self.assertEqual(value["mode"], "upload")
+        self.assertEqual(value["outcome"], "success")
+
 
 if __name__ == "__main__":
     unittest.main()
