@@ -61,6 +61,20 @@ class PipelineTests(unittest.TestCase):
         value = GeminiWriter._parse_json('```json\n{"topic":"구름"}\n```')
         self.assertEqual(value, {"topic": "구름"})
 
+    def test_gemini_interaction_text_is_extracted(self):
+        value = GeminiWriter._extract_interaction_text(
+            {
+                "steps": [
+                    {"type": "user_input", "content": []},
+                    {
+                        "type": "model_output",
+                        "content": [{"type": "text", "text": '{"topic":"번개"}'}],
+                    },
+                ]
+            }
+        )
+        self.assertEqual(value, '{"topic":"번개"}')
+
     def test_push_event_is_recorded_as_dry_run(self):
         value = build_status(
             {
