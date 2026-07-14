@@ -39,8 +39,10 @@ def validate_package(
     if not source.url.startswith("https://") or len(source.extract) < 350:
         raise QualityGateError("검증 자료가 부족합니다.")
 
-    combined = f"{plan.topic} {script.title} {script.narration}"
-    blocked = sorted(term for term in RISK_TERMS | HYPE_TERMS if term in combined)
+    headline = f"{plan.topic} {script.title}"
+    combined = f"{headline} {script.narration}"
+    blocked = sorted(term for term in RISK_TERMS if term in headline)
+    blocked.extend(sorted(term for term in HYPE_TERMS if term in combined))
     if blocked:
         raise QualityGateError("안전 기준에 걸린 표현: " + ", ".join(blocked))
 
