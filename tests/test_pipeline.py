@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ai_writer import GeminiWriter
+from main import build_engagement_comment
 from models import KnowledgeSource, ScriptPackage, TopicPlan
 from quality import QualityGateError, validate_package
 from run_status import build_status
@@ -31,18 +32,26 @@ class PipelineTests(unittest.TestCase):
             stock_queries=["deep sea", "jellyfish", "ocean"],
         )
         hook = "깊은 바다의 생물은 왜 스스로 빛을 낼까요?"
+        midpoint_hook = "그런데 같은 빛도 생물마다 쓰임이 다릅니다."
+        closing_loop = "깊은 바다에서 다시 빛을 본다면, 그 생물은 왜 빛나는 걸까요?"
         narration = (
             hook
             + " 생물발광은 생물의 몸속 화학 반응이 빛 에너지로 바뀌는 현상입니다. "
             "빛을 내는 물질과 효소가 산소와 반응하면서 열을 많이 만들지 않는 차가운 빛이 나타납니다. "
+            + midpoint_hook
+            + " "
             "어두운 바다에서는 먹이를 유인하거나 포식자를 피하고, 같은 종끼리 신호를 보내는 데 쓰입니다. "
-            "반딧불이와 일부 버섯도 비슷한 원리로 빛납니다. 결국 이 빛은 장식이 아니라 생존을 돕는 정교한 도구입니다."
+            "반딧불이와 일부 버섯도 비슷한 원리로 빛납니다. "
+            + closing_loop
         )
         self.script = ScriptPackage(
             title="깊은 바다 생물은 왜 스스로 빛날까",
             hook=hook,
             narration=narration,
             description_intro="생물발광의 원리와 쓰임을 설명합니다. 검증 자료를 바탕으로 구성했습니다.",
+            midpoint_hook=midpoint_hook,
+            closing_loop=closing_loop,
+            engagement_question="여러분이 직접 본 가장 신기한 빛은 무엇인가요?",
             tags=["생물발광", "심해", "과학", "자연", "지식"],
         )
         self.source = KnowledgeSource(
@@ -58,6 +67,21 @@ class PipelineTests(unittest.TestCase):
     def test_duplicate_topic_is_blocked(self):
         with self.assertRaises(QualityGateError):
             validate_package(self.plan, self.script, self.source, ["생물 발광의 원리"])
+
+    def test_midpoint_hook_must_be_near_the_middle(self):
+        script = replace(self.script, midpoint_hook="대본에 없는 반전 문장입니다.")
+        with self.assertRaises(QualityGateError):
+            validate_package(self.plan, script, self.source, [])
+
+    def test_closing_loop_must_end_the_narration(self):
+        script = replace(self.script, closing_loop="다른 마지막 문장입니다.")
+        with self.assertRaises(QualityGateError):
+            validate_package(self.plan, script, self.source, [])
+
+    def test_engagement_question_is_ready_for_a_comment(self):
+        comment = build_engagement_comment(self.script)
+        self.assertIn(self.script.engagement_question, comment)
+        self.assertIn("댓글", comment)
 
     def test_incidental_history_term_is_allowed_in_science_narration(self):
         script = replace(

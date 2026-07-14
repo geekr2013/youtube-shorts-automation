@@ -18,6 +18,7 @@ WIDTH = 1080
 HEIGHT = 1920
 CAPTION_X = 470
 CAPTION_Y = 1260
+LOOP_TAIL_SECONDS = 1.2
 
 
 class RenderError(RuntimeError):
@@ -232,14 +233,15 @@ def render_short(
     ass_path = output_dir / "captions.ass"
     write_ass(ass_path, narration_text, duration)
 
-    segment_duration = duration / len(clip_list)
+    loop_tail_duration = min(LOOP_TAIL_SECONDS, duration * 0.04)
+    segment_duration = (duration - loop_tail_duration) / len(clip_list)
     segments: List[Path] = []
     for index, clip in enumerate(clip_list):
         segment = output_dir / f"segment_{index + 1}.mp4"
         _run(
             [
                 "ffmpeg", "-y", "-stream_loop", "-1", "-i", str(clip.path),
-                "-t", f"{segment_duration + 0.12:.3f}",
+                "-t", f"{segment_duration:.3f}",
                 "-vf",
                 "scale=1080:1920:force_original_aspect_ratio=increase,"
                 "crop=1080:1920,setsar=1,fps=30,"
@@ -250,6 +252,22 @@ def render_short(
             ]
         )
         segments.append(segment)
+
+    loop_tail = output_dir / "segment_loop_tail.mp4"
+    _run(
+        [
+            "ffmpeg", "-y", "-t", f"{loop_tail_duration:.3f}",
+            "-i", str(clip_list[0].path),
+            "-vf",
+            "scale=1080:1920:force_original_aspect_ratio=increase,"
+            "crop=1080:1920,setsar=1,fps=30,"
+            "eq=contrast=1.04:saturation=1.06:brightness=-0.02,"
+            "drawbox=x=0:y=0:w=iw:h=ih:color=black@0.10:t=fill,reverse",
+            "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "21",
+            "-pix_fmt", "yuv420p", str(loop_tail),
+        ]
+    )
+    segments.append(loop_tail)
 
     concat_file = output_dir / "segments.txt"
     concat_file.write_text(

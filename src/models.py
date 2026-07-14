@@ -27,6 +27,9 @@ class ScriptPackage:
     hook: str
     narration: str
     description_intro: str
+    midpoint_hook: str = ""
+    closing_loop: str = ""
+    engagement_question: str = ""
     tags: List[str] = field(default_factory=list)
 
 
