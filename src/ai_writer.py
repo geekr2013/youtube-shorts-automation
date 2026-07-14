@@ -84,6 +84,17 @@ class GeminiWriter:
         return str(choices[0].get("message", {}).get("content", "")).strip()
 
     @staticmethod
+    def _strict_schema(value: Any) -> Any:
+        if isinstance(value, dict):
+            result = {key: GeminiWriter._strict_schema(item) for key, item in value.items()}
+            if result.get("type") == "object":
+                result.setdefault("additionalProperties", False)
+            return result
+        if isinstance(value, list):
+            return [GeminiWriter._strict_schema(item) for item in value]
+        return value
+
+    @staticmethod
     def _error_message(response: Any) -> str:
         try:
             message = response.json().get("error", {}).get("message", "")
@@ -114,7 +125,14 @@ class GeminiWriter:
                         ],
                         "temperature": temperature,
                         "max_tokens": 1800,
-                        "response_format": {"type": "json_object"},
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": "shorts_response",
+                                "strict": True,
+                                "schema": self._strict_schema(schema),
+                            },
+                        },
                     },
                     timeout=90,
                 )
@@ -215,9 +233,12 @@ class GeminiWriter:
                 break
             if fallback not in queries:
                 queries.append(fallback)
+        topic = str(result.get("topic", "")).strip()
+        if not topic:
+            raise GeminiError("AI 응답에 주제가 없습니다.")
         return TopicPlan(
-            topic=str(result["topic"]).strip(),
-            wiki_query=str(result["wiki_query"]).strip(),
+            topic=topic,
+            wiki_query=str(result.get("wiki_query") or topic).strip(),
             stock_queries=queries[:4],
             category=str(result.get("category", "science")).strip(),
             trend_reason=str(result.get("trend_reason", "")).strip(),
