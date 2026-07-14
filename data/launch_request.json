@@ -1,5 +1,4 @@
 {
-  "requested_at": "2026-07-14T02:53:00Z",
-  "reason": "Retry after normalizing the existing YouTube OAuth secret formats"
+  "requested_at": "2026-07-14T03:29:59.305Z",
+  "reason": "Publish one validated test Short with UI-safe captions, natural narration, and original BGM"
 }
-
