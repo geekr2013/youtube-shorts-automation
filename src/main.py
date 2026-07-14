@@ -84,7 +84,8 @@ def build_description(script, source, clips) -> str:
         "영상 자료 출처(각 제공처 라이선스 적용):\n"
         + "\n".join(credits)
         + "\n\nAI 도구를 주제 정리, 대본 작성 보조, 내레이션 제작에 사용했으며 "
-        "공개된 검증 자료 범위와 안전 기준을 자동 확인했습니다.\n\n"
+        "공개된 검증 자료 범위와 안전 기준을 자동 확인했습니다. "
+        "배경음은 외부 음원을 사용하지 않고 영상마다 직접 생성했습니다.\n\n"
         f"#shorts #지식쇼츠 {hashtags}"
     )
 
@@ -137,7 +138,12 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
 
     provider = StockMediaProvider()
     clips = provider.fetch_clips(plan.stock_queries, media_dir, limit=4)
-    final_video = render_short(clips, script.narration, render_dir)
+    final_video = render_short(
+        clips,
+        script.narration,
+        render_dir,
+        bgm_style=plan.category,
+    )
     duration = media_duration(final_video)
     description = build_description(script, source, clips)
     metadata = {
@@ -151,6 +157,10 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
             for item in clips
         ],
         "tags": script.tags,
+        "audio": {
+            "narration": "Korean neural voice",
+            "background_music": "original procedurally generated ambient",
+        },
         "dry_run": dry_run,
     }
     write_preview_metadata(WORK_DIR / "metadata.json", metadata)
