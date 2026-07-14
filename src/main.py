@@ -86,8 +86,13 @@ def build_description(script, source, clips) -> str:
         + "\n\nAI 도구를 주제 정리, 대본 작성 보조, 내레이션 제작에 사용했으며 "
         "공개된 검증 자료 범위와 안전 기준을 자동 확인했습니다. "
         "배경음은 외부 음원을 사용하지 않고 영상마다 직접 생성했습니다.\n\n"
+        f"댓글 질문: {script.engagement_question}\n\n"
         f"#shorts #지식쇼츠 {hashtags}"
     )
+
+
+def build_engagement_comment(script) -> str:
+    return f"💬 {script.engagement_question}\n여러분의 경험이나 생각을 댓글로 알려주세요."
 
 
 def write_preview_metadata(path: Path, payload: Dict[str, Any]) -> None:
@@ -150,6 +155,9 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "topic": plan.topic,
         "title": script.title,
         "hook": script.hook,
+        "midpoint_hook": script.midpoint_hook,
+        "closing_loop": script.closing_loop,
+        "engagement_comment": build_engagement_comment(script),
         "duration_seconds": round(duration, 2),
         "source": {"title": source.title, "url": source.url, "license": source.license_name},
         "stock_assets": [
@@ -189,6 +197,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "video_url": result["video_url"],
         "source_url": source.url,
         "asset_urls": [item.source_url for item in clips],
+        "engagement_comment": build_engagement_comment(script),
         "metrics": {"views": 0, "likes": 0, "comments": 0},
     }
     records.append(record)
@@ -197,7 +206,8 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     write_preview_metadata(WORK_DIR / "metadata.json", {**metadata, **result, "dry_run": False})
     send_notification(
         f"[지식 쇼츠] 업로드 완료 - {script.title}",
-        f"주제: {plan.topic}\n영상: {result['video_url']}\n출처: {source.url}",
+        f"주제: {plan.topic}\n영상: {result['video_url']}\n출처: {source.url}\n\n"
+        f"고정 댓글 추천 문구:\n{build_engagement_comment(script)}",
     )
     return {**metadata, **result}
 
