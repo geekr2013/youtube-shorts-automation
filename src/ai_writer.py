@@ -258,6 +258,10 @@ class GeminiWriter:
 - narration은 한국어 공백 포함 230~360자이며 45~58초 분량이다.
 - 첫 문장은 의외성 있는 질문형 hook과 같아야 한다.
 - 3~5개의 구체적 사실을 원인→과정→결과 흐름으로 설명한다.
+- midpoint_hook은 자료로 확인되는 반전 또는 관점 전환 한 문장이다. narration의 40~60% 지점에 문장 그대로 넣는다.
+- midpoint_hook은 매번 주제에 맞게 쓰고, '하지만 진짜 놀라운 사실은' 같은 상투적 문구를 반복하지 않는다.
+- closing_loop는 narration의 마지막 문장이다. 첫 질문의 핵심 소재로 자연스럽게 돌아가 영상이 다시 시작돼도 이어지게 쓴다.
+- engagement_question은 시청자가 자기 경험이나 생각을 짧게 답할 수 있는 주제 관련 질문 한 문장이다.
 - 자료에 없는 숫자, 추정, 최신 뉴스, 건강·투자 조언은 넣지 않는다.
 - '충격', '무조건', '소름', '역대급' 같은 과장과 구독 요청을 쓰지 않는다.
 - title은 44자 이내의 자연스러운 한국어이며 #shorts를 포함하지 않는다.
@@ -274,9 +278,21 @@ class GeminiWriter:
                 "hook": {"type": "string"},
                 "narration": {"type": "string"},
                 "description_intro": {"type": "string"},
+                "midpoint_hook": {"type": "string"},
+                "closing_loop": {"type": "string"},
+                "engagement_question": {"type": "string"},
                 "tags": {"type": "array", "items": {"type": "string"}},
             },
-            "required": ["title", "hook", "narration", "description_intro", "tags"],
+            "required": [
+                "title",
+                "hook",
+                "narration",
+                "description_intro",
+                "midpoint_hook",
+                "closing_loop",
+                "engagement_question",
+                "tags",
+            ],
         }
         result = self._generate(prompt, schema, temperature=0.72)
         narration = re.sub(r"\s+", " ", str(result["narration"])).strip()
@@ -303,6 +319,11 @@ class GeminiWriter:
             hook=hook,
             narration=narration,
             description_intro=str(result["description_intro"]).strip(),
+            midpoint_hook=re.sub(r"\s+", " ", str(result["midpoint_hook"])).strip(),
+            closing_loop=re.sub(r"\s+", " ", str(result["closing_loop"])).strip(),
+            engagement_question=re.sub(
+                r"\s+", " ", str(result["engagement_question"])
+            ).strip(),
             tags=tags[:8],
         )
 
