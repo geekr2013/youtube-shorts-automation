@@ -1,5 +1,7 @@
 import json
+import re
 import sys
+import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -12,7 +14,7 @@ from models import KnowledgeSource, ScriptPackage, TopicPlan
 from quality import QualityGateError, validate_package
 from run_status import build_status
 from secret_utils import clean_secret
-from video_renderer import caption_timeline, split_caption_chunks
+from video_renderer import caption_lines, caption_timeline, split_caption_chunks, write_ass
 
 
 class PipelineTests(unittest.TestCase):
@@ -61,12 +63,28 @@ class PipelineTests(unittest.TestCase):
         validate_package(self.plan, script, self.source, [])
 
     def test_caption_chunks_stay_readable(self):
-        chunks = split_caption_chunks(self.script.narration, max_chars=16)
+        chunks = split_caption_chunks(self.script.narration)
         self.assertGreater(len(chunks), 5)
-        self.assertTrue(all(len(chunk) <= 32 for chunk in chunks))
+        self.assertTrue(all(len(chunk) <= 20 for chunk in chunks))
+        for chunk in chunks:
+            lines = caption_lines(chunk)
+            self.assertLessEqual(len(lines), 2)
+            self.assertTrue(all(len(line) <= 11 for line in lines))
+            self.assertEqual(
+                re.sub(r"\s", "", chunk),
+                re.sub(r"\s", "", "".join(lines)),
+            )
         timeline = caption_timeline(self.script.narration, 50.0)
         self.assertAlmostEqual(timeline[0][0], 0.0)
         self.assertAlmostEqual(timeline[-1][1], 50.0)
+
+    def test_ass_has_no_top_brand_and_uses_safe_line_breaks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "captions.ass"
+            write_ass(path, self.script.narration, 50.0)
+            content = path.read_text(encoding="utf-8-sig")
+        self.assertNotIn("오늘의 60초 호기심", content)
+        self.assertIn(r"\N", content)
 
     def test_gemini_json_parser_accepts_code_fence(self):
         value = GeminiWriter._parse_json('```json\n{"topic":"구름"}\n```')
