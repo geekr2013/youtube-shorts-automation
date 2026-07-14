@@ -32,6 +32,14 @@ def validate_package(
         raise QualityGateError(f"대본 길이가 기준 밖입니다: {narration_length}자")
     if not script.narration.startswith(script.hook.rstrip(". ")) and script.hook not in script.narration[:100]:
         raise QualityGateError("첫 문장에 훅이 포함되지 않았습니다.")
+    midpoint_position = script.narration.find(script.midpoint_hook)
+    midpoint_ratio = midpoint_position / max(1, narration_length)
+    if len(script.midpoint_hook) < 8 or not 0.32 <= midpoint_ratio <= 0.68:
+        raise QualityGateError("중간 반전 훅이 대본 중앙에 포함되지 않았습니다.")
+    if len(script.closing_loop) < 8 or not script.narration.endswith(script.closing_loop):
+        raise QualityGateError("마지막 문장이 시작 훅으로 이어지는 루프 구조가 아닙니다.")
+    if not 10 <= len(script.engagement_question) <= 60 or not script.engagement_question.endswith(("?", "？")):
+        raise QualityGateError("댓글 참여 질문이 자연스러운 질문형 문장이 아닙니다.")
     if not 8 <= len(script.title) <= 44:
         raise QualityGateError("제목 길이가 기준 밖입니다.")
     if not 5 <= len(script.tags) <= 8:
