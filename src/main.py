@@ -49,7 +49,13 @@ def save_state(state: Dict[str, Any]) -> None:
 
 def check_configuration(for_upload: bool) -> List[str]:
     missing = []
-    required = ["GEMINI_API_KEY", "YOUTUBE_DATA_API_KEY"]
+    required = ["YOUTUBE_DATA_API_KEY"]
+    if not (
+        os.getenv("GITHUB_MODELS_TOKEN")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("GOOGLE_API_KEY")
+    ):
+        missing.append("GitHub Models 또는 Gemini 인증 정보")
     if not (os.getenv("PEXELS_API_KEY") or os.getenv("PIXABAY_API_KEY")):
         missing.append("PEXELS_API_KEY 또는 PIXABAY_API_KEY")
     if for_upload:
@@ -213,3 +219,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

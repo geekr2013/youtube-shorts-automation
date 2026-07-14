@@ -20,10 +20,9 @@ def _fetch_from_wikipedia(query: str, language: str) -> Optional[KnowledgeSource
         "action": "query",
         "generator": "search",
         "gsrsearch": query,
-        "gsrlimit": 1,
+        "gsrlimit": 3,
         "prop": "extracts|info",
         "explaintext": 1,
-        "exintro": 1,
         "exchars": 6000,
         "inprop": "url",
         "format": "json",
@@ -40,10 +39,14 @@ def _fetch_from_wikipedia(query: str, language: str) -> Optional[KnowledgeSource
     pages = response.json().get("query", {}).get("pages", [])
     if not pages:
         return None
-    page = pages[0]
-    extract = " ".join(str(page.get("extract", "")).split())
-    if len(extract) < 350:
+    usable_pages = []
+    for page in pages:
+        extract = " ".join(str(page.get("extract", "")).split())
+        if len(extract) >= 300:
+            usable_pages.append((len(extract), page, extract))
+    if not usable_pages:
         return None
+    _, page, extract = max(usable_pages, key=lambda item: item[0])
     return KnowledgeSource(
         title=str(page.get("title", query)),
         url=str(page.get("fullurl", "")),
