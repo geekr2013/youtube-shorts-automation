@@ -14,7 +14,7 @@
         "https://www.pexels.com/video/jellyfish-swimming-underwater-12860646/"
       ],
       "metrics": {
-        "views": 6,
+        "views": 8,
         "likes": 0,
         "comments": 0
       }
@@ -32,7 +32,7 @@
         "https://www.pexels.com/video/overcast-on-sky-12460328/"
       ],
       "metrics": {
-        "views": 3,
+        "views": 4,
         "likes": 0,
         "comments": 0
       }
@@ -51,6 +51,25 @@
       ],
       "engagement_comment": "💬 여러분이 직접 본 가장 아름다운 하늘빛은 무엇이었나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "preview_run_id": "29305397429",
+      "metrics": {
+        "views": 3,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-07-14T11:59:48.284145+00:00",
+      "topic": "문어의 위장 원리",
+      "title": "문어의 위장 원리와 생존 전략",
+      "video_id": "uH4TIvll0R0",
+      "video_url": "https://www.youtube.com/shorts/uH4TIvll0R0",
+      "source_url": "https://ko.wikipedia.org/wiki/%EB%AC%B8%EC%96%B4",
+      "asset_urls": [
+        "https://www.pexels.com/video/serene-underwater-coral-reef-exploration-35819882/",
+        "https://www.pexels.com/video/close-up-of-animals-13847608/",
+        "https://www.pexels.com/video/whales-on-sea-14146693/"
+      ],
+      "engagement_comment": "💬 여러분은 바다에서 위장한 생물을 본 적 있나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "metrics": {
         "views": 0,
         "likes": 0,
