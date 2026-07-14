@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ai_writer import GeminiWriter
+from ai_writer import GeminiWriter, normalize_loop_ending
 from main import build_engagement_comment
 from models import KnowledgeSource, ScriptPackage, TopicPlan
 from quality import QualityGateError, validate_package
@@ -77,6 +77,16 @@ class PipelineTests(unittest.TestCase):
         script = replace(self.script, closing_loop="다른 마지막 문장입니다.")
         with self.assertRaises(QualityGateError):
             validate_package(self.plan, script, self.source, [])
+
+    def test_invalid_ai_loop_is_replaced_with_a_safe_loop(self):
+        invalid = "이것이 생물발광의 놀라운 원리입니다."
+        narration, closing = normalize_loop_ending(
+            self.script.narration.replace(self.script.closing_loop, invalid),
+            invalid,
+        )
+        self.assertEqual(closing, "이 사실을 알고 처음 장면을 다시 보면…")
+        self.assertTrue(narration.endswith(closing))
+        self.assertNotIn(invalid, narration)
 
     def test_engagement_question_is_ready_for_a_comment(self):
         comment = build_engagement_comment(self.script)
