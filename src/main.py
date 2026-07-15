@@ -126,21 +126,38 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     recent_topics = [item.get("topic", "") for item in records[-40:] if item.get("topic")]
     trends = fetch_youtube_trends(data_api_key)
     writer = GeminiWriter()
-    plan = writer.select_topic(
-        trends,
-        recent_topics,
-        top_performing_topics(records),
-        EVERGREEN_SEEDS,
-    )
-    LOGGER.info("선정 주제: %s (%s)", plan.topic, plan.trend_reason)
-
-    try:
-        source = research_topic(plan.topic)
-    except Exception:
-        source = research_topic(plan.wiki_query)
-    if not source_is_relevant(plan, source) and plan.wiki_query != plan.topic:
-        LOGGER.warning("첫 검증 자료가 주제와 맞지 않아 보조 검색어로 다시 조회합니다.")
-        source = research_topic(plan.wiki_query)
+    selection_exclusions = list(recent_topics)
+    top_topics = top_performing_topics(records)
+    plan = None
+    source = None
+    for topic_attempt in range(3):
+        candidate = writer.select_topic(
+            trends,
+            selection_exclusions,
+            top_topics,
+            EVERGREEN_SEEDS,
+        )
+        LOGGER.info("선정 주제: %s (%s)", candidate.topic, candidate.trend_reason)
+        for query in dict.fromkeys((candidate.topic, candidate.wiki_query)):
+            try:
+                candidate_source = research_topic(query)
+            except Exception as exc:
+                LOGGER.warning("검증 자료 조회 실패(%s): %s", query, exc)
+                continue
+            if source_is_relevant(candidate, candidate_source):
+                plan = candidate
+                source = candidate_source
+                break
+            LOGGER.warning(
+                "주제와 직접 연결되지 않은 자료를 제외합니다: %s",
+                candidate_source.title,
+            )
+        if plan is not None:
+            break
+        selection_exclusions.append(candidate.topic)
+        LOGGER.warning("자료 검증에 실패해 다른 주제를 다시 고릅니다(%s/3).", topic_attempt + 1)
+    if plan is None or source is None:
+        raise QualityGateError("주제와 직접 연결된 검증 자료를 찾지 못했습니다.")
     script = None
     for attempt in range(2):
         try:
