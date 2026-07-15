@@ -15,7 +15,7 @@ from knowledge import research_topic
 from media_provider import StockMediaProvider
 from metrics import fetch_video_metrics, update_records
 from notifier import send_notification
-from quality import QualityGateError, validate_package
+from quality import QualityGateError, source_is_relevant, validate_package
 from trend_scout import EVERGREEN_SEEDS, fetch_youtube_trends, top_performing_topics
 from video_renderer import media_duration, render_short
 
@@ -137,6 +137,9 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     try:
         source = research_topic(plan.topic)
     except Exception:
+        source = research_topic(plan.wiki_query)
+    if not source_is_relevant(plan, source) and plan.wiki_query != plan.topic:
+        LOGGER.warning("첫 검증 자료가 주제와 맞지 않아 보조 검색어로 다시 조회합니다.")
         source = research_topic(plan.wiki_query)
     script = None
     for attempt in range(2):
