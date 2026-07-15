@@ -32,6 +32,8 @@ def validate_package(
         raise QualityGateError(f"대본 길이가 기준 밖입니다: {narration_length}자")
     if not script.narration.startswith(script.hook.rstrip(". ")) and script.hook not in script.narration[:100]:
         raise QualityGateError("첫 문장에 훅이 포함되지 않았습니다.")
+    if not script.hook.endswith(("?", "？")):
+        raise QualityGateError("첫 문장 훅이 질문형이 아닙니다.")
     midpoint_position = script.narration.find(script.midpoint_hook)
     midpoint_ratio = midpoint_position / max(1, narration_length)
     if len(script.midpoint_hook) < 8 or not 0.32 <= midpoint_ratio <= 0.68:
@@ -48,6 +50,15 @@ def validate_package(
         raise QualityGateError("태그 수가 기준 밖입니다.")
     if not source.url.startswith("https://") or len(source.extract) < 350:
         raise QualityGateError("검증 자료가 부족합니다.")
+    source_title = _normalized(source.title)
+    topic = _normalized(plan.topic)
+    wiki_query = _normalized(plan.wiki_query)
+    if not source_title or not (
+        source_title in topic
+        or source_title in wiki_query
+        or (wiki_query and wiki_query in source_title)
+    ):
+        raise QualityGateError("주제와 검증 자료 제목이 일치하지 않습니다.")
 
     headline = f"{plan.topic} {script.title}"
     combined = f"{headline} {script.narration}"
