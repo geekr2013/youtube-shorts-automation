@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from ai_writer import GeminiWriter, normalize_loop_ending
 from main import build_engagement_comment
+from knowledge import _select_wikipedia_page
 from models import KnowledgeSource, ScriptPackage, TopicPlan
 from publish_preview import build_preview_description
 from quality import QualityGateError, validate_package
@@ -76,6 +77,29 @@ class PipelineTests(unittest.TestCase):
         script = replace(self.script, midpoint_hook="대본에 없는 반전 문장입니다.")
         with self.assertRaises(QualityGateError):
             validate_package(self.plan, script, self.source, [])
+
+    def test_hook_must_be_a_question(self):
+        script = replace(self.script, hook="깊은 바다의 생물은 스스로 빛을 냅니다.")
+        with self.assertRaises(QualityGateError):
+            validate_package(self.plan, script, self.source, [])
+
+    def test_unrelated_wikipedia_source_is_blocked(self):
+        source = replace(
+            self.source,
+            title="버뮤다 삼각지대",
+            extract="버뮤다 삼각지대에 관한 설명입니다. " * 30,
+        )
+        with self.assertRaises(QualityGateError):
+            validate_package(self.plan, self.script, source, [])
+
+    def test_wikipedia_search_rank_beats_longest_article(self):
+        selected = _select_wikipedia_page(
+            [
+                {"index": 2, "title": "긴 곁가지", "extract": "가" * 2000},
+                {"index": 1, "title": "번개", "extract": "나" * 400},
+            ]
+        )
+        self.assertEqual(selected[0]["title"], "번개")
 
     def test_closing_loop_must_end_the_narration(self):
         script = replace(self.script, closing_loop="다른 마지막 문장입니다.")
