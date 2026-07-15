@@ -14,6 +14,20 @@ class KnowledgeError(RuntimeError):
     pass
 
 
+def _select_wikipedia_page(pages):
+    """검색 결과의 글 길이가 아니라 위키백과 검색 순위를 우선한다."""
+    usable_pages = []
+    for page in pages:
+        extract = " ".join(str(page.get("extract", "")).split())
+        if len(extract) >= 300:
+            rank = int(page.get("index", 999999))
+            usable_pages.append((rank, -len(extract), page, extract))
+    if not usable_pages:
+        return None
+    _, _, page, extract = min(usable_pages, key=lambda item: (item[0], item[1]))
+    return page, extract
+
+
 def _fetch_from_wikipedia(query: str, language: str) -> Optional[KnowledgeSource]:
     endpoint = f"https://{language}.wikipedia.org/w/api.php"
     params = {
@@ -39,14 +53,10 @@ def _fetch_from_wikipedia(query: str, language: str) -> Optional[KnowledgeSource
     pages = response.json().get("query", {}).get("pages", [])
     if not pages:
         return None
-    usable_pages = []
-    for page in pages:
-        extract = " ".join(str(page.get("extract", "")).split())
-        if len(extract) >= 300:
-            usable_pages.append((len(extract), page, extract))
-    if not usable_pages:
+    selected = _select_wikipedia_page(pages)
+    if not selected:
         return None
-    _, page, extract = max(usable_pages, key=lambda item: item[0])
+    page, extract = selected
     return KnowledgeSource(
         title=str(page.get("title", query)),
         url=str(page.get("fullurl", "")),
