@@ -43,6 +43,24 @@ def normalize_loop_ending(narration: str, closing_loop: str) -> Tuple[str, str]:
     return f"{prefix} {fallback}".strip(), fallback
 
 
+def normalize_question_hook(narration: str, hook: str) -> Tuple[str, str]:
+    """AI가 질문형을 놓치면 사실 문장을 보존한 채 자연스러운 질문을 앞에 둔다."""
+    narration = re.sub(r"\s+", " ", narration).strip()
+    hook = re.sub(r"\s+", " ", hook).strip()
+    if hook.endswith(("?", "？")):
+        return narration, hook
+
+    fallback = "이 현상이 왜 일어나는지 알고 계셨나요?"
+    if len(narration) + len(fallback) + 1 <= 390:
+        narration = f"{fallback} {narration}"
+    elif hook and narration.startswith(hook):
+        narration = f"{fallback} {narration[len(hook):].lstrip()}".strip()
+    else:
+        first_sentence = re.split(r"(?<=[.!?？])\s+", narration, maxsplit=1)
+        narration = f"{fallback} {first_sentence[-1]}".strip()
+    return narration, fallback
+
+
 class GeminiWriter:
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.api_keys = list(
@@ -325,6 +343,7 @@ class GeminiWriter:
         if not narration.startswith(hook.rstrip(". ")):
             first_sentence = re.split(r"(?<=[.!?？])\s+", narration, maxsplit=1)[0].strip()
             hook = first_sentence or hook
+        narration, hook = normalize_question_hook(narration, hook)
 
         tags = []
         for raw in result.get("tags", []):

@@ -9,12 +9,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ai_writer import GeminiWriter, normalize_loop_ending
+from ai_writer import GeminiWriter, normalize_loop_ending, normalize_question_hook
 from main import build_engagement_comment
 from knowledge import _select_wikipedia_page
 from models import KnowledgeSource, ScriptPackage, TopicPlan
 from publish_preview import build_preview_description
-from quality import QualityGateError, validate_package
+from quality import QualityGateError, source_is_relevant, validate_package
 from run_status import build_status
 from secret_utils import clean_secret
 from video_renderer import (
@@ -83,6 +83,15 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaises(QualityGateError):
             validate_package(self.plan, script, self.source, [])
 
+    def test_non_question_ai_hook_is_normalized(self):
+        narration, hook = normalize_question_hook(
+            "벌집은 공간을 효율적으로 사용합니다. 그래서 육각형이 됩니다.",
+            "벌집은 공간을 효율적으로 사용합니다.",
+        )
+        self.assertTrue(hook.endswith("?"))
+        self.assertTrue(narration.startswith(hook))
+        self.assertIn("벌집은 공간을 효율적으로 사용합니다.", narration)
+
     def test_unrelated_wikipedia_source_is_blocked(self):
         source = replace(
             self.source,
@@ -91,6 +100,15 @@ class PipelineTests(unittest.TestCase):
         )
         with self.assertRaises(QualityGateError):
             validate_package(self.plan, self.script, source, [])
+
+    def test_related_source_can_match_topic_terms_in_extract(self):
+        plan = replace(self.plan, topic="벌집이 육각형인 이유", wiki_query="벌집")
+        source = replace(
+            self.source,
+            title="벌",
+            extract="벌집은 육각형 구조로 만들어집니다. " * 30,
+        )
+        self.assertTrue(source_is_relevant(plan, source))
 
     def test_wikipedia_search_rank_beats_longest_article(self):
         selected = _select_wikipedia_page(

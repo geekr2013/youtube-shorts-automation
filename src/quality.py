@@ -11,6 +11,7 @@ RISK_TERMS = {
     "도박", "코인", "주식 추천", "투자 추천", "치료법", "암 치료", "연예인",
 }
 HYPE_TERMS = {"충격", "역대급", "무조건", "소름", "실화냐", "미쳤다"}
+TOPIC_STOPWORDS = {"이유", "원리", "과정", "방법", "무엇", "어떻게", "정체", "사실"}
 
 
 class QualityGateError(RuntimeError):
@@ -19,6 +20,30 @@ class QualityGateError(RuntimeError):
 
 def _normalized(text: str) -> str:
     return re.sub(r"[^0-9A-Za-z가-힣]", "", text).lower()
+
+
+def _topic_terms(text: str):
+    suffixes = ("에서는", "에서", "으로", "하는", "되는", "처럼", "까지", "부터", "에게", "한테", "로", "인", "이", "가", "은", "는", "을", "를", "의")
+    terms = []
+    for raw in re.findall(r"[0-9A-Za-z가-힣]{2,}", text.lower()):
+        term = raw
+        for suffix in suffixes:
+            if term.endswith(suffix) and len(term) - len(suffix) >= 2:
+                term = term[: -len(suffix)]
+                break
+        if term not in TOPIC_STOPWORDS and term not in terms:
+            terms.append(term)
+    return terms
+
+
+def source_is_relevant(plan: TopicPlan, source: KnowledgeSource) -> bool:
+    corpus = _normalized(f"{source.title} {source.extract[:2400]}")
+    terms = _topic_terms(plan.topic)
+    if not terms:
+        return bool(_normalized(source.title))
+    matches = sum(1 for term in terms if _normalized(term) in corpus)
+    required = 2 if len(terms) >= 2 else 1
+    return matches >= required
 
 
 def validate_package(
@@ -50,15 +75,8 @@ def validate_package(
         raise QualityGateError("태그 수가 기준 밖입니다.")
     if not source.url.startswith("https://") or len(source.extract) < 350:
         raise QualityGateError("검증 자료가 부족합니다.")
-    source_title = _normalized(source.title)
-    topic = _normalized(plan.topic)
-    wiki_query = _normalized(plan.wiki_query)
-    if not source_title or not (
-        source_title in topic
-        or source_title in wiki_query
-        or (wiki_query and wiki_query in source_title)
-    ):
-        raise QualityGateError("주제와 검증 자료 제목이 일치하지 않습니다.")
+    if not source_is_relevant(plan, source):
+        raise QualityGateError("주제와 검증 자료의 핵심 내용이 일치하지 않습니다.")
 
     headline = f"{plan.topic} {script.title}"
     combined = f"{headline} {script.narration}"
