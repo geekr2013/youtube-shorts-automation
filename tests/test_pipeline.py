@@ -105,10 +105,19 @@ class PipelineTests(unittest.TestCase):
         plan = replace(self.plan, topic="벌집이 육각형인 이유", wiki_query="벌집")
         source = replace(
             self.source,
-            title="벌",
+            title="벌집",
             extract="벌집은 육각형 구조로 만들어집니다. " * 30,
         )
         self.assertTrue(source_is_relevant(plan, source))
+
+    def test_analogy_in_extract_does_not_replace_a_direct_source(self):
+        plan = replace(self.plan, topic="벌집이 육각형인 이유", wiki_query="벌집")
+        source = replace(
+            self.source,
+            title="그래핀",
+            extract="그래핀은 벌집과 같은 육각형 구조를 이룹니다. " * 30,
+        )
+        self.assertFalse(source_is_relevant(plan, source))
 
     def test_wikipedia_search_rank_beats_longest_article(self):
         selected = _select_wikipedia_page(

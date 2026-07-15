@@ -41,6 +41,14 @@ def source_is_relevant(plan: TopicPlan, source: KnowledgeSource) -> bool:
     terms = _topic_terms(plan.topic)
     if not terms:
         return bool(_normalized(source.title))
+    source_title = _normalized(source.title)
+    title_matches_topic = any(
+        _normalized(term) in source_title
+        or (len(source_title) >= 2 and source_title in _normalized(term))
+        for term in terms
+    )
+    if not title_matches_topic:
+        return False
     matches = sum(1 for term in terms if _normalized(term) in corpus)
     required = 2 if len(terms) >= 2 else 1
     return matches >= required
