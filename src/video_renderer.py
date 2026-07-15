@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import math
 import re
 import shutil
 import subprocess
@@ -16,8 +15,15 @@ from models import StockClip
 LOGGER = logging.getLogger(__name__)
 WIDTH = 1080
 HEIGHT = 1920
-CAPTION_X = 470
-CAPTION_Y = 1260
+CAPTION_X = 450
+CAPTION_Y = 1220
+CAPTION_MAX_WIDTH = 760
+CAPTION_BASE_FONT_SIZE = 64
+CAPTION_MIN_FONT_SIZE = 50
+CAPTION_FADE_IN_MS = 100
+CAPTION_FADE_OUT_MS = 80
+BGM_TARGET_LUFS = -24.0
+BGM_MIX_VOLUME = 1.05
 LOOP_TAIL_SECONDS = 1.2
 
 
@@ -47,51 +53,80 @@ def media_duration(path: Path) -> float:
         return 0.0
 
 
-def split_caption_chunks(text: str, max_chars: int = 20) -> List[str]:
+def split_caption_chunks(text: str, max_chars: int = 22) -> List[str]:
+    """어절을 자르지 않고 짧은 호흡 단위의 자막 묶음을 만든다."""
     words = re.findall(r"\S+", text)
     chunks: List[str] = []
     current = ""
     for word in words:
-        parts = [word[index : index + max_chars] for index in range(0, len(word), max_chars)]
-        for part in parts:
-            candidate = f"{current} {part}".strip()
-            if current and len(candidate) > max_chars:
-                chunks.append(current)
-                current = part
-            else:
-                current = candidate
+        candidate = f"{current} {word}".strip()
+        sentence_break = bool(re.search(r"[.!?？。…]$", current))
+        if current and (len(candidate) > max_chars or (sentence_break and len(current) >= 8)):
+            chunks.append(current)
+            current = word
+        else:
+            current = candidate
     if current:
         chunks.append(current)
     return chunks
 
 
-def caption_lines(text: str, max_line_chars: int = 10) -> List[str]:
-    """세로 영상 안전 폭 안에서 한글 자막을 최대 두 줄로 나눈다."""
+def _visual_units(text: str) -> float:
+    units = 0.0
+    for character in text:
+        if character.isspace():
+            units += 0.35
+        elif character.isascii() and character.isalnum():
+            units += 0.55
+        elif character in ",.!?？。…:;'\"()[]{}":
+            units += 0.5
+        else:
+            units += 1.0
+    return units
+
+
+def caption_lines(text: str, max_line_chars: int = 13) -> List[str]:
+    """어절을 보존하며 세로 영상 자막을 최대 두 줄로 나눈다."""
     cleaned = re.sub(r"\s+", " ", text).strip()
-    if not cleaned or len(cleaned) <= max_line_chars:
+    if not cleaned or _visual_units(cleaned) <= max_line_chars:
         return [cleaned] if cleaned else []
 
-    midpoint = len(cleaned) / 2
-    valid_spaces = [
-        index
-        for index, character in enumerate(cleaned)
-        if character == " "
-        and len(cleaned[:index].rstrip()) <= max_line_chars
-        and len(cleaned[index + 1 :].lstrip()) <= max_line_chars
-    ]
-    if valid_spaces:
-        split_at = min(valid_spaces, key=lambda index: abs(index - midpoint))
-        return [cleaned[:split_at].rstrip(), cleaned[split_at + 1 :].lstrip()]
+    words = cleaned.split(" ")
+    if len(words) == 1:
+        return [cleaned]
 
-    split_at = math.ceil(len(cleaned) / 2)
-    return [cleaned[:split_at].rstrip(), cleaned[split_at:].lstrip()]
+    candidates = []
+    for index in range(1, len(words)):
+        first = " ".join(words[:index])
+        second = " ".join(words[index:])
+        first_units = _visual_units(first)
+        second_units = _visual_units(second)
+        overflow = max(0.0, max(first_units, second_units) - max_line_chars)
+        score = max(first_units, second_units) + abs(first_units - second_units) * 0.35 + overflow * 2
+        candidates.append((score, first, second))
+    _, first, second = min(candidates, key=lambda item: item[0])
+    return [first, second]
+
+
+def caption_font_size(lines: Sequence[str]) -> int:
+    """긴 어절도 자르지 않고 안전 폭에 들어오도록 글자 크기를 조절한다."""
+    longest = max((_visual_units(line) for line in lines), default=1.0)
+    fitted = int(CAPTION_MAX_WIDTH / max(longest, 1.0))
+    return max(CAPTION_MIN_FONT_SIZE, min(CAPTION_BASE_FONT_SIZE, fitted))
 
 
 def caption_timeline(text: str, duration: float) -> List[Tuple[float, float, str]]:
     chunks = split_caption_chunks(text)
     if not chunks:
         return []
-    weights = [max(2, len(re.sub(r"\s", "", item))) for item in chunks]
+    weights = []
+    for item in chunks:
+        weight = max(2.0, _visual_units(item))
+        if re.search(r"[.!?？。…]$", item):
+            weight += 2.0
+        elif re.search(r"[,，]$", item):
+            weight += 1.0
+        weights.append(weight)
     total = sum(weights)
     cursor = 0.0
     timeline = []
@@ -125,23 +160,33 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,Noto Sans CJK KR,68,&H00FFFFFF,&H000000FF,&H00111111,&H78000000,-1,0,0,0,100,100,0,0,1,5,2,5,140,260,0,1
+Style: Caption,Noto Sans CJK KR,64,&H00FFFFFF,&H000000FF,&H00101010,&H64000000,-1,0,0,0,100,100,0,0,1,3,1,5,140,260,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = [header]
     for start, end, text in caption_timeline(narration, duration):
-        wrapped = "\n".join(caption_lines(text))
+        wrapped_lines = caption_lines(text)
+        wrapped = "\n".join(wrapped_lines)
+        font_size = caption_font_size(wrapped_lines)
         lines.append(
             f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Caption,,0,0,0,,"
-            f"{{\\an5\\pos({CAPTION_X},{CAPTION_Y})}}{_ass_escape(wrapped)}\n"
+            f"{{\\an5\\pos({CAPTION_X},{CAPTION_Y})\\fs{font_size}"
+            f"\\fad({CAPTION_FADE_IN_MS},{CAPTION_FADE_OUT_MS})}}"
+            f"{_ass_escape(wrapped)}\n"
         )
     path.write_text("".join(lines), encoding="utf-8-sig")
 
 
 async def _synthesize(text: str, output: Path, voice: str) -> None:
-    communicator = edge_tts.Communicate(text=text, voice=voice, rate="-2%", volume="+0%")
+    communicator = edge_tts.Communicate(
+        text=text,
+        voice=voice,
+        rate="-5%",
+        volume="+2%",
+        pitch="-2Hz",
+    )
     await communicator.save(str(output))
 
 
@@ -171,7 +216,9 @@ def create_narration(text: str, output_dir: Path, voice: str = "ko-KR-SunHiNeura
     _run(
         [
             "ffmpeg", "-y", "-i", str(raw), "-filter:a",
-            f"atempo={tempo:.4f},loudnorm=I=-16:LRA=11:TP=-1.5",
+            f"atempo={tempo:.4f},highpass=f=80,lowpass=f=12000,"
+            "acompressor=threshold=0.125:ratio=2:attack=20:release=180:makeup=1.4,"
+            "loudnorm=I=-15:LRA=8:TP=-1.5",
             "-c:a", "aac", "-b:a", "160k", str(normalized),
         ]
     )
@@ -195,9 +242,13 @@ def create_background_music(output_dir: Path, duration: float, style: str) -> Pa
     """외부 음원 없이 영상 길이에 맞는 저음량 배경음을 만든다."""
     first, second, third = background_music_frequencies(style)
     expression = (
-        f"(0.030*sin(2*PI*{first:.2f}*t)+"
-        f"0.022*sin(2*PI*{second:.2f}*t)+"
-        f"0.018*sin(2*PI*{third:.2f}*t))*(0.80+0.20*sin(2*PI*0.05*t))"
+        f"(0.050*sin(2*PI*{first:.2f}*t)+"
+        f"0.040*sin(2*PI*{second:.2f}*t)+"
+        f"0.032*sin(2*PI*{third:.2f}*t)+"
+        f"0.040*sin(2*PI*{first * 2:.2f}*t)+"
+        f"0.030*sin(2*PI*{second * 2:.2f}*t)+"
+        f"0.022*sin(2*PI*{third * 2:.2f}*t))"
+        "*(0.78+0.22*sin(2*PI*0.05*t))"
     )
     output = output_dir / "background_music.m4a"
     fade_out = max(0.0, duration - 2.0)
@@ -206,8 +257,9 @@ def create_background_music(output_dir: Path, duration: float, style: str) -> Pa
             "ffmpeg", "-y", "-f", "lavfi", "-i",
             f"aevalsrc={expression}:s=48000:d={duration:.3f}",
             "-filter:a",
-            f"highpass=f=70,lowpass=f=1400,aecho=0.8:0.35:80:0.12,"
-            f"afade=t=in:st=0:d=1.5,afade=t=out:st={fade_out:.3f}:d=2",
+            f"highpass=f=100,lowpass=f=2600,aecho=0.8:0.30:90:0.10,"
+            f"loudnorm=I={BGM_TARGET_LUFS}:LRA=7:TP=-3,"
+            f"afade=t=in:st=0:d=1.2,afade=t=out:st={fade_out:.3f}:d=2",
             "-c:a", "aac", "-b:a", "128k", str(output),
         ]
     )
@@ -289,7 +341,8 @@ def render_short(
             "-i", str(background_music_path),
             "-filter_complex",
             f"[0:v]ass='{ass_filter_path}'[v];"
-            "[2:a]volume=0.45[bgm];"
+            f"[2:a]volume={BGM_MIX_VOLUME}[music];"
+            "[music][1:a]sidechaincompress=threshold=0.12:ratio=2:attack=30:release=300[bgm];"
             "[1:a][bgm]amix=inputs=2:duration=first:normalize=0,"
             "alimiter=limit=0.95[a]",
             "-map", "[v]", "-map", "[a]",
