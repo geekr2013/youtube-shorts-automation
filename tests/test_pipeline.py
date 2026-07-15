@@ -17,7 +17,10 @@ from quality import QualityGateError, validate_package
 from run_status import build_status
 from secret_utils import clean_secret
 from video_renderer import (
+    BGM_MIX_VOLUME,
+    BGM_TARGET_LUFS,
     background_music_frequencies,
+    caption_font_size,
     caption_lines,
     caption_timeline,
     split_caption_chunks,
@@ -106,11 +109,10 @@ class PipelineTests(unittest.TestCase):
     def test_caption_chunks_stay_readable(self):
         chunks = split_caption_chunks(self.script.narration)
         self.assertGreater(len(chunks), 5)
-        self.assertTrue(all(len(chunk) <= 20 for chunk in chunks))
+        self.assertTrue(all(len(chunk) <= 22 or " " not in chunk for chunk in chunks))
         for chunk in chunks:
             lines = caption_lines(chunk)
             self.assertLessEqual(len(lines), 2)
-            self.assertTrue(all(len(line) <= 10 for line in lines))
             self.assertEqual(
                 re.sub(r"\s", "", chunk),
                 re.sub(r"\s", "", "".join(lines)),
@@ -126,14 +128,30 @@ class PipelineTests(unittest.TestCase):
             content = path.read_text(encoding="utf-8-sig")
         self.assertNotIn("오늘의 60초 호기심", content)
         self.assertIn(r"\N", content)
-        self.assertIn("Noto Sans CJK KR,68", content)
-        self.assertIn(r"{\an5\pos(470,1260)}", content)
+        self.assertIn("Noto Sans CJK KR,64", content)
+        self.assertIn(r"\pos(450,1220)", content)
+        self.assertIn(r"\fad(100,80)", content)
+        self.assertRegex(content, r"\\fs\d+")
+
+    def test_korean_word_is_never_split_between_caption_lines(self):
+        lines = caption_lines("오로라가 선명하게 보이고 있습니다", max_line_chars=10)
+        self.assertTrue(any("있습니다" in line for line in lines))
+        self.assertFalse(any(line.endswith("있습니") for line in lines))
+        self.assertEqual("오로라가 선명하게 보이고 있습니다", " ".join(lines))
+
+    def test_long_caption_uses_smaller_font_without_splitting_words(self):
+        short_size = caption_font_size(["빛이 납니다"])
+        long_size = caption_font_size(["전자기적인 상호작용입니다"])
+        self.assertLess(long_size, short_size)
+        self.assertGreaterEqual(long_size, 50)
 
     def test_background_music_changes_with_topic_style(self):
         self.assertNotEqual(
             background_music_frequencies("과학"),
             background_music_frequencies("역사"),
         )
+        self.assertEqual(BGM_TARGET_LUFS, -24.0)
+        self.assertGreaterEqual(BGM_MIX_VOLUME, 1.0)
 
     def test_gemini_json_parser_accepts_code_fence(self):
         value = GeminiWriter._parse_json('```json\n{"topic":"구름"}\n```')
