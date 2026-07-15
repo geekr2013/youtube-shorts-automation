@@ -135,9 +135,9 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     LOGGER.info("선정 주제: %s (%s)", plan.topic, plan.trend_reason)
 
     try:
-        source = research_topic(plan.wiki_query)
-    except Exception:
         source = research_topic(plan.topic)
+    except Exception:
+        source = research_topic(plan.wiki_query)
     script = None
     for attempt in range(2):
         try:
