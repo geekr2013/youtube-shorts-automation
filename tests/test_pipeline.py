@@ -17,6 +17,7 @@ from publish_preview import build_preview_description
 from quality import QualityGateError, source_is_relevant, validate_package
 from run_status import build_status
 from secret_utils import clean_secret
+from topic_catalog import VERIFIED_TOPICS, eligible_topic_plans
 from video_renderer import (
     BGM_MIX_VOLUME,
     BGM_TARGET_LUFS,
@@ -110,6 +111,19 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertTrue(source_is_relevant(plan, source))
 
+    def test_exact_catalog_source_allows_natural_question_wording(self):
+        plan = replace(
+            self.plan,
+            topic="달은 왜 지구에서 늘 비슷한 면으로 보일까",
+            wiki_query="달",
+        )
+        source = replace(
+            self.source,
+            title="달",
+            extract="달은 지구의 위성이며 자전과 공전을 합니다. " * 30,
+        )
+        self.assertTrue(source_is_relevant(plan, source))
+
     def test_analogy_in_extract_does_not_replace_a_direct_source(self):
         plan = replace(self.plan, topic="벌집이 육각형인 이유", wiki_query="벌집")
         source = replace(
@@ -127,6 +141,58 @@ class PipelineTests(unittest.TestCase):
             ]
         )
         self.assertEqual(selected[0]["title"], "번개")
+
+    def test_wikipedia_direct_title_beats_unrelated_first_result(self):
+        selected = _select_wikipedia_page(
+            [
+                {"index": 1, "title": "독일의 전략 폭격", "extract": "가" * 500},
+                {"index": 3, "title": "번개", "extract": "나" * 500},
+            ],
+            "번개",
+        )
+        self.assertEqual(selected[0]["title"], "번개")
+
+    def test_verified_catalog_has_direct_sources_and_specific_media_queries(self):
+        topics = [plan.topic for plan in VERIFIED_TOPICS]
+        self.assertEqual(len(topics), len(set(topics)))
+        self.assertGreaterEqual(len(topics), 15)
+        for plan in VERIFIED_TOPICS:
+            self.assertTrue(plan.wiki_query)
+            self.assertEqual(len(plan.stock_queries), 3)
+            self.assertNotIn("technology close up", plan.stock_queries)
+            self.assertNotIn("natural world", plan.stock_queries)
+
+    def test_recent_catalog_topic_is_filtered(self):
+        recent = VERIFIED_TOPICS[0].topic
+        eligible = eligible_topic_plans([recent])
+        self.assertNotIn(recent, [plan.topic for plan in eligible])
+
+    def test_ai_can_only_rank_verified_candidate_ids(self):
+        writer = GeminiWriter.__new__(GeminiWriter)
+        writer._generate = lambda prompt, schema, temperature: {
+            "candidate_ids": [2, 99, 2, 1],
+            "trend_reason": "시각적으로 설명하기 좋습니다.",
+        }
+        candidates = list(VERIFIED_TOPICS[:3])
+        ranked = writer.rank_topics([], [], [], candidates, limit=3)
+        self.assertEqual(
+            [item.topic for item in ranked],
+            [candidates[2].topic, candidates[1].topic, candidates[0].topic],
+        )
+
+    def test_editorial_review_requires_80_points(self):
+        writer = GeminiWriter.__new__(GeminiWriter)
+        writer._generate = lambda prompt, schema, temperature: {
+            "approved": True,
+            "score": 79,
+            "facts_supported": True,
+            "natural_korean": True,
+            "visualizable": True,
+            "issues": ["한 문장을 더 짧게 다듬어야 합니다."],
+        }
+        review = writer.review_script(self.plan, self.source, self.script)
+        self.assertFalse(review["approved"])
+        self.assertEqual(review["score"], 79)
 
     def test_closing_loop_must_end_the_narration(self):
         script = replace(self.script, closing_loop="다른 마지막 문장입니다.")

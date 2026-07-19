@@ -227,61 +227,104 @@ class GeminiWriter:
                     )
         raise GeminiError("Gemini 생성 실패 - " + " | ".join(errors[-3:]))
 
+    def rank_topics(
+        self,
+        trend_signals: Iterable[Dict[str, Any]],
+        recent_topics: Iterable[str],
+        top_performers: Iterable[str],
+        verified_candidates: Iterable[TopicPlan],
+        limit: int = 6,
+    ) -> List[TopicPlan]:
+        signals = list(trend_signals)[:20]
+        candidates = list(verified_candidates)
+        if not candidates:
+            raise GeminiError("검증된 주제 후보가 없습니다.")
+        candidate_rows = [
+            {
+                "id": index,
+                "topic": plan.topic,
+                "source_title": plan.wiki_query,
+                "category": plan.category,
+                "stock_queries": plan.stock_queries,
+            }
+            for index, plan in enumerate(candidates)
+        ]
+        prompt = f"""
+당신은 한국어 유튜브 교육 쇼츠의 책임 편집자다.
+아래 검증 후보만 사용해 오늘 제작할 순서를 정한다. 후보 밖의 주제를 새로 만들지 않는다.
+인기 신호는 시청자의 현재 관심 분야를 파악하는 참고 자료로만 쓰고 제목이나 영상을 복제하지 않는다.
+
+인기 신호: {json.dumps(signals, ensure_ascii=False)}
+최근 사용 주제(반복 금지): {json.dumps(list(recent_topics)[-30:], ensure_ascii=False)}
+성과가 상대적으로 좋았던 주제: {json.dumps(list(top_performers)[:5], ensure_ascii=False)}
+출처와 스톡 검색어를 사람이 미리 검토한 후보: {json.dumps(candidate_rows, ensure_ascii=False)}
+
+조건:
+- candidate_ids에는 후보 id만 넣고, 예상 시청 지속률·시각적 매력·설명 명확성 순으로 최대 {max(1, limit)}개를 정렬한다.
+- 최근 사용 주제와 비슷한 후보는 뒤로 보낸다.
+- 단기 유행보다 사실을 선명하게 설명할 수 있고 오래 검색되는 소재를 우선한다.
+- trend_reason에는 1순위 선택 이유를 과장 없이 한 문장으로 쓴다.
+"""
+        schema = {
+            "type": "object",
+            "properties": {
+                "candidate_ids": {"type": "array", "items": {"type": "integer"}},
+                "trend_reason": {"type": "string"},
+            },
+            "required": ["candidate_ids", "trend_reason"],
+        }
+        result = self._generate(prompt, schema, temperature=0.35)
+        ordered_ids = []
+        for raw in result.get("candidate_ids", []):
+            try:
+                candidate_id = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= candidate_id < len(candidates) and candidate_id not in ordered_ids:
+                ordered_ids.append(candidate_id)
+        ordered_ids.extend(index for index in range(len(candidates)) if index not in ordered_ids)
+        reason = str(result.get("trend_reason", "")).strip()
+        ranked = []
+        for position, candidate_id in enumerate(ordered_ids[: max(1, limit)]):
+            selected = candidates[candidate_id]
+            ranked.append(
+                TopicPlan(
+                    topic=selected.topic,
+                    wiki_query=selected.wiki_query,
+                    stock_queries=list(selected.stock_queries),
+                    category=selected.category,
+                    trend_reason=reason if position == 0 else "검증된 편집 후보",
+                )
+            )
+        return ranked
+
     def select_topic(
         self,
         trend_signals: Iterable[Dict[str, Any]],
         recent_topics: Iterable[str],
         top_performers: Iterable[str],
-        evergreen_seeds: Iterable[str],
+        verified_candidates: Iterable[TopicPlan],
     ) -> TopicPlan:
-        signals = list(trend_signals)[:20]
-        prompt = f"""
-당신은 한국어 유튜브 교육 쇼츠의 책임 편집자다.
-아래 인기 신호는 소재 탐색에만 사용하고 제목이나 영상을 복제하지 않는다.
+        return self.rank_topics(
+            trend_signals,
+            recent_topics,
+            top_performers,
+            verified_candidates,
+            limit=1,
+        )[0]
 
-인기 신호: {json.dumps(signals, ensure_ascii=False)}
-최근 사용 주제(반복 금지): {json.dumps(list(recent_topics)[-30:], ensure_ascii=False)}
-성과가 상대적으로 좋았던 주제: {json.dumps(list(top_performers)[:5], ensure_ascii=False)}
-안전한 상시 후보: {json.dumps(list(evergreen_seeds), ensure_ascii=False)}
-
-조건:
-- 45~58초 안에 설명 가능한 과학·기술·자연·역사 상식 하나를 고른다.
-- 정치, 사건사고, 연예인, 의료 조언, 투자, 논쟁, 공포 조장 주제는 제외한다.
-- 한국어 위키백과에서 단일 문서로 사실을 확인할 수 있어야 한다.
-- 시청자가 첫 2초에 궁금해할 질문이 생기고, 스톡 영상으로 표현 가능해야 한다.
-- stock_queries는 Pexels에서 찾기 쉬운 영어 검색어 3개로 쓴다.
-- trend_reason에는 선택 이유를 과장 없이 한 문장으로 쓴다.
-"""
-        schema = {
-            "type": "object",
-            "properties": {
-                "topic": {"type": "string"},
-                "wiki_query": {"type": "string"},
-                "stock_queries": {"type": "array", "items": {"type": "string"}},
-                "category": {"type": "string"},
-                "trend_reason": {"type": "string"},
-            },
-            "required": ["topic", "wiki_query", "stock_queries", "category", "trend_reason"],
-        }
-        result = self._generate(prompt, schema, temperature=0.55)
-        queries = [str(item).strip() for item in result.get("stock_queries", []) if str(item).strip()]
-        for fallback in ("science nature", "technology close up", "natural world"):
-            if len(queries) >= 3:
-                break
-            if fallback not in queries:
-                queries.append(fallback)
-        topic = str(result.get("topic", "")).strip()
-        if not topic:
-            raise GeminiError("AI 응답에 주제가 없습니다.")
-        return TopicPlan(
-            topic=topic,
-            wiki_query=str(result.get("wiki_query") or topic).strip(),
-            stock_queries=queries[:4],
-            category=str(result.get("category", "science")).strip(),
-            trend_reason=str(result.get("trend_reason", "")).strip(),
+    def write_script(
+        self,
+        plan: TopicPlan,
+        source: KnowledgeSource,
+        editorial_feedback: Optional[Iterable[str]] = None,
+    ) -> ScriptPackage:
+        feedback = [str(item).strip() for item in (editorial_feedback or []) if str(item).strip()]
+        feedback_text = (
+            "\n이전 편집 검토에서 지적된 내용을 반드시 고친다:\n- " + "\n- ".join(feedback[:6])
+            if feedback
+            else ""
         )
-
-    def write_script(self, plan: TopicPlan, source: KnowledgeSource) -> ScriptPackage:
         prompt = f"""
 당신은 한국어 1분 지식 영상의 작가다. 아래 '검증 자료'에 명시된 사실만 사용해 완전히 새 문장으로 대본을 작성한다.
 
@@ -290,6 +333,7 @@ class GeminiWriter:
 검증 자료 URL: {source.url}
 검증 자료 본문:
 {source.extract[:6000]}
+{feedback_text}
 
 작성 규칙:
 - narration은 한국어 공백 포함 230~360자이며 45~58초 분량이다.
@@ -302,6 +346,7 @@ class GeminiWriter:
 - engagement_question은 시청자가 관찰 경험이나 선호를 짧게 답할 수 있는 쉬운 질문이다. 지식을 시험하거나 긴 이유 설명을 요구하지 않는다.
 - engagement_question은 15~45자이며, '여러분이 본 가장 신기한 구름 모양은 무엇인가요?'처럼 바로 답할 수 있게 쓴다.
 - 자료에 없는 숫자, 추정, 최신 뉴스, 건강·투자 조언은 넣지 않는다.
+- 다른 현상과의 비유를 원인이나 근거처럼 바꾸지 않는다. 자료가 직접 설명하지 않는 인과관계는 쓰지 않는다.
 - '충격', '무조건', '소름', '역대급' 같은 과장과 구독 요청을 쓰지 않는다.
 - title은 44자 이내의 자연스러운 한국어이며 #shorts를 포함하지 않는다.
 - description_intro는 영상의 교육적 가치를 설명하는 2문장이다.
@@ -370,4 +415,63 @@ class GeminiWriter:
             ).strip(),
             tags=tags[:8],
         )
+
+    def review_script(
+        self,
+        plan: TopicPlan,
+        source: KnowledgeSource,
+        script: ScriptPackage,
+    ) -> Dict[str, Any]:
+        """업로드 전에 사실성·문장 품질·화면 적합성을 편집자 관점으로 재검토한다."""
+        prompt = f"""
+당신은 한국어 지식 쇼츠의 최종 편집자다. 검증 자료와 대본을 대조해 냉정하게 검수한다.
+
+주제: {plan.topic}
+검증 자료 제목: {source.title}
+검증 자료 본문: {source.extract[:6000]}
+대본 패키지: {json.dumps(script.__dict__, ensure_ascii=False)}
+
+검수 기준:
+- narration의 모든 구체적 사실과 인과관계가 검증 자료로 직접 뒷받침되어야 한다.
+- 첫 질문은 주제에 구체적이어야 하며, 어디에나 붙일 수 있는 상투적 질문이면 안 된다.
+- 짧은 문장과 자연스러운 호흡으로 한국어 아나운서가 읽기 편해야 한다.
+- 중간 전환은 핵심 설명을 깊게 만들고, 결말은 첫 장면으로 자연스럽게 이어져야 한다.
+- 스톡 영상으로 장면을 구성할 수 있어야 하며 과장·낚시·구독 요청이 없어야 한다.
+- score는 사람이 바로 공개해도 될 완성도를 0~100으로 평가한다. 80점 이상만 승인한다.
+"""
+        schema = {
+            "type": "object",
+            "properties": {
+                "approved": {"type": "boolean"},
+                "score": {"type": "integer"},
+                "facts_supported": {"type": "boolean"},
+                "natural_korean": {"type": "boolean"},
+                "visualizable": {"type": "boolean"},
+                "issues": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": [
+                "approved",
+                "score",
+                "facts_supported",
+                "natural_korean",
+                "visualizable",
+                "issues",
+            ],
+        }
+        result = self._generate(prompt, schema, temperature=0.15)
+        score = max(0, min(100, int(result.get("score", 0) or 0)))
+        facts_supported = bool(result.get("facts_supported"))
+        natural_korean = bool(result.get("natural_korean"))
+        visualizable = bool(result.get("visualizable"))
+        issues = [str(item).strip() for item in result.get("issues", []) if str(item).strip()]
+        approved = bool(result.get("approved")) and score >= 80
+        approved = approved and facts_supported and natural_korean and visualizable
+        return {
+            "approved": approved,
+            "score": score,
+            "facts_supported": facts_supported,
+            "natural_korean": natural_korean,
+            "visualizable": visualizable,
+            "issues": issues,
+        }
 
