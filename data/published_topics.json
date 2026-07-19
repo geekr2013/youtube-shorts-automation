@@ -75,6 +75,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-07-19T23:34:45.510352+00:00",
+      "topic": "QR 코드는 왜 일부가 가려져도 읽힐까",
+      "title": "QR 코드는 왜 일부가 가려져도 읽히는가",
+      "video_id": "oTThHh_NjBg",
+      "video_url": "https://www.youtube.com/shorts/oTThHh_NjBg",
+      "source_url": "https://ko.wikipedia.org/wiki/QR_%EC%BD%94%EB%93%9C",
+      "asset_urls": [
+        "https://www.pexels.com/video/man-taking-photo-of-the-qr-code-on-the-box-7287317/",
+        "https://www.pexels.com/video/blurred-code-on-computer-monitor-display-33315117/",
+        "https://www.pexels.com/video/a-person-getting-a-ticket-from-the-machine-7252267/"
+      ],
+      "engagement_comment": "💬 여러분은 QR 코드를 어디에서 가장 자주 사용하시나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "preview_run_id": "29707853296",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
