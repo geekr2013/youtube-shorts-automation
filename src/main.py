@@ -11,12 +11,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from ai_writer import GeminiWriter
-from knowledge import research_topic
+from knowledge import research_exact_topic
 from media_provider import StockMediaProvider
 from metrics import fetch_video_metrics, update_records
 from notifier import send_notification
 from quality import QualityGateError, source_is_relevant, validate_package
-from trend_scout import EVERGREEN_SEEDS, fetch_youtube_trends, top_performing_topics
+from topic_catalog import eligible_topic_plans
+from trend_scout import fetch_youtube_trends, top_performing_topics
 from video_renderer import media_duration, render_short
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -99,6 +100,35 @@ def write_preview_metadata(path: Path, payload: Dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def create_editorial_script(writer, plan, source, recent_topics):
+    """작가 작성과 독립 편집 검수를 최대 두 번 수행한다."""
+    feedback = []
+    last_reason = "편집 검수를 통과하지 못했습니다."
+    for attempt in range(2):
+        try:
+            script = writer.write_script(plan, source, editorial_feedback=feedback)
+            validate_package(plan, script, source, recent_topics)
+        except QualityGateError as exc:
+            last_reason = str(exc)
+            feedback = [last_reason]
+            LOGGER.warning("자동 품질 기준 미달로 대본을 다시 작성합니다(%s/2): %s", attempt + 1, exc)
+            continue
+        review = writer.review_script(plan, source, script)
+        if review["approved"]:
+            return script, review
+        last_reason = ", ".join(review["issues"][:3]) or f"편집 점수 {review['score']}점"
+        feedback = review["issues"] or [
+            "검증 자료에 직접 근거한 사실만 남기고 문장을 더 자연스럽고 구체적으로 다듬으세요."
+        ]
+        LOGGER.warning(
+            "편집자 검수 미달로 대본을 다시 작성합니다(%s/2): %s점 / %s",
+            attempt + 1,
+            review["score"],
+            last_reason,
+        )
+    raise QualityGateError("최종 편집 검수를 통과하지 못했습니다: " + last_reason)
+
+
 def run(dry_run: bool = False) -> Dict[str, Any]:
     missing = check_configuration(for_upload=not dry_run)
     if missing:
@@ -123,53 +153,50 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     media_dir.mkdir(parents=True, exist_ok=True)
     render_dir.mkdir(parents=True, exist_ok=True)
 
-    recent_topics = [item.get("topic", "") for item in records[-40:] if item.get("topic")]
+    recent_topics = [item.get("topic", "") for item in records[-12:] if item.get("topic")]
     trends = fetch_youtube_trends(data_api_key)
     writer = GeminiWriter()
-    selection_exclusions = list(recent_topics)
     top_topics = top_performing_topics(records)
+    candidate_pool = eligible_topic_plans(recent_topics)
+    ranked_candidates = writer.rank_topics(
+        trends,
+        recent_topics,
+        top_topics,
+        candidate_pool,
+        limit=min(8, len(candidate_pool)),
+    )
     plan = None
     source = None
-    for topic_attempt in range(3):
-        candidate = writer.select_topic(
-            trends,
-            selection_exclusions,
-            top_topics,
-            EVERGREEN_SEEDS,
-        )
+    script = None
+    editorial_review = None
+    for topic_attempt, candidate in enumerate(ranked_candidates, start=1):
         LOGGER.info("선정 주제: %s (%s)", candidate.topic, candidate.trend_reason)
-        for query in dict.fromkeys((candidate.topic, candidate.wiki_query)):
-            try:
-                candidate_source = research_topic(query)
-            except Exception as exc:
-                LOGGER.warning("검증 자료 조회 실패(%s): %s", query, exc)
-                continue
-            if source_is_relevant(candidate, candidate_source):
-                plan = candidate
-                source = candidate_source
-                break
-            LOGGER.warning(
-                "주제와 직접 연결되지 않은 자료를 제외합니다: %s",
-                candidate_source.title,
+        try:
+            candidate_source = research_exact_topic(candidate.wiki_query)
+        except Exception as exc:
+            LOGGER.warning("검증 문서 직접 조회 실패(%s): %s", candidate.wiki_query, exc)
+            continue
+        if not source_is_relevant(candidate, candidate_source):
+            LOGGER.warning("등록된 주제와 검증 문서가 일치하지 않습니다: %s", candidate_source.title)
+            continue
+        try:
+            candidate_script, candidate_review = create_editorial_script(
+                writer,
+                candidate,
+                candidate_source,
+                recent_topics,
             )
+        except Exception as exc:
+            LOGGER.warning("주제 편집 실패로 다음 검증 후보를 시도합니다(%s): %s", topic_attempt, exc)
+            continue
+        plan = candidate
+        source = candidate_source
+        script = candidate_script
+        editorial_review = candidate_review
         if plan is not None:
             break
-        selection_exclusions.append(candidate.topic)
-        LOGGER.warning("자료 검증에 실패해 다른 주제를 다시 고릅니다(%s/3).", topic_attempt + 1)
-    if plan is None or source is None:
-        raise QualityGateError("주제와 직접 연결된 검증 자료를 찾지 못했습니다.")
-    script = None
-    for attempt in range(2):
-        try:
-            script = writer.write_script(plan, source)
-            validate_package(plan, script, source, recent_topics)
-            break
-        except QualityGateError as exc:
-            if attempt == 1:
-                raise
-            LOGGER.warning("대본 품질 기준 미달로 한 번 다시 작성합니다: %s", exc)
-    if script is None:
-        raise RuntimeError("검증된 대본을 만들지 못했습니다.")
+    if plan is None or source is None or script is None or editorial_review is None:
+        raise QualityGateError("검증 자료와 최종 편집 기준을 모두 통과한 주제를 만들지 못했습니다.")
 
     provider = StockMediaProvider()
     clips = provider.fetch_clips(plan.stock_queries, media_dir, limit=4)
@@ -190,6 +217,8 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "engagement_comment": build_engagement_comment(script),
         "duration_seconds": round(duration, 2),
         "source": {"title": source.title, "url": source.url, "license": source.license_name},
+        "editorial_review": editorial_review,
+        "source_strategy": "curated exact-title Wikipedia document",
         "stock_assets": [
             {"provider": item.provider, "creator": item.creator, "url": item.source_url}
             for item in clips
@@ -228,6 +257,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "source_url": source.url,
         "asset_urls": [item.source_url for item in clips],
         "engagement_comment": build_engagement_comment(script),
+        "editorial_score": editorial_review["score"],
         "metrics": {"views": 0, "likes": 0, "comments": 0},
     }
     records.append(record)
