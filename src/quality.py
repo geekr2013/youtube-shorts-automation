@@ -42,15 +42,21 @@ def source_is_relevant(plan: TopicPlan, source: KnowledgeSource) -> bool:
     if not terms:
         return bool(_normalized(source.title))
     source_title = _normalized(source.title)
+    expected_title = _normalized(plan.wiki_query)
+    title_matches_expected = bool(expected_title) and (
+        expected_title in source_title or source_title in expected_title
+    )
     title_matches_topic = any(
         _normalized(term) in source_title
         or (len(source_title) >= 2 and source_title in _normalized(term))
         for term in terms
     )
-    if not title_matches_topic:
+    if not (title_matches_expected or title_matches_topic):
         return False
     matches = sum(1 for term in terms if _normalized(term) in corpus)
-    required = 2 if len(terms) >= 2 else 1
+    if title_matches_expected and expected_title in _normalized(plan.topic):
+        return True
+    required = 1 if title_matches_expected else (2 if len(terms) >= 2 else 1)
     return matches >= required
 
 
