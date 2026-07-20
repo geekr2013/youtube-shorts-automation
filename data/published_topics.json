@@ -91,6 +91,26 @@
       "engagement_comment": "💬 여러분은 QR 코드를 어디에서 가장 자주 사용하시나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "preview_run_id": "29707853296",
       "metrics": {
+        "views": 3,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-07-20T12:37:04.081680+00:00",
+      "topic": "표면장력은 어떻게 물방울을 둥글게 만들까",
+      "title": "표면장력은 어떻게 물방울을 둥글게 만들까",
+      "video_id": "hDUWuK4dy8Q",
+      "video_url": "https://www.youtube.com/shorts/hDUWuK4dy8Q",
+      "source_url": "https://ko.wikipedia.org/wiki/%ED%91%9C%EB%A9%B4%EC%9E%A5%EB%A0%A5",
+      "asset_urls": [
+        "https://www.pexels.com/video/a-close-up-shot-of-oil-in-a-water-4031895/",
+        "https://www.pexels.com/video/calm-ocean-waves-rippling-under-daylight-35404538/",
+        "https://www.pexels.com/video/rain-water-drops-in-slow-motion-26793258/"
+      ],
+      "engagement_comment": "💬 여러분은 직접 관찰한 가장 큰 물방울이 언제였나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 92,
+      "metrics": {
         "views": 0,
         "likes": 0,
         "comments": 0
