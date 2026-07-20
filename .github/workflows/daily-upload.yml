@@ -121,7 +121,7 @@ jobs:
         run: python src/run_status.py
 
       - name: 운영 기록 저장
-        if: always()
+        if: ${{ always() && github.ref == 'refs/heads/main' }}
         run: |
           git config user.email "action@github.com"
           git config user.name "Original Shorts Bot"
