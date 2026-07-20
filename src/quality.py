@@ -67,7 +67,7 @@ def validate_package(
     recent_topics: Iterable[str],
 ) -> None:
     narration_length = len(script.narration)
-    if not 200 <= narration_length <= 390:
+    if not 200 <= narration_length <= 340:
         raise QualityGateError(f"대본 길이가 기준 밖입니다: {narration_length}자")
     if not script.narration.startswith(script.hook.rstrip(". ")) and script.hook not in script.narration[:100]:
         raise QualityGateError("첫 문장에 훅이 포함되지 않았습니다.")

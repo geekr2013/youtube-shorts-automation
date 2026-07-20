@@ -86,7 +86,7 @@ def build_description(script, source, clips) -> str:
         + "\n".join(credits)
         + "\n\nAI 도구를 주제 정리, 대본 작성 보조, 내레이션 제작에 사용했으며 "
         "공개된 검증 자료 범위와 안전 기준을 자동 확인했습니다. "
-        "배경음은 외부 음원을 사용하지 않고 영상마다 직접 생성했습니다.\n\n"
+        "청취를 방해하는 합성 배경음 없이 내레이션 중심으로 제작했습니다.\n\n"
         f"댓글 질문: {script.engagement_question}\n\n"
         f"#shorts #지식쇼츠 {hashtags}"
     )
@@ -204,9 +204,10 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         clips,
         script.narration,
         render_dir,
-        bgm_style=plan.category,
     )
     duration = media_duration(final_video)
+    audio_metadata_path = render_dir / "audio_metadata.json"
+    audio_metadata = json.loads(audio_metadata_path.read_text(encoding="utf-8"))
     description = build_description(script, source, clips)
     metadata = {
         "topic": plan.topic,
@@ -224,10 +225,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
             for item in clips
         ],
         "tags": script.tags,
-        "audio": {
-            "narration": "Korean neural voice",
-            "background_music": "original procedurally generated ambient",
-        },
+        "audio": audio_metadata,
         "dry_run": dry_run,
     }
     write_preview_metadata(WORK_DIR / "metadata.json", metadata)

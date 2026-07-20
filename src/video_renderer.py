@@ -1,14 +1,19 @@
 """한국어 내레이션과 자막이 들어간 9:16 원본 쇼츠를 렌더링한다."""
 
 import asyncio
+import base64
+import json
 import logging
+import os
 import re
 import shutil
 import subprocess
+import wave
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Sequence, Tuple
 
 import edge_tts
+import requests
 
 from models import StockClip
 
@@ -22,9 +27,16 @@ CAPTION_BASE_FONT_SIZE = 64
 CAPTION_MIN_FONT_SIZE = 50
 CAPTION_FADE_IN_MS = 100
 CAPTION_FADE_OUT_MS = 80
-BGM_TARGET_LUFS = -24.0
-BGM_MIX_VOLUME = 1.05
 LOOP_TAIL_SECONDS = 1.2
+GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+GEMINI_TTS_VOICE = "Gacrux"
+EDGE_TTS_VOICES = (
+    "ko-KR-HyunsuMultilingualNeural",
+    "ko-KR-HyunsuNeural",
+    "ko-KR-InJoonNeural",
+    "ko-KR-SunHiNeural",
+)
+AUDIO_MIX_MODE = "voice_only"
 
 
 class RenderError(RuntimeError):
@@ -179,91 +191,137 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     path.write_text("".join(lines), encoding="utf-8-sig")
 
 
-async def _synthesize(text: str, output: Path, voice: str) -> None:
+def prepare_narration_text(text: str) -> str:
+    """문장 끝에서 자연스럽게 숨을 고르도록 낭독용 문단을 만든다."""
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    sentences = re.split(r"(?<=[.!?？。…])\s+", cleaned)
+    return "\n".join(sentence.strip() for sentence in sentences if sentence.strip())
+
+
+def narration_audio_filter(raw_duration: float) -> str:
+    """음색을 과도하게 누르지 않고 음량만 방송 수준으로 정리한다."""
+    filters = []
+    if raw_duration > 59:
+        tempo = min(raw_duration / 58.0, 1.06)
+        filters.append(f"atempo={tempo:.4f}")
+    filters.extend(
+        [
+            "highpass=f=65",
+            "lowpass=f=14500",
+            "loudnorm=I=-16:LRA=10:TP=-1.5",
+        ]
+    )
+    return ",".join(filters)
+
+
+def _write_pcm_wave(path: Path, pcm: bytes, sample_rate: int = 24000) -> None:
+    with wave.open(str(path), "wb") as audio_file:
+        audio_file.setnchannels(1)
+        audio_file.setsampwidth(2)
+        audio_file.setframerate(sample_rate)
+        audio_file.writeframes(pcm)
+
+
+def _synthesize_gemini_tts(text: str, output: Path, api_key: str) -> None:
+    prompt = (
+        "차분하고 따뜻한 한국어 다큐멘터리 내레이터처럼 읽어주세요. "
+        "광고처럼 과장하지 말고, 문장 사이에 자연스럽게 숨을 고르며, "
+        "핵심 단어만 은은하게 강조하세요. 대본의 단어를 바꾸거나 덧붙이지 마세요.\n\n"
+        f"대본:\n{text}"
+    )
+    response = requests.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_TTS_MODEL}:generateContent",
+        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+        json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {"voiceName": GEMINI_TTS_VOICE}
+                    }
+                },
+            },
+        },
+        timeout=120,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    parts = payload.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    chunks = []
+    sample_rate = 24000
+    for part in parts:
+        inline = part.get("inlineData") or part.get("inline_data") or {}
+        if inline.get("data"):
+            chunks.append(base64.b64decode(inline["data"]))
+            mime_type = str(inline.get("mimeType") or inline.get("mime_type") or "")
+            match = re.search(r"rate=(\d+)", mime_type)
+            if match:
+                sample_rate = int(match.group(1))
+    if not chunks:
+        raise RenderError("Gemini TTS 응답에 오디오가 없습니다.")
+    _write_pcm_wave(output, b"".join(chunks), sample_rate)
+
+
+async def _synthesize_edge_tts(text: str, output: Path, voice: str) -> None:
     communicator = edge_tts.Communicate(
         text=text,
         voice=voice,
-        rate="-5%",
-        volume="+2%",
-        pitch="-2Hz",
+        rate="-2%",
+        volume="+0%",
+        pitch="+0Hz",
     )
     await communicator.save(str(output))
 
 
-def create_narration(text: str, output_dir: Path, voice: str = "ko-KR-SunHiNeural") -> Tuple[Path, float]:
-    raw = output_dir / "narration_raw.mp3"
-    voices = [voice, "ko-KR-InJoonNeural"]
+def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str, str]]:
+    prepared = prepare_narration_text(text)
+    raw = output_dir / "narration_raw.wav"
+    engine = "Gemini expressive TTS"
+    selected_voice = GEMINI_TTS_VOICE
     last_error = None
-    for candidate in dict.fromkeys(voices):
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if api_key:
         try:
-            asyncio.run(_synthesize(text, raw, candidate))
-            break
+            _synthesize_gemini_tts(prepared, raw, api_key)
         except Exception as exc:
             last_error = exc
-            LOGGER.warning("TTS 음성 실패(%s), 다른 음성을 시도합니다.", candidate)
-    else:
-        raise RenderError(f"한국어 내레이션을 만들지 못했습니다: {last_error}")
+            LOGGER.warning("Gemini TTS 실패, 무료 한국어 신경망 음성으로 전환합니다: %s", exc)
+    if not raw.exists():
+        raw = output_dir / "narration_raw.mp3"
+        engine = "Microsoft neural TTS fallback"
+        for candidate in EDGE_TTS_VOICES:
+            try:
+                asyncio.run(_synthesize_edge_tts(prepared, raw, candidate))
+                selected_voice = candidate
+                break
+            except Exception as exc:
+                last_error = exc
+                LOGGER.warning("TTS 음성 실패(%s), 다른 음성을 시도합니다.", candidate)
+        else:
+            raise RenderError(f"한국어 내레이션을 만들지 못했습니다: {last_error}")
     raw_duration = media_duration(raw)
-    if not 25 <= raw_duration <= 80:
+    if not 25 <= raw_duration <= 63:
         raise RenderError(f"내레이션 길이가 비정상입니다: {raw_duration:.1f}초")
 
-    tempo = 1.0
-    if raw_duration > 59:
-        tempo = min(raw_duration / 57.0, 1.10)
-    elif raw_duration < 36:
-        tempo = max(raw_duration / 38.0, 0.92)
     normalized = output_dir / "narration.m4a"
     _run(
         [
             "ffmpeg", "-y", "-i", str(raw), "-filter:a",
-            f"atempo={tempo:.4f},highpass=f=80,lowpass=f=12000,"
-            "acompressor=threshold=0.125:ratio=2:attack=20:release=180:makeup=1.4,"
-            "loudnorm=I=-15:LRA=8:TP=-1.5",
+            narration_audio_filter(raw_duration),
             "-c:a", "aac", "-b:a", "160k", str(normalized),
         ]
     )
     duration = media_duration(normalized)
-    if not 35 <= duration <= 60:
+    if not 28 <= duration <= 60:
         raise RenderError(f"정규화 후 내레이션 길이가 기준 밖입니다: {duration:.1f}초")
-    return normalized, duration
-
-
-def background_music_frequencies(style: str) -> Tuple[float, float, float]:
-    """주제 유형에 맞는 잔잔한 3화음 주파수를 고른다."""
-    normalized = style.lower()
-    if any(keyword in normalized for keyword in ("기술", "과학", "tech", "science")):
-        return 146.83, 185.00, 220.00
-    if any(keyword in normalized for keyword in ("역사", "문화", "history", "culture")):
-        return 110.00, 130.81, 164.81
-    return 130.81, 164.81, 196.00
-
-
-def create_background_music(output_dir: Path, duration: float, style: str) -> Path:
-    """외부 음원 없이 영상 길이에 맞는 저음량 배경음을 만든다."""
-    first, second, third = background_music_frequencies(style)
-    expression = (
-        f"(0.050*sin(2*PI*{first:.2f}*t)+"
-        f"0.040*sin(2*PI*{second:.2f}*t)+"
-        f"0.032*sin(2*PI*{third:.2f}*t)+"
-        f"0.040*sin(2*PI*{first * 2:.2f}*t)+"
-        f"0.030*sin(2*PI*{second * 2:.2f}*t)+"
-        f"0.022*sin(2*PI*{third * 2:.2f}*t))"
-        "*(0.78+0.22*sin(2*PI*0.05*t))"
-    )
-    output = output_dir / "background_music.m4a"
-    fade_out = max(0.0, duration - 2.0)
-    _run(
-        [
-            "ffmpeg", "-y", "-f", "lavfi", "-i",
-            f"aevalsrc={expression}:s=48000:d={duration:.3f}",
-            "-filter:a",
-            f"highpass=f=100,lowpass=f=2600,aecho=0.8:0.30:90:0.10,"
-            f"loudnorm=I={BGM_TARGET_LUFS}:LRA=7:TP=-3,"
-            f"afade=t=in:st=0:d=1.2,afade=t=out:st={fade_out:.3f}:d=2",
-            "-c:a", "aac", "-b:a", "128k", str(output),
-        ]
-    )
-    return output
+    return normalized, duration, {
+        "narration_engine": engine,
+        "narration_voice": selected_voice,
+        "pacing": "sentence-aware natural Korean",
+        "background_music": "none",
+        "mix_mode": AUDIO_MIX_MODE,
+    }
 
 
 def render_short(
@@ -271,7 +329,6 @@ def render_short(
     narration_text: str,
     output_dir: Path,
     output_name: str = "final_short.mp4",
-    bgm_style: str = "curiosity",
 ) -> Path:
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         raise RenderError("FFmpeg 또는 FFprobe가 설치되어 있지 않습니다.")
@@ -280,8 +337,11 @@ def render_short(
     if len(clip_list) < 2:
         raise RenderError("렌더링에는 서로 다른 영상 2개 이상이 필요합니다.")
 
-    narration_path, duration = create_narration(narration_text, output_dir)
-    background_music_path = create_background_music(output_dir, duration, bgm_style)
+    narration_path, duration, audio_metadata = create_narration(narration_text, output_dir)
+    (output_dir / "audio_metadata.json").write_text(
+        json.dumps(audio_metadata, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     ass_path = output_dir / "captions.ass"
     write_ass(ass_path, narration_text, duration)
 
@@ -338,13 +398,9 @@ def render_short(
     _run(
         [
             "ffmpeg", "-y", "-i", str(visual), "-i", str(narration_path),
-            "-i", str(background_music_path),
             "-filter_complex",
             f"[0:v]ass='{ass_filter_path}'[v];"
-            f"[2:a]volume={BGM_MIX_VOLUME}[music];"
-            "[music][1:a]sidechaincompress=threshold=0.12:ratio=2:attack=30:release=300[bgm];"
-            "[1:a][bgm]amix=inputs=2:duration=first:normalize=0,"
-            "alimiter=limit=0.95[a]",
+            "[1:a]alimiter=limit=0.95[a]",
             "-map", "[v]", "-map", "[a]",
             "-t", f"{duration:.3f}", "-c:v", "libx264", "-preset", "medium",
             "-crf", "20", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart",

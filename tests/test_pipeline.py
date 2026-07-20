@@ -1,10 +1,13 @@
+import base64
 import json
 import re
 import sys
 import tempfile
 import unittest
+import wave
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -19,12 +22,15 @@ from run_status import build_status
 from secret_utils import clean_secret
 from topic_catalog import VERIFIED_TOPICS, eligible_topic_plans
 from video_renderer import (
-    BGM_MIX_VOLUME,
-    BGM_TARGET_LUFS,
-    background_music_frequencies,
+    AUDIO_MIX_MODE,
+    EDGE_TTS_VOICES,
+    GEMINI_TTS_MODEL,
+    _synthesize_gemini_tts,
     caption_font_size,
     caption_lines,
     caption_timeline,
+    narration_audio_filter,
+    prepare_narration_text,
     split_caption_chunks,
     write_ass,
 )
@@ -262,13 +268,60 @@ class PipelineTests(unittest.TestCase):
         self.assertLess(long_size, short_size)
         self.assertGreaterEqual(long_size, 50)
 
-    def test_background_music_changes_with_topic_style(self):
-        self.assertNotEqual(
-            background_music_frequencies("과학"),
-            background_music_frequencies("역사"),
+    def test_audio_is_voice_only_without_synthetic_tones(self):
+        self.assertEqual(AUDIO_MIX_MODE, "voice_only")
+        renderer_source = (ROOT / "src" / "video_renderer.py").read_text(encoding="utf-8")
+        self.assertNotIn("aevalsrc=", renderer_source)
+        self.assertNotIn("create_background_music", renderer_source)
+
+    def test_narration_uses_expressive_voice_and_sentence_pacing(self):
+        self.assertEqual(GEMINI_TTS_MODEL, "gemini-2.5-flash-preview-tts")
+        self.assertEqual(EDGE_TTS_VOICES[0], "ko-KR-HyunsuMultilingualNeural")
+        prepared = prepare_narration_text(
+            "첫 문장입니다. 다음 문장은 자연스럽게 숨을 고릅니다."
         )
-        self.assertEqual(BGM_TARGET_LUFS, -24.0)
-        self.assertGreaterEqual(BGM_MIX_VOLUME, 1.0)
+        self.assertEqual(
+            prepared,
+            "첫 문장입니다.\n다음 문장은 자연스럽게 숨을 고릅니다.",
+        )
+        normal_filter = narration_audio_filter(48.0)
+        self.assertNotIn("atempo", normal_filter)
+        self.assertNotIn("acompressor", normal_filter)
+        self.assertIn("loudnorm=I=-16", normal_filter)
+
+    def test_long_narration_uses_only_small_tempo_correction(self):
+        long_filter = narration_audio_filter(62.0)
+        self.assertIn("atempo=1.06", long_filter)
+
+    def test_gemini_tts_writes_wave_without_key_in_url(self):
+        pcm = b"\x00\x00" * 240
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "voice.wav"
+            with patch("video_renderer.requests.post") as request:
+                request.return_value.raise_for_status.return_value = None
+                request.return_value.json.return_value = {
+                    "candidates": [
+                        {
+                            "content": {
+                                "parts": [
+                                    {
+                                        "inlineData": {
+                                            "data": base64.b64encode(pcm).decode("ascii"),
+                                            "mimeType": "audio/L16;codec=pcm;rate=24000",
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+                _synthesize_gemini_tts("테스트 대본입니다.", output, "secret-value")
+            _, kwargs = request.call_args
+            self.assertNotIn("params", kwargs)
+            self.assertEqual(kwargs["headers"]["x-goog-api-key"], "secret-value")
+            with wave.open(str(output), "rb") as audio_file:
+                self.assertEqual(audio_file.getframerate(), 24000)
+                self.assertEqual(audio_file.getnchannels(), 1)
 
     def test_gemini_json_parser_accepts_code_fence(self):
         value = GeminiWriter._parse_json('```json\n{"topic":"구름"}\n```')

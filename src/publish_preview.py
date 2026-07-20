@@ -36,7 +36,7 @@ def build_preview_description(metadata: Dict[str, Any]) -> str:
         "영상 자료 출처(각 제공처 라이선스 적용):\n"
         + "\n".join(credits)
         + "\n\nAI 도구를 주제 정리, 대본 작성 보조, 내레이션 제작에 사용했습니다. "
-        "배경음은 외부 음원을 사용하지 않고 직접 생성했습니다.\n\n"
+        "청취를 방해하는 합성 배경음 없이 내레이션 중심으로 제작했습니다.\n\n"
         + (f"{engagement}\n\n" if engagement else "")
         + f"#shorts #지식쇼츠 {hashtags}"
     )
