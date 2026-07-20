@@ -275,7 +275,7 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("create_background_music", renderer_source)
 
     def test_narration_uses_expressive_voice_and_sentence_pacing(self):
-        self.assertEqual(GEMINI_TTS_MODEL, "gemini-2.5-flash-preview-tts")
+        self.assertEqual(GEMINI_TTS_MODEL, "gemini-3.1-flash-tts-preview")
         self.assertEqual(EDGE_TTS_VOICES[0], "ko-KR-HyunsuMultilingualNeural")
         prepared = prepare_narration_text(
             "첫 문장입니다. 다음 문장은 자연스럽게 숨을 고릅니다."

@@ -28,7 +28,7 @@ CAPTION_MIN_FONT_SIZE = 50
 CAPTION_FADE_IN_MS = 100
 CAPTION_FADE_OUT_MS = 80
 LOOP_TAIL_SECONDS = 1.2
-GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
 GEMINI_TTS_VOICE = "Gacrux"
 EDGE_TTS_VOICES = (
     "ko-KR-HyunsuMultilingualNeural",
