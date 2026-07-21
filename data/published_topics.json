@@ -115,6 +115,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-07-21T12:13:07.409399+00:00",
+      "topic": "무지개는 왜 둥근 원의 일부처럼 보일까",
+      "title": "무지개가 둥근 원처럼 보이는 이유는 무엇일까",
+      "video_id": "ddG54XLRPFQ",
+      "video_url": "https://www.youtube.com/shorts/ddG54XLRPFQ",
+      "source_url": "https://ko.wikipedia.org/wiki/%EB%AC%B4%EC%A7%80%EA%B0%9C",
+      "asset_urls": [
+        "https://www.pexels.com/video/town-and-rainbow-12436334/",
+        "https://www.pexels.com/video/aerial-view-of-coastal-town-with-rainbow-38383443/",
+        "https://www.pexels.com/video/a-small-piece-of-paper-with-a-hole-in-it-15829409/"
+      ],
+      "engagement_comment": "💬 최근 본 무지개 중 가장 선명했던 색은 무엇인가요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 90,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
