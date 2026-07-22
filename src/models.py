@@ -31,6 +31,7 @@ class ScriptPackage:
     closing_loop: str = ""
     engagement_question: str = ""
     tags: List[str] = field(default_factory=list)
+    caption_translations: List[str] = field(default_factory=list)
 
 
 @dataclass

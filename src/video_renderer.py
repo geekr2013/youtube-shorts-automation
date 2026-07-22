@@ -1,4 +1,4 @@
-"""한국어 내레이션과 자막이 들어간 9:16 원본 쇼츠를 렌더링한다."""
+"""??? ????? ??? ??? 9:16 ?? ??? ?????."""
 
 import asyncio
 import base64
@@ -21,12 +21,18 @@ LOGGER = logging.getLogger(__name__)
 WIDTH = 1080
 HEIGHT = 1920
 CAPTION_X = 450
-CAPTION_Y = 1220
+CAPTION_Y = 1215
 CAPTION_MAX_WIDTH = 760
-CAPTION_BASE_FONT_SIZE = 64
-CAPTION_MIN_FONT_SIZE = 50
-CAPTION_FADE_IN_MS = 100
-CAPTION_FADE_OUT_MS = 80
+CAPTION_BASE_FONT_SIZE = 74
+CAPTION_MIN_FONT_SIZE = 56
+ENGLISH_CAPTION_BASE_FONT_SIZE = 40
+ENGLISH_CAPTION_MIN_FONT_SIZE = 32
+CAPTION_PANEL_LEFT = 48
+CAPTION_PANEL_RIGHT = 852
+CAPTION_PANEL_TOP = 1035
+CAPTION_PANEL_BOTTOM = 1395
+CAPTION_FADE_IN_MS = 140
+CAPTION_FADE_OUT_MS = 100
 LOOP_TAIL_SECONDS = 1.2
 GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
 GEMINI_TTS_VOICE = "Gacrux"
@@ -47,7 +53,7 @@ def _run(command: Sequence[str]) -> None:
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
         tail = (result.stderr or result.stdout)[-2500:]
-        raise RenderError(f"FFmpeg 실행 실패: {tail}")
+        raise RenderError(f"FFmpeg ?? ??: {tail}")
 
 
 def media_duration(path: Path) -> float:
@@ -66,13 +72,13 @@ def media_duration(path: Path) -> float:
 
 
 def split_caption_chunks(text: str, max_chars: int = 22) -> List[str]:
-    """어절을 자르지 않고 짧은 호흡 단위의 자막 묶음을 만든다."""
+    """??? ??? ?? ?? ?? ??? ?? ??? ???."""
     words = re.findall(r"\S+", text)
     chunks: List[str] = []
     current = ""
     for word in words:
         candidate = f"{current} {word}".strip()
-        sentence_break = bool(re.search(r"[.!?？。…]$", current))
+        sentence_break = bool(re.search(r"[.!????]$", current))
         if current and (len(candidate) > max_chars or (sentence_break and len(current) >= 8)):
             chunks.append(current)
             current = word
@@ -90,7 +96,7 @@ def _visual_units(text: str) -> float:
             units += 0.35
         elif character.isascii() and character.isalnum():
             units += 0.55
-        elif character in ",.!?？。…:;'\"()[]{}":
+        elif character in ",.!????:;'\"()[]{}":
             units += 0.5
         else:
             units += 1.0
@@ -98,7 +104,7 @@ def _visual_units(text: str) -> float:
 
 
 def caption_lines(text: str, max_line_chars: int = 13) -> List[str]:
-    """어절을 보존하며 세로 영상 자막을 최대 두 줄로 나눈다."""
+    """??? ???? ?? ?? ??? ?? ? ?? ???."""
     cleaned = re.sub(r"\s+", " ", text).strip()
     if not cleaned or _visual_units(cleaned) <= max_line_chars:
         return [cleaned] if cleaned else []
@@ -120,11 +126,20 @@ def caption_lines(text: str, max_line_chars: int = 13) -> List[str]:
     return [first, second]
 
 
-def caption_font_size(lines: Sequence[str]) -> int:
-    """긴 어절도 자르지 않고 안전 폭에 들어오도록 글자 크기를 조절한다."""
+def caption_font_size(
+    lines: Sequence[str],
+    base_size: int = CAPTION_BASE_FONT_SIZE,
+    min_size: int = CAPTION_MIN_FONT_SIZE,
+) -> int:
+    """? ??? ??? ?? ?? ?? ????? ?? ??? ????."""
     longest = max((_visual_units(line) for line in lines), default=1.0)
     fitted = int(CAPTION_MAX_WIDTH / max(longest, 1.0))
-    return max(CAPTION_MIN_FONT_SIZE, min(CAPTION_BASE_FONT_SIZE, fitted))
+    return max(min_size, min(base_size, fitted))
+
+
+def english_caption_lines(text: str) -> List[str]:
+    """??? ??? ??? ?? ?? ? ?? ????."""
+    return caption_lines(text, max_line_chars=23)
 
 
 def caption_timeline(text: str, duration: float) -> List[Tuple[float, float, str]]:
@@ -134,9 +149,9 @@ def caption_timeline(text: str, duration: float) -> List[Tuple[float, float, str
     weights = []
     for item in chunks:
         weight = max(2.0, _visual_units(item))
-        if re.search(r"[.!?？。…]$", item):
+        if re.search(r"[.!????]$", item):
             weight += 2.0
-        elif re.search(r"[,，]$", item):
+        elif re.search(r"[,?]$", item):
             weight += 1.0
         weights.append(weight)
     total = sum(weights)
@@ -162,7 +177,19 @@ def _ass_escape(text: str) -> str:
     return text.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}").replace("\n", r"\N")
 
 
-def write_ass(path: Path, narration: str, duration: float) -> None:
+def write_ass(
+    path: Path,
+    narration: str,
+    duration: float,
+    caption_translations: Sequence[str] = (),
+) -> None:
+    timeline = caption_timeline(narration, duration)
+    translations = [re.sub(r"\s+", " ", str(item)).strip() for item in caption_translations]
+    if translations and len(translations) != len(timeline):
+        raise RenderError(
+            f"????? ?? ?? ????: ?? {len(timeline)}? / ?? {len(translations)}?"
+        )
+
     header = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -172,34 +199,60 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,Noto Sans CJK KR,64,&H00FFFFFF,&H000000FF,&H00101010,&H64000000,-1,0,0,0,100,100,0,0,1,3,1,5,140,260,0,1
+Style: Panel,Noto Sans CJK KR,20,&H7224180E,&H7224180E,&H7224180E,&H7224180E,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Caption,Noto Sans CJK KR,74,&H00FFFFFF,&H000000FF,&H00101010,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,5,140,260,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = [header]
-    for start, end, text in caption_timeline(narration, duration):
+    for index, (start, end, text) in enumerate(timeline):
         wrapped_lines = caption_lines(text)
-        wrapped = "\n".join(wrapped_lines)
         font_size = caption_font_size(wrapped_lines)
+        fade = f"\\fad({CAPTION_FADE_IN_MS},{CAPTION_FADE_OUT_MS})"
+        panel_shape = (
+            f"m {CAPTION_PANEL_LEFT} {CAPTION_PANEL_TOP} "
+            f"l {CAPTION_PANEL_RIGHT} {CAPTION_PANEL_TOP} "
+            f"l {CAPTION_PANEL_RIGHT} {CAPTION_PANEL_BOTTOM} "
+            f"l {CAPTION_PANEL_LEFT} {CAPTION_PANEL_BOTTOM}"
+        )
         lines.append(
-            f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Caption,,0,0,0,,"
+            f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Panel,,0,0,0,,"
+            f"{{\\an7\\pos(0,0)\\p1\\1c&H24180E&\\1a&H72&{fade}}}{panel_shape}\n"
+        )
+
+        korean_block = r"\N".join(_ass_escape(item) for item in wrapped_lines)
+        caption_text = korean_block
+        if translations:
+            english_lines = english_caption_lines(translations[index])
+            english_size = caption_font_size(
+                english_lines,
+                base_size=ENGLISH_CAPTION_BASE_FONT_SIZE,
+                min_size=ENGLISH_CAPTION_MIN_FONT_SIZE,
+            )
+            english_block = r"\N".join(_ass_escape(item) for item in english_lines)
+            caption_text += (
+                r"\N"
+                f"{{\\fs{english_size}\\b0\\c&H00F1E6DC&\\bord2}}"
+                f"{english_block}"
+            )
+        lines.append(
+            f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Caption,,0,0,0,,"
             f"{{\\an5\\pos({CAPTION_X},{CAPTION_Y})\\fs{font_size}"
-            f"\\fad({CAPTION_FADE_IN_MS},{CAPTION_FADE_OUT_MS})}}"
-            f"{_ass_escape(wrapped)}\n"
+            f"{fade}}}{caption_text}\n"
         )
     path.write_text("".join(lines), encoding="utf-8-sig")
 
 
 def prepare_narration_text(text: str) -> str:
-    """문장 끝에서 자연스럽게 숨을 고르도록 낭독용 문단을 만든다."""
+    """?? ??? ????? ?? ???? ??? ??? ???."""
     cleaned = re.sub(r"\s+", " ", text).strip()
-    sentences = re.split(r"(?<=[.!?？。…])\s+", cleaned)
+    sentences = re.split(r"(?<=[.!????])\s+", cleaned)
     return "\n".join(sentence.strip() for sentence in sentences if sentence.strip())
 
 
 def narration_audio_filter(raw_duration: float) -> str:
-    """음색을 과도하게 누르지 않고 음량만 방송 수준으로 정리한다."""
+    """??? ???? ??? ?? ??? ?? ???? ????."""
     filters = []
     if raw_duration > 59:
         tempo = min(raw_duration / 58.0, 1.06)
@@ -224,10 +277,10 @@ def _write_pcm_wave(path: Path, pcm: bytes, sample_rate: int = 24000) -> None:
 
 def _synthesize_gemini_tts(text: str, output: Path, api_key: str) -> None:
     prompt = (
-        "차분하고 따뜻한 한국어 다큐멘터리 내레이터처럼 읽어주세요. "
-        "광고처럼 과장하지 말고, 문장 사이에 자연스럽게 숨을 고르며, "
-        "핵심 단어만 은은하게 강조하세요. 대본의 단어를 바꾸거나 덧붙이지 마세요.\n\n"
-        f"대본:\n{text}"
+        "???? ??? ??? ????? ?????? ?????. "
+        "???? ???? ??, ?? ??? ????? ?? ???, "
+        "?? ??? ???? ?????. ??? ??? ???? ???? ???.\n\n"
+        f"??:\n{text}"
     )
     response = requests.post(
         f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_TTS_MODEL}:generateContent",
@@ -259,7 +312,7 @@ def _synthesize_gemini_tts(text: str, output: Path, api_key: str) -> None:
             if match:
                 sample_rate = int(match.group(1))
     if not chunks:
-        raise RenderError("Gemini TTS 응답에 오디오가 없습니다.")
+        raise RenderError("Gemini TTS ??? ???? ????.")
     _write_pcm_wave(output, b"".join(chunks), sample_rate)
 
 
@@ -286,7 +339,7 @@ def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str
             _synthesize_gemini_tts(prepared, raw, api_key)
         except Exception as exc:
             last_error = exc
-            LOGGER.warning("Gemini TTS 실패, 무료 한국어 신경망 음성으로 전환합니다: %s", exc)
+            LOGGER.warning("Gemini TTS ??, ?? ??? ??? ???? ?????: %s", exc)
     if not raw.exists():
         raw = output_dir / "narration_raw.mp3"
         engine = "Microsoft neural TTS fallback"
@@ -297,12 +350,12 @@ def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str
                 break
             except Exception as exc:
                 last_error = exc
-                LOGGER.warning("TTS 음성 실패(%s), 다른 음성을 시도합니다.", candidate)
+                LOGGER.warning("TTS ?? ??(%s), ?? ??? ?????.", candidate)
         else:
-            raise RenderError(f"한국어 내레이션을 만들지 못했습니다: {last_error}")
+            raise RenderError(f"??? ????? ??? ?????: {last_error}")
     raw_duration = media_duration(raw)
     if not 25 <= raw_duration <= 63:
-        raise RenderError(f"내레이션 길이가 비정상입니다: {raw_duration:.1f}초")
+        raise RenderError(f"???? ??? ??????: {raw_duration:.1f}?")
 
     normalized = output_dir / "narration.m4a"
     _run(
@@ -314,7 +367,7 @@ def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str
     )
     duration = media_duration(normalized)
     if not 28 <= duration <= 60:
-        raise RenderError(f"정규화 후 내레이션 길이가 기준 밖입니다: {duration:.1f}초")
+        raise RenderError(f"??? ? ???? ??? ?? ????: {duration:.1f}?")
     return normalized, duration, {
         "narration_engine": engine,
         "narration_voice": selected_voice,
@@ -329,13 +382,14 @@ def render_short(
     narration_text: str,
     output_dir: Path,
     output_name: str = "final_short.mp4",
+    caption_translations: Sequence[str] = (),
 ) -> Path:
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
-        raise RenderError("FFmpeg 또는 FFprobe가 설치되어 있지 않습니다.")
+        raise RenderError("FFmpeg ?? FFprobe? ???? ?? ????.")
     output_dir.mkdir(parents=True, exist_ok=True)
     clip_list = list(clips)
     if len(clip_list) < 2:
-        raise RenderError("렌더링에는 서로 다른 영상 2개 이상이 필요합니다.")
+        raise RenderError("????? ?? ?? ?? 2? ??? ?????.")
 
     narration_path, duration, audio_metadata = create_narration(narration_text, output_dir)
     (output_dir / "audio_metadata.json").write_text(
@@ -343,7 +397,21 @@ def render_short(
         encoding="utf-8",
     )
     ass_path = output_dir / "captions.ass"
-    write_ass(ass_path, narration_text, duration)
+    write_ass(ass_path, narration_text, duration, caption_translations)
+    (output_dir / "caption_metadata.json").write_text(
+        json.dumps(
+            {
+                "language_mode": "ko+en" if caption_translations else "ko",
+                "korean_base_font_size": CAPTION_BASE_FONT_SIZE,
+                "english_base_font_size": ENGLISH_CAPTION_BASE_FONT_SIZE,
+                "layout": "transparent safe-area panel",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
     loop_tail_duration = min(LOOP_TAIL_SECONDS, duration * 0.04)
     segment_duration = (duration - loop_tail_duration) / len(clip_list)
@@ -408,7 +476,7 @@ def render_short(
         ]
     )
     if not final_path.exists() or final_path.stat().st_size < 500_000:
-        raise RenderError("최종 영상 파일이 생성되지 않았습니다.")
-    LOGGER.info("최종 영상 생성: %.1f초 / %.1fMB", duration, final_path.stat().st_size / 1024 / 1024)
+        raise RenderError("?? ?? ??? ???? ?????.")
+    LOGGER.info("?? ?? ??: %.1f? / %.1fMB", duration, final_path.stat().st_size / 1024 / 1024)
     return final_path
 
