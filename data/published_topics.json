@@ -151,7 +151,7 @@
       "engagement_comment": "💬 여러분은 달의 앞면과 뒷면 중 어느 쪽이 더 궁금한가요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 92,
       "metrics": {
-        "views": 0,
+        "views": 1,
         "likes": 0,
         "comments": 0
       }
@@ -169,6 +169,26 @@
         "https://www.pexels.com/video/vintage-cassette-tape-with-retro-lighting-31984118/"
       ],
       "engagement_comment": "💬 여러분은 언제 나침반을 직접 사용해본 적이 있나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 95,
+      "metrics": {
+        "views": 8,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-07-24T12:07:05.145321+00:00",
+      "topic": "소리는 왜 우주 공간에서 전달되지 않을까",
+      "title": "소리는 왜 우주 공간에서 들리지 않을까",
+      "video_id": "gPQJCi2-ITI",
+      "video_url": "https://www.youtube.com/shorts/gPQJCi2-ITI",
+      "source_url": "https://ko.wikipedia.org/wiki/%EC%86%8C%EB%A6%AC",
+      "asset_urls": [
+        "https://www.pexels.com/video/a-record-player-with-the-words-the-best-way-to-listen-to-music-16277046/",
+        "https://www.pexels.com/video/an-astronaut-posing-with-the-american-flag-8475052/",
+        "https://www.pexels.com/video/waveform-on-a-computer-screen-during-recording-in-a-music-studio-12330877/"
+      ],
+      "engagement_comment": "💬 여러분이 가장 좋아하는 자연의 소리는 무엇인가요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 95,
       "metrics": {
         "views": 0,
