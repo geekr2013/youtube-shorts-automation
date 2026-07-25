@@ -171,7 +171,7 @@
       "engagement_comment": "💬 여러분은 언제 나침반을 직접 사용해본 적이 있나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 95,
       "metrics": {
-        "views": 8,
+        "views": 9,
         "likes": 0,
         "comments": 0
       }
@@ -190,6 +190,26 @@
       ],
       "engagement_comment": "💬 여러분이 가장 좋아하는 자연의 소리는 무엇인가요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 95,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-07-25T11:50:01.453787+00:00",
+      "topic": "태풍의 눈은 왜 주변보다 비교적 고요할까",
+      "title": "태풍의 눈은 왜 고요할까: 하강 기류와 중심 구조의 비밀",
+      "video_id": "TIRNzOCEO70",
+      "video_url": "https://www.youtube.com/shorts/TIRNzOCEO70",
+      "source_url": "https://ko.wikipedia.org/wiki/%ED%83%9C%ED%92%8D",
+      "asset_urls": [
+        "https://www.pexels.com/video/overcast-sky-with-gray-clouds-11565218/",
+        "https://www.pexels.com/video/dramatic-aerial-view-of-cumulus-clouds-28699828/",
+        "https://www.pexels.com/video/serene-ocean-view-with-dramatic-clouds-31705190/"
+      ],
+      "engagement_comment": "💬 여러분은 맑은 하늘 아래 갑자기 바람이 멈춘 경험이 있나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 92,
       "metrics": {
         "views": 0,
         "likes": 0,
