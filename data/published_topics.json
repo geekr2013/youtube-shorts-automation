@@ -215,6 +215,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-07-27T13:29:53.570963+00:00",
+      "topic": "번개는 구름 속 전하를 어떻게 방전할까",
+      "title": "번개는 구름 속 전하를 어떻게 방전할까",
+      "video_id": "3TuJs23OYz4",
+      "video_url": "https://www.youtube.com/shorts/3TuJs23OYz4",
+      "source_url": "https://ko.wikipedia.org/wiki/%EB%B2%88%EA%B0%9C",
+      "asset_urls": [
+        "https://www.pexels.com/video/thunderstorm-over-trees-12107199/",
+        "https://www.pexels.com/video/dark-nighttime-skyline-with-distant-lightning-37398776/",
+        "https://www.pexels.com/video/vibrant-purple-electric-lightning-animation-35047933/"
+      ],
+      "engagement_comment": "💬 여러분이 직접 본 번개는 언제였나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 87,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
