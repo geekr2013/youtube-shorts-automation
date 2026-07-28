@@ -235,6 +235,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-07-28T12:26:33.307476+00:00",
+      "topic": "카멜레온은 왜 몸 색깔을 바꿀까",
+      "title": "카멜레온이 몸 색을 바꾸는 진짜 이유와 과정",
+      "video_id": "Bh3Jropk_N4",
+      "video_url": "https://www.youtube.com/shorts/Bh3Jropk_N4",
+      "source_url": "https://ko.wikipedia.org/wiki/%EC%B9%B4%EB%A9%9C%EB%A0%88%EC%98%A8",
+      "asset_urls": [
+        "https://www.pexels.com/video/chameleon-on-a-branch-5088506/",
+        "https://www.pexels.com/video/close-up-video-of-a-skin-7477545/",
+        "https://www.pexels.com/video/green-chameleon-amidst-lush-foliage-34649798/"
+      ],
+      "engagement_comment": "💬 여러분이 본 카멜레온 색 중 가장 인상 깊은 색은 무엇인가요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 92,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
