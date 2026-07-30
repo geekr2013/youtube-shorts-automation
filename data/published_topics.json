@@ -255,6 +255,26 @@
         "likes": 1,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-07-30T12:17:17.969430+00:00",
+      "topic": "철새는 먼 이동 경로를 어떻게 찾을까",
+      "title": "철새는 먼 이동 경로를 어떻게 찾을까",
+      "video_id": "xfwRUV5KmcY",
+      "video_url": "https://www.youtube.com/shorts/xfwRUV5KmcY",
+      "source_url": "https://ko.wikipedia.org/wiki/%EC%B2%A0%EC%83%88",
+      "asset_urls": [
+        "https://www.pexels.com/video/majestic-flock-of-birds-soaring-in-blue-sky-29918597/",
+        "https://www.pexels.com/video/mesmerizing-flock-of-birds-at-sunset-34956420/",
+        "https://www.pexels.com/video/a-flock-of-birds-flying-in-the-sky-20323203/"
+      ],
+      "engagement_comment": "💬 여러분이 가장 기억에 남는 철새는 어떤 새인가요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 87,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
