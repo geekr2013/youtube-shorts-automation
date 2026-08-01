@@ -271,7 +271,27 @@
       "engagement_comment": "💬 여러분이 가장 기억에 남는 철새는 어떤 새인가요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 87,
       "metrics": {
-        "views": 3,
+        "views": 4,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-01T11:48:32.847798+00:00",
+      "topic": "구름은 무거운데 어떻게 하늘에 떠 있을까",
+      "title": "하늘에 떠 있는 구름의 진짜 정체",
+      "video_id": "UAkZrKgLCAc",
+      "video_url": "https://www.youtube.com/shorts/UAkZrKgLCAc",
+      "source_url": "https://ko.wikipedia.org/wiki/%EA%B5%AC%EB%A6%84",
+      "asset_urls": [
+        "https://www.pexels.com/video/dramatic-aerial-view-of-cumulus-clouds-28699828/",
+        "https://www.pexels.com/video/beautiful-white-clouds-against-deep-blue-sky-33705707/",
+        "https://www.pexels.com/video/rain-drops-streaming-down-a-window-pane-35184743/"
+      ],
+      "engagement_comment": "💬 여러분은 오늘 하늘에서 어떤 모양의 구름을 보셨나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 85,
+      "metrics": {
+        "views": 0,
         "likes": 0,
         "comments": 0
       }
