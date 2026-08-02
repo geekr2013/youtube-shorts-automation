@@ -295,6 +295,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-02T11:48:20.888301+00:00",
+      "topic": "오로라는 왜 극지방의 밤하늘에서 잘 보일까",
+      "title": "오로라가 극지방 밤하늘에서만 빛나는 이유",
+      "video_id": "HroX2Y7D3WQ",
+      "video_url": "https://www.youtube.com/shorts/HroX2Y7D3WQ",
+      "source_url": "https://ko.wikipedia.org/wiki/%EC%98%A4%EB%A1%9C%EB%9D%BC",
+      "asset_urls": [
+        "https://www.pexels.com/video/stunning-aurora-borealis-over-rocky-seashore-35206733/",
+        "https://www.pexels.com/video/the-aurora-bore-is-shown-in-this-photo-25988225/",
+        "https://www.pexels.com/video/snowy-lapland-landscape-at-sunset-35059521/"
+      ],
+      "engagement_comment": "💬 여러분은 밤하늘에서 오로라를 직접 본 적이 있으신가요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 100,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
