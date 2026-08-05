@@ -315,6 +315,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-05T12:29:42.861337+00:00",
+      "topic": "파도는 물이 아닌 에너지를 어떻게 옮길까",
+      "title": "수천 킬로미터를 달리는 파도의 비밀, 물이 이동하는 게 아니다?",
+      "video_id": "MW6Qob_auQs",
+      "video_url": "https://www.youtube.com/shorts/MW6Qob_auQs",
+      "source_url": "https://ko.wikipedia.org/wiki/%ED%8C%8C%EB%8F%84",
+      "asset_urls": [
+        "https://www.pexels.com/video/waves-of-the-ocean-9620654/",
+        "https://www.pexels.com/video/view-of-waves-in-water-from-motorboat-10144321/",
+        "https://www.pexels.com/video/ripples-on-the-water-surface-4975728/"
+      ],
+      "engagement_comment": "💬 여러분은 바다에서 잔잔한 물결과 거친 풍파 중 어떤 것을 더 좋아하시나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 98,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
