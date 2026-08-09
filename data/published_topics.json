@@ -375,6 +375,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-09T11:07:47.872902+00:00",
+      "topic": "화산재는 왜 비행기에 위험할까",
+      "title": "미세한 화산재가 거대한 비행기를 멈추는 치명적인 이유",
+      "video_id": "58v5FcW-xlk",
+      "video_url": "https://www.youtube.com/shorts/58v5FcW-xlk",
+      "source_url": "https://ko.wikipedia.org/wiki/%ED%99%94%EC%82%B0%EC%9E%AC",
+      "asset_urls": [
+        "https://www.pexels.com/video/spectacular-mount-etna-eruption-plume-29171249/",
+        "https://www.pexels.com/video/view-from-flying-airplane-10274047/",
+        "https://www.pexels.com/video/steaming-sulfur-vent-in-volcanic-landscape-30744363/"
+      ],
+      "engagement_comment": "💬 여러분은 하늘에서 비행기가 지나간 흔적을 본 적이 있나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
+      "editorial_score": 85,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
