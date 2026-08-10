@@ -395,6 +395,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-10T11:33:51.534106+00:00",
+      "topic": "GPS는 왜 길치인 나보다 내 위치를 잘 알까",
+      "title": "길치인 나를 위해 인공위성 4대가 움직인다고?",
+      "video_id": "PPiMvH1OJZs",
+      "video_url": "https://www.youtube.com/shorts/PPiMvH1OJZs",
+      "source_url": "https://ko.wikipedia.org/wiki/GPS",
+      "asset_urls": [
+        "https://www.pexels.com/video/using-mobile-phone-to-locate-a-place-7431692/",
+        "https://www.pexels.com/video/earth-20349276/",
+        "https://www.pexels.com/video/woman-holding-a-map-7010427/"
+      ],
+      "engagement_comment": "💬 지도 앱 없이 낯선 길 찾기, 가능하다 대 불가능하다?\n한 단어로 답해도 됩니다.",
+      "editorial_score": 98,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
