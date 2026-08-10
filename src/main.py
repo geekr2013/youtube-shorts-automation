@@ -1,4 +1,4 @@
-"""원본 한국어 지식 쇼츠를 매일 한 편 생성하고 업로드한다."""
+"""원본 한국어 B급 교양 예능 쇼츠를 매일 한 편 생성하고 업로드한다."""
 
 import argparse
 import json
@@ -89,17 +89,17 @@ def build_description(script, source, clips) -> str:
         f"위키백과 텍스트 라이선스: {source.license_name}\n\n"
         "영상 자료 출처(각 제공처 라이선스 적용):\n"
         + "\n".join(credits)
-        + "\n\nAI 도구를 주제 정리, 대본 작성 보조, 내레이션 제작에 사용했으며 "
+        + "\n\nAI 도구를 주제 정리, B급 교양 예능 대본 작성 보조, 내레이션 제작에 사용했으며 "
         "공개된 검증 자료 범위와 안전 기준을 자동 확인했습니다. "
         "청취를 방해하는 합성 배경음 없이 내레이션 중심으로 제작했습니다. "
         f"{caption_note}\n\n"
         f"댓글 질문: {script.engagement_question}\n\n"
-        f"#shorts #지식쇼츠 {hashtags}"
+        f"#shorts #한입지식 #웃긴지식 {hashtags}"
     )
 
 
 def build_engagement_comment(script) -> str:
-    return f"💬 {script.engagement_question}\n여러분의 경험이나 생각을 댓글로 알려주세요."
+    return f"💬 {script.engagement_question}\n한 단어로 답해도 됩니다."
 
 
 def write_preview_metadata(path: Path, payload: Dict[str, Any]) -> None:
@@ -230,6 +230,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "topic": plan.topic,
         "title": script.title,
         "hook": script.hook,
+        "comedy_beat": script.comedy_beat,
         "midpoint_hook": script.midpoint_hook,
         "closing_loop": script.closing_loop,
         "engagement_comment": build_engagement_comment(script),
@@ -237,6 +238,12 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "source": {"title": source.title, "url": source.url, "license": source.license_name},
         "editorial_review": editorial_review,
         "source_strategy": "curated exact-title Wikipedia document",
+        "format": {
+            "version": "bgrade-edutainment-v1",
+            "audience_angle": plan.audience_angle,
+            "comedy_angle": plan.comedy_angle,
+            "tone": "deadpan everyday humor with verified fact payoff",
+        },
         "stock_assets": [
             {"provider": item.provider, "creator": item.creator, "url": item.source_url}
             for item in clips
@@ -263,7 +270,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         final_video,
         title=f"{script.title} #shorts",
         description=description,
-        tags=["shorts", "지식쇼츠", *script.tags],
+        tags=["shorts", "한입지식", "웃긴지식", *script.tags],
         privacy=os.getenv("YOUTUBE_PRIVACY", "public"),
     )
     now = datetime.now(timezone.utc).isoformat()
@@ -284,7 +291,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     save_state(state)
     write_preview_metadata(WORK_DIR / "metadata.json", {**metadata, **result, "dry_run": False})
     send_notification(
-        f"[지식 쇼츠] 업로드 완료 - {script.title}",
+        f"[한입지식 쇼츠] 업로드 완료 - {script.title}",
         f"주제: {plan.topic}\n영상: {result['video_url']}\n출처: {source.url}\n\n"
         f"고정 댓글 추천 문구:\n{build_engagement_comment(script)}",
     )
@@ -292,7 +299,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="원본 AI 지식 쇼츠 자동화")
+    parser = argparse.ArgumentParser(description="원본 AI B급 교양 예능 쇼츠 자동화")
     parser.add_argument("--dry-run", action="store_true", help="영상만 만들고 업로드하지 않음")
     parser.add_argument("--check-config", action="store_true", help="비밀키 이름만 점검")
     return parser.parse_args()

@@ -10,6 +10,8 @@ class TopicPlan:
     stock_queries: List[str]
     category: str = "science"
     trend_reason: str = ""
+    audience_angle: str = ""
+    comedy_angle: str = ""
 
 
 @dataclass
@@ -30,6 +32,7 @@ class ScriptPackage:
     midpoint_hook: str = ""
     closing_loop: str = ""
     engagement_question: str = ""
+    comedy_beat: str = ""
     tags: List[str] = field(default_factory=list)
     caption_translations: List[str] = field(default_factory=list)
 

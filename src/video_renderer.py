@@ -34,6 +34,8 @@ CAPTION_PANEL_BOTTOM = 1395
 CAPTION_FADE_IN_MS = 140
 CAPTION_FADE_OUT_MS = 100
 LOOP_TAIL_SECONDS = 1.2
+VISUAL_BEAT_SECONDS = 6.0
+MAX_VISUAL_BEATS = 6
 GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
 GEMINI_TTS_VOICE = "Gacrux"
 EDGE_TTS_VOICES = (
@@ -164,6 +166,14 @@ def caption_timeline(text: str, duration: float) -> List[Tuple[float, float, str
     return timeline
 
 
+def visual_beat_count(clip_count: int, duration: float) -> int:
+    """짧은 예능 호흡을 위해 4~6개의 화면 전환을 만든다."""
+    if clip_count <= 0:
+        return 0
+    paced = int(round(max(0.0, duration) / VISUAL_BEAT_SECONDS))
+    return min(MAX_VISUAL_BEATS, max(4, clip_count, paced))
+
+
 def _ass_time(seconds: float) -> str:
     seconds = max(0.0, seconds)
     total_centiseconds = int(round(seconds * 100))
@@ -277,9 +287,10 @@ def _write_pcm_wave(path: Path, pcm: bytes, sample_rate: int = 24000) -> None:
 
 def _synthesize_gemini_tts(text: str, output: Path, api_key: str) -> None:
     prompt = (
-        "차분하고 따뜻한 한국어 다큐멘터리 내레이터처럼 읽어주세요. "
-        "광고처럼 과장하지 말고, 문장 사이에 자연스럽게 숨을 고르며, "
-        "핵심 단어만 은은하게 강조하세요. 대본의 단어를 바꾸거나 덧붙이지 마세요.\n\n"
+        "친근한 한국어 교양 예능 진행자처럼 읽어주세요. "
+        "과장된 유튜버 말투는 피하고, 사실은 또렷하게, 농담은 무표정하게 살짝 읽어주세요. "
+        "문장 사이에 자연스럽게 숨을 고르고 핵심 단어만 은은하게 강조하세요. "
+        "대본의 단어를 바꾸거나 덧붙이지 마세요.\n\n"
         f"대본:\n{text}"
     )
     response = requests.post(
@@ -392,6 +403,9 @@ def render_short(
         raise RenderError("렌더링에는 서로 다른 영상 2개 이상이 필요합니다.")
 
     narration_path, duration, audio_metadata = create_narration(narration_text, output_dir)
+    loop_tail_duration = min(LOOP_TAIL_SECONDS, duration * 0.04)
+    beat_count = visual_beat_count(len(clip_list), duration - loop_tail_duration)
+    segment_duration = (duration - loop_tail_duration) / beat_count
     (output_dir / "audio_metadata.json").write_text(
         json.dumps(audio_metadata, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -405,6 +419,7 @@ def render_short(
                 "korean_base_font_size": CAPTION_BASE_FONT_SIZE,
                 "english_base_font_size": ENGLISH_CAPTION_BASE_FONT_SIZE,
                 "layout": "transparent safe-area panel",
+                "visual_pacing": f"{beat_count} beats with alternating punch-ins",
             },
             ensure_ascii=False,
             indent=2,
@@ -413,20 +428,24 @@ def render_short(
         encoding="utf-8",
     )
 
-    loop_tail_duration = min(LOOP_TAIL_SECONDS, duration * 0.04)
-    segment_duration = (duration - loop_tail_duration) / len(clip_list)
     segments: List[Path] = []
-    for index, clip in enumerate(clip_list):
+    for index in range(beat_count):
+        clip = clip_list[index % len(clip_list)]
         segment = output_dir / f"segment_{index + 1}.mp4"
+        punch_in = index % 2 == 1
+        target_width = 1188 if punch_in else 1080
+        target_height = 2112 if punch_in else 1920
+        seek_offset = 0.0 if index < len(clip_list) else 1.3 * (index // len(clip_list))
         _run(
             [
                 "ffmpeg", "-y", "-stream_loop", "-1", "-i", str(clip.path),
+                "-ss", f"{seek_offset:.3f}",
                 "-t", f"{segment_duration:.3f}",
                 "-vf",
-                "scale=1080:1920:force_original_aspect_ratio=increase,"
+                f"scale={target_width}:{target_height}:force_original_aspect_ratio=increase,"
                 "crop=1080:1920,setsar=1,fps=30,"
-                "eq=contrast=1.04:saturation=1.06:brightness=-0.02,"
-                "drawbox=x=0:y=0:w=iw:h=ih:color=black@0.10:t=fill",
+                "eq=contrast=1.05:saturation=1.08:brightness=-0.01,"
+                "drawbox=x=0:y=0:w=iw:h=ih:color=black@0.08:t=fill",
                 "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "21",
                 "-pix_fmt", "yuv420p", str(segment),
             ]
