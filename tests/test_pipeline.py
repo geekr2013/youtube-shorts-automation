@@ -33,6 +33,7 @@ from video_renderer import (
     narration_audio_filter,
     prepare_narration_text,
     split_caption_chunks,
+    visual_beat_count,
     write_ass,
 )
 
@@ -45,11 +46,14 @@ class PipelineTests(unittest.TestCase):
             stock_queries=["deep sea", "jellyfish", "ocean"],
         )
         hook = "깊은 바다의 생물은 왜 스스로 빛을 낼까요?"
+        comedy_beat = "심해 주민은 전기세 대신 화학 반응으로 불을 켜는 셈입니다."
         midpoint_hook = "그런데 같은 빛도 생물마다 쓰임이 다릅니다."
         closing_loop = "이 빛의 쓰임을 알고 처음 장면을 다시 보면…"
         narration = (
             hook
             + " 생물발광은 생물의 몸속 화학 반응이 빛 에너지로 바뀌는 현상입니다. "
+            + comedy_beat
+            + " "
             "빛을 내는 물질과 효소가 산소와 반응하면서 열을 많이 만들지 않는 차가운 빛이 나타납니다. "
             + midpoint_hook
             + " "
@@ -65,6 +69,7 @@ class PipelineTests(unittest.TestCase):
             midpoint_hook=midpoint_hook,
             closing_loop=closing_loop,
             engagement_question="여러분이 직접 본 가장 신기한 빛은 무엇인가요?",
+            comedy_beat=comedy_beat,
             tags=["생물발광", "심해", "과학", "자연", "지식"],
         )
         self.source = KnowledgeSource(
@@ -83,6 +88,11 @@ class PipelineTests(unittest.TestCase):
 
     def test_midpoint_hook_must_be_near_the_middle(self):
         script = replace(self.script, midpoint_hook="대본에 없는 반전 문장입니다.")
+        with self.assertRaises(QualityGateError):
+            validate_package(self.plan, script, self.source, [])
+
+    def test_comedy_beat_must_be_in_the_first_half(self):
+        script = replace(self.script, comedy_beat="대본에 없는 농담입니다.")
         with self.assertRaises(QualityGateError):
             validate_package(self.plan, script, self.source, [])
 
@@ -166,6 +176,8 @@ class PipelineTests(unittest.TestCase):
         for plan in VERIFIED_TOPICS:
             self.assertTrue(plan.wiki_query)
             self.assertEqual(len(plan.stock_queries), 3)
+            self.assertTrue(plan.audience_angle)
+            self.assertTrue(plan.comedy_angle)
             self.assertNotIn("technology close up", plan.stock_queries)
             self.assertNotIn("natural world", plan.stock_queries)
 
@@ -187,19 +199,42 @@ class PipelineTests(unittest.TestCase):
             [candidates[2].topic, candidates[1].topic, candidates[0].topic],
         )
 
-    def test_editorial_review_requires_80_points(self):
+    def test_editorial_review_requires_85_points(self):
         writer = GeminiWriter.__new__(GeminiWriter)
         writer._generate = lambda prompt, schema, temperature: {
             "approved": True,
-            "score": 79,
+            "score": 84,
             "facts_supported": True,
             "natural_korean": True,
             "visualizable": True,
+            "entertaining": True,
+            "entertainment_score": 90,
             "issues": ["한 문장을 더 짧게 다듬어야 합니다."],
         }
         review = writer.review_script(self.plan, self.source, self.script)
         self.assertFalse(review["approved"])
-        self.assertEqual(review["score"], 79)
+        self.assertEqual(review["score"], 84)
+
+    def test_editorial_review_rejects_boring_script(self):
+        writer = GeminiWriter.__new__(GeminiWriter)
+        writer._generate = lambda prompt, schema, temperature: {
+            "approved": True,
+            "score": 90,
+            "facts_supported": True,
+            "natural_korean": True,
+            "visualizable": True,
+            "entertaining": False,
+            "entertainment_score": 45,
+            "issues": ["교과서식 설명이 길고 유머 보상이 약합니다."],
+        }
+        review = writer.review_script(self.plan, self.source, self.script)
+        self.assertFalse(review["approved"])
+        self.assertEqual(review["entertainment_score"], 45)
+
+    def test_documentary_style_title_is_blocked(self):
+        script = replace(self.script, title="생물발광의 숨겨진 원리")
+        with self.assertRaises(QualityGateError):
+            validate_package(self.plan, script, self.source, [])
 
     def test_closing_loop_must_end_the_narration(self):
         script = replace(self.script, closing_loop="다른 마지막 문장입니다.")
@@ -212,14 +247,17 @@ class PipelineTests(unittest.TestCase):
             self.script.narration.replace(self.script.closing_loop, invalid),
             invalid,
         )
-        self.assertEqual(closing, "이 사실을 알고 처음 장면을 다시 보면…")
+        self.assertEqual(
+            closing,
+            "이제 첫 질문이 조금 다르게 들립니다. 처음 장면을 다시 보면…",
+        )
         self.assertTrue(narration.endswith(closing))
         self.assertNotIn(invalid, narration)
 
     def test_engagement_question_is_ready_for_a_comment(self):
         comment = build_engagement_comment(self.script)
         self.assertIn(self.script.engagement_question, comment)
-        self.assertIn("댓글", comment)
+        self.assertIn("한 단어", comment)
 
     def test_incidental_history_term_is_allowed_in_science_narration(self):
         script = replace(
@@ -332,6 +370,7 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("atempo", normal_filter)
         self.assertNotIn("acompressor", normal_filter)
         self.assertIn("loudnorm=I=-16", normal_filter)
+        self.assertEqual(visual_beat_count(3, 36.0), 6)
 
     def test_long_narration_uses_only_small_tempo_correction(self):
         long_filter = narration_audio_filter(62.0)
@@ -363,6 +402,9 @@ class PipelineTests(unittest.TestCase):
             _, kwargs = request.call_args
             self.assertNotIn("params", kwargs)
             self.assertEqual(kwargs["headers"]["x-goog-api-key"], "secret-value")
+            prompt_text = kwargs["json"]["contents"][0]["parts"][0]["text"]
+            self.assertIn("교양 예능 진행자", prompt_text)
+            self.assertNotIn("다큐멘터리 내레이터", prompt_text)
             with wave.open(str(output), "rb") as audio_file:
                 self.assertEqual(audio_file.getframerate(), 24000)
                 self.assertEqual(audio_file.getnchannels(), 1)

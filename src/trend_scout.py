@@ -17,7 +17,8 @@ def fetch_youtube_trends(api_key: str, region: str = "KR") -> List[Dict[str, Any
     if not api_key:
         return []
     results: List[Dict[str, Any]] = []
-    for category_id in ("0", "28"):  # 전체, 과학/기술
+    # 전체·코미디·노하우·과학/기술 신호를 함께 보되 제목이나 소재를 복제하지 않는다.
+    for category_id in ("0", "23", "26", "28"):
         try:
             response = requests.get(
                 YOUTUBE_VIDEOS_ENDPOINT,
