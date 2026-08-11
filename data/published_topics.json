@@ -211,7 +211,7 @@
       "engagement_comment": "💬 여러분은 맑은 하늘 아래 갑자기 바람이 멈춘 경험이 있나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 92,
       "metrics": {
-        "views": 3,
+        "views": 4,
         "likes": 0,
         "comments": 0
       }
@@ -409,6 +409,26 @@
         "https://www.pexels.com/video/woman-holding-a-map-7010427/"
       ],
       "engagement_comment": "💬 지도 앱 없이 낯선 길 찾기, 가능하다 대 불가능하다?\n한 단어로 답해도 됩니다.",
+      "editorial_score": 98,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-11T11:25:44.678078+00:00",
+      "topic": "하품은 왜 옆 사람에게 무료 배포될까",
+      "title": "옆 사람 하품은 왜 내 입까지 벌리게 만들까?",
+      "video_id": "p1MbE5phNBA",
+      "video_url": "https://www.youtube.com/shorts/p1MbE5phNBA",
+      "source_url": "https://ko.wikipedia.org/wiki/%ED%95%98%ED%92%88",
+      "asset_urls": [
+        "https://www.pexels.com/video/sleepy-woman-rubbing-eyes-6658334/",
+        "https://www.pexels.com/video/relaxed-anatolian-shepherd-dog-outdoors-36962770/",
+        "https://www.pexels.com/video/a-woman-is-laying-on-top-of-a-laptop-27430396/"
+      ],
+      "engagement_comment": "💬 지금 하품 참기 성공하셨나요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 98,
       "metrics": {
         "views": 0,
