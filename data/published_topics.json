@@ -231,7 +231,7 @@
       "engagement_comment": "💬 여러분이 직접 본 번개는 언제였나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 87,
       "metrics": {
-        "views": 3,
+        "views": 4,
         "likes": 0,
         "comments": 0
       }
@@ -391,7 +391,7 @@
       "engagement_comment": "💬 여러분은 하늘에서 비행기가 지나간 흔적을 본 적이 있나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 85,
       "metrics": {
-        "views": 0,
+        "views": 5,
         "likes": 0,
         "comments": 0
       }
@@ -430,6 +430,26 @@
       ],
       "engagement_comment": "💬 지금 하품 참기 성공하셨나요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 98,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-12T11:27:58.652274+00:00",
+      "topic": "양파는 왜 칼만 보면 사람부터 울릴까",
+      "title": "칼만 대면 눈물 버튼 누르는 양파의 정체",
+      "video_id": "lUDPG9IRtPE",
+      "video_url": "https://www.youtube.com/shorts/lUDPG9IRtPE",
+      "source_url": "https://ko.wikipedia.org/wiki/%EC%96%91%ED%8C%8C",
+      "asset_urls": [
+        "https://www.pexels.com/video/slicing-onion-on-cutting-board-in-sunlight-31479043/",
+        "https://www.pexels.com/video/a-woman-crying-while-wiping-her-tears-8724225/",
+        "https://www.pexels.com/video/home-cooking-in-cozy-kitchen-atmosphere-37848044/"
+      ],
+      "engagement_comment": "💬 양파 썰 때 눈물 흘려본 적 있으신가요?\n한 단어로 답해도 됩니다.",
+      "editorial_score": 92,
       "metrics": {
         "views": 0,
         "likes": 0,
