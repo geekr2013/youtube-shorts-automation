@@ -391,7 +391,7 @@
       "engagement_comment": "💬 여러분은 하늘에서 비행기가 지나간 흔적을 본 적이 있나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 85,
       "metrics": {
-        "views": 5,
+        "views": 9,
         "likes": 0,
         "comments": 0
       }
@@ -450,6 +450,26 @@
       ],
       "engagement_comment": "💬 양파 썰 때 눈물 흘려본 적 있으신가요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 92,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-13T11:27:28.488413+00:00",
+      "topic": "딸꾹질은 왜 중요한 순간에 마이크를 잡을까",
+      "title": "중요한 자리에서 갑자기 딸꾹질이 멈추지 않는 이유",
+      "video_id": "ZZtpxymbUJE",
+      "video_url": "https://www.youtube.com/shorts/ZZtpxymbUJE",
+      "source_url": "https://ko.wikipedia.org/wiki/%EB%94%B8%EA%BE%B9%EC%A7%88",
+      "asset_urls": [
+        "https://www.pexels.com/video/excited-woman-wearing-yellow-shirt-8724462/",
+        "https://www.pexels.com/video/woman-doing-the-lotus-position-7664202/",
+        "https://www.pexels.com/video/people-shaking-hands-after-meeting-7643456/"
+      ],
+      "engagement_comment": "💬 딸꾹질을 멈출 때 물 마시기와 귀 막기 중 무엇을 선호하시나요?\n한 단어로 답해도 됩니다.",
+      "editorial_score": 98,
       "metrics": {
         "views": 0,
         "likes": 0,
