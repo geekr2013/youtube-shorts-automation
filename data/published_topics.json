@@ -391,7 +391,7 @@
       "engagement_comment": "💬 여러분은 하늘에서 비행기가 지나간 흔적을 본 적이 있나요?\n여러분의 경험이나 생각을 댓글로 알려주세요.",
       "editorial_score": 85,
       "metrics": {
-        "views": 9,
+        "views": 11,
         "likes": 0,
         "comments": 0
       }
@@ -469,6 +469,26 @@
         "https://www.pexels.com/video/people-shaking-hands-after-meeting-7643456/"
       ],
       "engagement_comment": "💬 딸꾹질을 멈출 때 물 마시기와 귀 막기 중 무엇을 선호하시나요?\n한 단어로 답해도 됩니다.",
+      "editorial_score": 98,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-14T11:27:15.735977+00:00",
+      "topic": "무지개는 왜 매번 반쪽짜리 프로필 사진만 보여줄까",
+      "title": "무지개는 왜 매번 반쪽짜리 프로필 사진만 보여줄까",
+      "video_id": "F4ErB9Sfgws",
+      "video_url": "https://www.youtube.com/shorts/F4ErB9Sfgws",
+      "source_url": "https://ko.wikipedia.org/wiki/%EB%AC%B4%EC%A7%80%EA%B0%9C",
+      "asset_urls": [
+        "https://www.pexels.com/video/town-and-rainbow-12436334/",
+        "https://www.pexels.com/video/vivid-double-rainbow-over-verdant-forest-28912660/",
+        "https://www.pexels.com/video/a-small-piece-of-paper-with-a-hole-in-it-15829409/"
+      ],
+      "engagement_comment": "💬 쌍무지개를 직접 본 적이 있으신가요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 98,
       "metrics": {
         "views": 0,
