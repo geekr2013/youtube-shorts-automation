@@ -471,7 +471,7 @@
       "engagement_comment": "💬 딸꾹질을 멈출 때 물 마시기와 귀 막기 중 무엇을 선호하시나요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 98,
       "metrics": {
-        "views": 0,
+        "views": 1,
         "likes": 0,
         "comments": 0
       }
@@ -490,6 +490,26 @@
       ],
       "engagement_comment": "💬 쌍무지개를 직접 본 적이 있으신가요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 98,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-15T10:54:46.502869+00:00",
+      "topic": "정전기는 왜 겨울만 되면 손끝에서 시비를 걸까",
+      "title": "문손잡이 잡을 때마다 찌릿하며 시비 거는 녀석의 정체",
+      "video_id": "7eAk2US8qDY",
+      "video_url": "https://www.youtube.com/shorts/7eAk2US8qDY",
+      "source_url": "https://ko.wikipedia.org/wiki/%EC%A0%95%EC%A0%84%EA%B8%B0",
+      "asset_urls": [
+        "https://www.pexels.com/video/plasma-ball-against-blue-background-10186775/",
+        "https://www.pexels.com/video/a-smiling-woman-dancing-alone-10198573/",
+        "https://www.pexels.com/video/a-man-putting-a-comb-in-his-afro-hair-7451432/"
+      ],
+      "engagement_comment": "💬 여러분은 정전기 불꽃을 보면 놀라시나요, 아니면 덤덤하시나요?\n한 단어로 답해도 됩니다.",
+      "editorial_score": 96,
       "metrics": {
         "views": 0,
         "likes": 0,
