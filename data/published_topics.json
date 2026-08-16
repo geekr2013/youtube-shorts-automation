@@ -471,7 +471,7 @@
       "engagement_comment": "💬 딸꾹질을 멈출 때 물 마시기와 귀 막기 중 무엇을 선호하시나요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 98,
       "metrics": {
-        "views": 1,
+        "views": 2,
         "likes": 0,
         "comments": 0
       }
@@ -510,6 +510,26 @@
       ],
       "engagement_comment": "💬 여러분은 정전기 불꽃을 보면 놀라시나요, 아니면 덤덤하시나요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 96,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-16T10:54:10.252431+00:00",
+      "topic": "태풍의 눈은 왜 난리 한가운데 혼자 평온할까",
+      "title": "태풍의 눈은 왜 난리 속에서 혼자 평온할까?",
+      "video_id": "z8S_k_BCxgs",
+      "video_url": "https://www.youtube.com/shorts/z8S_k_BCxgs",
+      "source_url": "https://ko.wikipedia.org/wiki/%ED%83%9C%ED%92%8D",
+      "asset_urls": [
+        "https://www.pexels.com/video/overcast-sky-with-gray-clouds-11565218/",
+        "https://www.pexels.com/video/aerial-view-of-airplane-shadow-on-clouds-28699824/",
+        "https://www.pexels.com/video/serene-ocean-view-with-dramatic-clouds-31705190/"
+      ],
+      "engagement_comment": "💬 태풍의 눈 속에 직접 들어가 보고 싶으신가요?\n한 단어로 답해도 됩니다.",
+      "editorial_score": 100,
       "metrics": {
         "views": 0,
         "likes": 0,
