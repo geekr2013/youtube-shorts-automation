@@ -535,6 +535,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-17T11:03:06.059908+00:00",
+      "topic": "모기는 왜 사람 많은데 꼭 나를 고를까",
+      "title": "방에 사람도 많은데 왜 꼭 나만 물리는 걸까?",
+      "video_id": "0jccgUJmSdk",
+      "video_url": "https://www.youtube.com/shorts/0jccgUJmSdk",
+      "source_url": "https://ko.wikipedia.org/wiki/%EB%AA%A8%EA%B8%B0",
+      "asset_urls": [
+        "https://www.pexels.com/video/grass-growing-in-the-sand-with-the-words-grass-growing-in-the-sand-25252204/",
+        "https://www.pexels.com/video/close-up-view-of-a-couple-s-hands-13770850/",
+        "https://www.pexels.com/video/body-painting-a-woman-s-arm-3795303/"
+      ],
+      "engagement_comment": "💬 모기한테 더 자주 물리시나요, 덜 물리시나요?\n한 단어로 답해도 됩니다.",
+      "editorial_score": 98,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
