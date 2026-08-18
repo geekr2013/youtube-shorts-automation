@@ -555,6 +555,26 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-18T11:01:10.133917+00:00",
+      "topic": "방귀는 왜 조용한 곳에서 존재감이 커질까",
+      "title": "조용한 회의실에서 방귀 소리가 유독 우렁찬 이유",
+      "video_id": "xMW2zlmqR4I",
+      "video_url": "https://www.youtube.com/shorts/xMW2zlmqR4I",
+      "source_url": "https://ko.wikipedia.org/wiki/%EB%B0%A9%EA%B7%80",
+      "asset_urls": [
+        "https://www.pexels.com/video/people-pointing-on-a-man-7640109/",
+        "https://www.pexels.com/video/majestic-hot-air-balloons-over-cappadocia-28731600/",
+        "https://www.pexels.com/video/a-happy-couple-holding-hands-while-talking-and-laughing-13335633/"
+      ],
+      "engagement_comment": "💬 소리 큰 방귀 대 냄새 독한 방귀, 무엇이 더 참기 힘든가요?\n한 단어로 답해도 됩니다.",
+      "editorial_score": 98,
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
