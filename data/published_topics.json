@@ -575,6 +575,27 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-19T11:03:34.321071+00:00",
+      "content_format": "pilates-hana-v1",
+      "routine_id": "balance-control",
+      "topic": "균형 잡는 코어",
+      "title": "균형 잡는 코어 | BALANCE & CONTROL",
+      "instructor_id": "hana-v1",
+      "video_id": "0tmNICKK6kg",
+      "video_url": "https://www.youtube.com/shorts/0tmNICKK6kg",
+      "exercise_slugs": [
+        "bird-dog",
+        "dead-bug",
+        "ring-side-bend"
+      ],
+      "engagement_comment": "💬 균형 동작에서 어느 방향이 더 흔들렸나요?\n무리하지 않은 범위에서 알려주세요.",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
