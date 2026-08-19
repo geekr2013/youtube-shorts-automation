@@ -111,6 +111,7 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn(first.cue_en, content)
         self.assertIn(r"\pos(48,210)", content)
         self.assertIn(r"\pos(540,820)", content)
+        self.assertIn("NanumGothic", content)
         self.assertNotRegex(content, r"\\pos\([^,]+,1[5-9]\d{2}\)")
         self.assertEqual(metadata["language_mode"], "ko+en")
 
