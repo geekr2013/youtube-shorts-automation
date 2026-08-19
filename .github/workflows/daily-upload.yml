@@ -1,4 +1,4 @@
-name: Daily Original Knowledge Short
+name: Daily Hana Pilates Short
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
       - 'requirements.txt'
       - 'src/**'
       - 'tests/**'
+      - 'assets/instructor/**'
       - 'data/launch_request.json'
   schedule:
     # 매일 한국 시간 19:35 (UTC 10:35)
@@ -23,7 +24,6 @@ on:
 permissions:
   actions: read
   contents: write
-  models: read
 
 concurrency:
   group: daily-original-knowledge-short
@@ -34,11 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      GITHUB_MODELS_TOKEN: ${{ github.token }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
       YOUTUBE_DATA_API_KEY: ${{ secrets.YOUTUBE_DATA_API_KEY }}
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
       YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
@@ -124,7 +121,7 @@ jobs:
         if: ${{ always() && github.ref == 'refs/heads/main' }}
         run: |
           git config user.email "action@github.com"
-          git config user.name "Original Shorts Bot"
+          git config user.name "Hana Pilates Bot"
           git add data/published_topics.json data/automation_status.json
           git diff --cached --quiet || git commit -m "Update Shorts performance data [skip ci]"
           git pull --rebase origin main

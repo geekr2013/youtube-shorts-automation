@@ -14,6 +14,23 @@ LOGGER = logging.getLogger("publish-preview")
 
 
 def build_preview_description(metadata: Dict[str, Any]) -> str:
+    if metadata.get("content_format") == "pilates-hana-v1":
+        exercises = metadata.get("exercises") or []
+        lines = [
+            f"{index}. {item.get('name_ko', '')} / {item.get('name_en', '')} — {item.get('prescription_ko', '')}"
+            for index, item in enumerate(exercises, start=1)
+        ]
+        engagement = str(metadata.get("engagement_comment") or "").strip()
+        return (
+            f"{metadata.get('title', '하나 필라테스')}\n\n"
+            + "\n".join(lines)
+            + "\n\n통증, 어지러움 또는 불편함이 느껴지면 즉시 중단하세요. "
+            "개인 건강 상태에 따라 의료진 또는 자격을 갖춘 지도자와 상담하세요.\n\n"
+            "영상 속 인물은 AI로 만든 가상 성인 강사이며 실제 인물이 아닙니다. "
+            "검수된 동일 인물 자세 자산과 한국어 여성 안내 음성, 한·영 자막으로 제작했습니다.\n\n"
+            + (f"{engagement}\n\n" if engagement else "")
+            + "#shorts #필라테스 #홈트 #Pilates #Workout"
+        )
     source = metadata.get("source") or {}
     credits = []
     seen = set()
@@ -78,14 +95,18 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         video_path,
         title=f"{metadata['title']} #shorts",
         description=build_preview_description(metadata),
-        tags=["shorts", "지식쇼츠", *metadata.get("tags", [])],
+        tags=["shorts", *metadata.get("tags", [])],
         privacy="public",
+        category_id="26" if metadata.get("content_format") == "pilates-hana-v1" else "27",
     )
 
     record = {
         "published_at": datetime.now(timezone.utc).isoformat(),
         "topic": metadata.get("topic", ""),
         "title": metadata.get("title", ""),
+        "content_format": metadata.get("content_format", ""),
+        "routine_id": metadata.get("routine_id", ""),
+        "instructor_id": (metadata.get("instructor") or {}).get("id", ""),
         "video_id": result["video_id"],
         "video_url": result["video_url"],
         "source_url": (metadata.get("source") or {}).get("url", ""),
@@ -106,7 +127,7 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         encoding="utf-8",
     )
     send_notification(
-        f"[지식 쇼츠] 테스트 영상 공개 완료 - {metadata.get('title', '')}",
+        f"[쇼츠] 테스트 영상 공개 완료 - {metadata.get('title', '')}",
         f"영상: {result['video_url']}\n\n"
         f"고정 댓글 추천 문구:\n{metadata.get('engagement_comment', '')}",
     )
