@@ -83,6 +83,7 @@ class YouTubeUploader:
         description: str,
         tags: List[str],
         privacy: str = "public",
+        category_id: str = "26",
     ) -> Dict[str, str]:
         if not video_path.exists():
             raise FileNotFoundError(video_path)
@@ -91,14 +92,14 @@ class YouTubeUploader:
                 "title": title[:100],
                 "description": description.encode("utf-8")[:4900].decode("utf-8", errors="ignore"),
                 "tags": tags[:15],
-                "categoryId": "27",  # Education
+                "categoryId": category_id,  # Howto & Style for Pilates guidance
                 "defaultLanguage": "ko",
                 "defaultAudioLanguage": "ko",
             },
             "status": {
                 "privacyStatus": privacy,
                 "selfDeclaredMadeForKids": False,
-                # AI 음성을 사용하므로 보수적으로 공개한다. 공개 자체는 수익화 자격을 제한하지 않는다.
+                # 사실적으로 보이는 가상 강사와 AI 음성을 사용하므로 반드시 공개한다.
                 "containsSyntheticMedia": True,
             },
         }

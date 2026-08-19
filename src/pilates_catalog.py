@@ -1,0 +1,180 @@
+"""검수된 필라테스 동작과 장기 순환용 루틴 목록."""
+
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Sequence, Tuple
+
+
+ROOT = Path(__file__).resolve().parents[1]
+INSTRUCTOR_ID = "hana-v1"
+INSTRUCTOR_NAME_KO = "하나"
+INSTRUCTOR_NAME_EN = "HANA"
+POSE_DIR = ROOT / "assets" / "instructor" / "poses"
+
+
+@dataclass(frozen=True)
+class Exercise:
+    slug: str
+    name_ko: str
+    name_en: str
+    pose_file: str
+    prescription_ko: str
+    prescription_en: str
+    cue_ko: str
+    cue_en: str
+    voice_ko: str
+    equipment: str = "매트"
+
+    @property
+    def pose_path(self) -> Path:
+        return POSE_DIR / self.pose_file
+
+
+@dataclass(frozen=True)
+class Routine:
+    routine_id: str
+    title_ko: str
+    title_en: str
+    intro_ko: str
+    exercise_slugs: Tuple[str, str, str]
+    engagement_question: str
+
+
+EXERCISES: Dict[str, Exercise] = {
+    "dead-bug": Exercise(
+        slug="dead-bug",
+        name_ko="데드버그",
+        name_en="DEAD BUG",
+        pose_file="dead-bug.jpg",
+        prescription_ko="좌우 여섯 번씩",
+        prescription_en="6 EACH SIDE",
+        cue_ko="허리가 뜨지 않게",
+        cue_en="KEEP YOUR BACK HEAVY",
+        voice_ko="허리가 뜨지 않게, 내쉬며 좌우 여섯 번씩 움직여요.",
+    ),
+    "glute-bridge": Exercise(
+        slug="glute-bridge",
+        name_ko="브릿지",
+        name_en="GLUTE BRIDGE",
+        pose_file="glute-bridge.jpg",
+        prescription_ko="여덟 번",
+        prescription_en="8 REPS",
+        cue_ko="무릎은 나란히 유지",
+        cue_en="KEEP KNEES PARALLEL",
+        voice_ko="무릎을 나란히 두고, 내쉬며 골반을 여덟 번 들어 올려요.",
+    ),
+    "bird-dog": Exercise(
+        slug="bird-dog",
+        name_ko="버드독",
+        name_en="BIRD DOG",
+        pose_file="bird-dog.jpg",
+        prescription_ko="좌우 다섯 번씩",
+        prescription_en="5 EACH SIDE",
+        cue_ko="골반은 바닥과 평행",
+        cue_en="KEEP HIPS LEVEL",
+        voice_ko="골반이 돌아가지 않게, 팔과 반대쪽 다리를 좌우 다섯 번씩 뻗어요.",
+    ),
+    "side-leg-lift": Exercise(
+        slug="side-leg-lift",
+        name_ko="사이드 레그 리프트",
+        name_en="SIDE LEG LIFT",
+        pose_file="side-leg-lift.jpg",
+        prescription_ko="좌우 여덟 번씩",
+        prescription_en="8 EACH SIDE",
+        cue_ko="골반은 포개서 고정",
+        cue_en="STACK YOUR HIPS",
+        voice_ko="골반을 포개어 고정하고, 위쪽 다리를 좌우 여덟 번씩 들어요.",
+    ),
+    "spine-twist": Exercise(
+        slug="spine-twist",
+        name_ko="스파인 트위스트",
+        name_en="SPINE TWIST",
+        pose_file="spine-twist.jpg",
+        prescription_ko="좌우 다섯 번씩",
+        prescription_en="5 EACH SIDE",
+        cue_ko="허리를 길게 세우기",
+        cue_en="SIT TALL",
+        voice_ko="허리를 길게 세우고, 내쉬며 상체를 좌우 다섯 번씩 돌려요.",
+    ),
+    "ring-side-bend": Exercise(
+        slug="ring-side-bend",
+        name_ko="링 사이드 밴드",
+        name_en="RING SIDE BEND",
+        pose_file="ring-side-bend.jpg",
+        prescription_ko="좌우 다섯 번씩",
+        prescription_en="5 EACH SIDE",
+        cue_ko="골반은 가운데 고정",
+        cue_en="KEEP HIPS CENTERED",
+        voice_ko="링을 머리 위로 들고, 골반을 가운데 둔 채 좌우 다섯 번씩 기울여요.",
+        equipment="필라테스 링",
+    ),
+    "modified-plank": Exercise(
+        slug="modified-plank",
+        name_ko="무릎 플랭크",
+        name_en="KNEE PLANK",
+        pose_file="modified-plank.jpg",
+        prescription_ko="스무 초",
+        prescription_en="20 SECONDS",
+        cue_ko="어깨 아래 팔꿈치",
+        cue_en="ELBOWS UNDER SHOULDERS",
+        voice_ko="어깨 아래에 팔꿈치를 두고, 머리부터 무릎까지 길게 스무 초 버텨요.",
+    ),
+}
+
+
+ROUTINES: Tuple[Routine, ...] = (
+    Routine("morning-core", "아침 코어 깨우기", "MORNING CORE", "굳은 몸을 깨우는 초급 코어 세 동작입니다.", ("dead-bug", "bird-dog", "glute-bridge"), "아침 운동과 저녁 운동 중 언제가 더 편한가요?"),
+    Routine("hip-stability", "골반 안정 루틴", "HIP STABILITY", "골반을 안정적으로 쓰는 세 동작을 이어갑니다.", ("glute-bridge", "side-leg-lift", "bird-dog"), "브릿지와 버드독 중 어느 동작이 더 어려웠나요?"),
+    Routine("desk-reset", "앉아 있던 몸 리셋", "DESK RESET", "오래 앉아 있던 날 가볍게 움직이는 세 동작입니다.", ("ring-side-bend", "spine-twist", "bird-dog"), "오늘 의자에 몇 시간 정도 앉아 있었나요?"),
+    Routine("beginner-core", "초보 코어 삼종 세트", "BEGINNER CORE", "처음 시작하기 좋은 코어 세 동작입니다.", ("dead-bug", "modified-plank", "glute-bridge"), "세 동작 중 저장해두고 싶은 동작은 무엇인가요?"),
+    Routine("no-jump", "층간소음 없는 홈트", "NO-JUMP PILATES", "점프 없이 조용하게 이어가는 세 동작입니다.", ("bird-dog", "glute-bridge", "modified-plank"), "집에서 가장 자주 운동하는 시간대는 언제인가요?"),
+    Routine("side-line", "옆라인 컨트롤", "SIDE-LINE CONTROL", "옆면과 중심을 함께 조절하는 세 동작입니다.", ("side-leg-lift", "ring-side-bend", "modified-plank"), "왼쪽과 오른쪽 중 어느 쪽이 더 어려웠나요?"),
+    Routine("evening-gentle", "저녁의 부드러운 코어", "EVENING CORE", "하루 끝에 힘을 과하게 쓰지 않는 세 동작입니다.", ("spine-twist", "dead-bug", "glute-bridge"), "운동 후 가장 편안해진 부위는 어디인가요?"),
+    Routine("balance-control", "균형 잡는 코어", "BALANCE & CONTROL", "흔들림을 줄이고 천천히 조절하는 세 동작입니다.", ("bird-dog", "dead-bug", "ring-side-bend"), "균형 동작에서 어느 방향이 더 흔들렸나요?"),
+    Routine("mat-essential", "매트 필라테스 기본", "MAT ESSENTIALS", "매트 한 장으로 연습하는 기본 세 동작입니다.", ("glute-bridge", "spine-twist", "dead-bug"), "매트 운동은 맨발과 양말 중 어느 쪽을 선호하나요?"),
+    Routine("posture-flow", "상체 정렬 플로우", "POSTURE FLOW", "상체를 길게 세우는 감각에 집중하는 세 동작입니다.", ("spine-twist", "ring-side-bend", "bird-dog"), "오늘 가장 시원하게 느껴진 동작은 무엇인가요?"),
+)
+
+
+def select_routine(records: Iterable[Dict[str, Any]], today: date | None = None) -> Routine:
+    """최근 다섯 편과 겹치지 않는 루틴을 날짜 기반으로 안정적으로 선택한다."""
+    recent = [str(item.get("routine_id") or "") for item in list(records)[-5:]]
+    available = [routine for routine in ROUTINES if routine.routine_id not in recent]
+    candidates = available or list(ROUTINES)
+    day = today or date.today()
+    return candidates[day.toordinal() % len(candidates)]
+
+
+def routine_exercises(routine: Routine) -> List[Exercise]:
+    return [EXERCISES[slug] for slug in routine.exercise_slugs]
+
+
+def build_narration(routine: Routine) -> str:
+    movements = routine_exercises(routine)
+    order = ("첫 번째", "두 번째", "마지막")
+    sentences = [routine.intro_ko]
+    for label, exercise in zip(order, movements):
+        sentences.append(f"{label}, {exercise.name_ko}. {exercise.voice_ko}")
+    sentences.append("호흡은 편안하게 이어가고, 통증이 느껴지면 바로 멈추세요.")
+    return " ".join(sentences)
+
+
+def validate_routine(routine: Routine) -> None:
+    if len(routine.exercise_slugs) != 3 or len(set(routine.exercise_slugs)) != 3:
+        raise ValueError("한 루틴에는 서로 다른 동작 세 개가 필요합니다.")
+    narration = build_narration(routine)
+    if any(character.isdigit() for character in narration):
+        raise ValueError("한국어 내레이션에는 숫자 표기를 사용할 수 없습니다.")
+    blocked = ("치료", "완치", "통증 제거", "살이 빠", "지방 제거")
+    if any(term in narration for term in blocked):
+        raise ValueError("의료 또는 과장 효과 표현을 사용할 수 없습니다.")
+    for exercise in routine_exercises(routine):
+        if not exercise.pose_path.exists() or exercise.pose_path.stat().st_size < 100_000:
+            raise FileNotFoundError(f"검수된 자세 이미지가 없습니다: {exercise.pose_path}")
+        if not all((exercise.name_ko, exercise.name_en, exercise.cue_ko, exercise.cue_en)):
+            raise ValueError(f"한·영 안내가 누락되었습니다: {exercise.slug}")
+
+
+def all_pose_paths() -> Sequence[Path]:
+    return tuple(exercise.pose_path for exercise in EXERCISES.values())

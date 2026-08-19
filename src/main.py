@@ -1,4 +1,4 @@
-"""원본 한국어 B급 교양 예능 쇼츠를 매일 한 편 생성하고 업로드한다."""
+"""고정된 가상 강사 하나의 필라테스 쇼츠를 매일 한 편 제작·업로드한다."""
 
 import argparse
 import json
@@ -10,15 +10,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ai_writer import GeminiWriter
-from knowledge import research_exact_topic
-from media_provider import StockMediaProvider
 from metrics import fetch_video_metrics, update_records
 from notifier import send_notification
-from quality import QualityGateError, source_is_relevant, validate_package
-from topic_catalog import eligible_topic_plans
-from trend_scout import fetch_youtube_trends, top_performing_topics
-from video_renderer import media_duration, render_short, split_caption_chunks
+from pilates_catalog import (
+    INSTRUCTOR_ID,
+    INSTRUCTOR_NAME_EN,
+    INSTRUCTOR_NAME_KO,
+    build_narration,
+    routine_exercises,
+    select_routine,
+    validate_routine,
+)
+from pilates_renderer import media_duration, render_pilates_short
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
@@ -26,16 +30,17 @@ STATE_PATH = DATA_DIR / "published_topics.json"
 WORK_DIR = DATA_DIR / "work"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
-LOGGER = logging.getLogger("original-shorts")
+LOGGER = logging.getLogger("pilates-shorts")
 
 
 def load_state() -> Dict[str, Any]:
     if not STATE_PATH.exists():
-        return {"version": 1, "videos": []}
+        return {"version": 2, "videos": []}
     try:
         data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
         if not isinstance(data.get("videos"), list):
             raise ValueError("videos가 목록이 아님")
+        data["version"] = max(2, int(data.get("version", 1)))
         return data
     except Exception as exc:
         raise RuntimeError(f"운영 상태 파일을 읽지 못했습니다: {exc}") from exc
@@ -43,96 +48,57 @@ def load_state() -> Dict[str, Any]:
 
 def save_state(state: Dict[str, Any]) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def check_configuration(for_upload: bool) -> List[str]:
-    missing = []
-    required = ["YOUTUBE_DATA_API_KEY"]
-    if not (
-        os.getenv("GITHUB_MODELS_TOKEN")
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("GOOGLE_API_KEY")
-    ):
-        missing.append("GitHub Models 또는 Gemini 인증 정보")
-    if not (os.getenv("PEXELS_API_KEY") or os.getenv("PIXABAY_API_KEY")):
-        missing.append("PEXELS_API_KEY 또는 PIXABAY_API_KEY")
+    missing: List[str] = []
     if for_upload:
-        required.extend(
-            ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"]
-        )
-    missing.extend(name for name in required if not os.getenv(name))
+        required = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
+        missing.extend(name for name in required if not os.getenv(name))
     return missing
 
 
-def build_description(script, source, clips) -> str:
-    credits = []
-    seen = set()
-    for clip in clips:
-        key = (clip.provider, clip.source_url)
-        if key in seen:
-            continue
-        seen.add(key)
-        creator = f" / {clip.creator}" if clip.creator else ""
-        credits.append(f"- {clip.provider}{creator}: {clip.source_url}")
-    hashtags = " ".join(f"#{tag.replace(' ', '')}" for tag in script.tags[:5])
-    caption_note = (
-        "한글과 영어 자막을 함께 제공합니다."
-        if script.caption_translations
-        else "한글 자막을 제공합니다."
-    )
+def build_title(routine) -> str:
+    return f"{routine.title_ko} | {routine.title_en}"
+
+
+def build_engagement_comment(routine) -> str:
+    return f"💬 {routine.engagement_question}\n무리하지 않은 범위에서 알려주세요."
+
+
+def build_description(routine) -> str:
+    exercises = routine_exercises(routine)
+    movement_lines = [
+        f"{index}. {item.name_ko} / {item.name_en} — {item.prescription_ko}"
+        for index, item in enumerate(exercises, start=1)
+    ]
     return (
-        f"{script.description_intro}\n\n"
-        f"검증 자료: {source.title}\n{source.url}\n"
-        f"위키백과 텍스트 라이선스: {source.license_name}\n\n"
-        "영상 자료 출처(각 제공처 라이선스 적용):\n"
-        + "\n".join(credits)
-        + "\n\nAI 도구를 주제 정리, B급 교양 예능 대본 작성 보조, 내레이션 제작에 사용했으며 "
-        "공개된 검증 자료 범위와 안전 기준을 자동 확인했습니다. "
-        "청취를 방해하는 합성 배경음 없이 내레이션 중심으로 제작했습니다. "
-        f"{caption_note}\n\n"
-        f"댓글 질문: {script.engagement_question}\n\n"
-        f"#shorts #한입지식 #웃긴지식 {hashtags}"
+        f"{routine.intro_ko}\n\n"
+        + "\n".join(movement_lines)
+        + "\n\n호흡을 멈추지 말고 천천히 진행하세요. 통증, 어지러움 또는 불편함이 느껴지면 즉시 중단하세요. "
+        "부상, 질환, 임신 등 개인 상황이 있다면 운동 전에 의료진 또는 자격을 갖춘 지도자와 상담하세요.\n\n"
+        f"강사 캐릭터: {INSTRUCTOR_NAME_KO} / {INSTRUCTOR_NAME_EN}\n"
+        "영상 속 인물은 AI로 만든 가상 성인 강사이며 실제 인물이 아닙니다. "
+        "운동 자세 이미지는 매일 새로 생성하지 않고 검수된 동일 인물 자산만 사용합니다.\n"
+        "배경음악 없이 한국어 여성 안내 음성과 한·영 자막으로 제작했습니다.\n\n"
+        f"댓글 질문: {routine.engagement_question}\n\n"
+        "#shorts #필라테스 #홈트 #Pilates #Workout"
     )
 
 
-def build_engagement_comment(script) -> str:
-    return f"💬 {script.engagement_question}\n한 단어로 답해도 됩니다."
-
-
-def write_preview_metadata(path: Path, payload: Dict[str, Any]) -> None:
+def write_metadata(path: Path, payload: Dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def create_editorial_script(writer, plan, source, recent_topics):
-    """작가 작성과 독립 편집 검수를 최대 두 번 수행한다."""
-    feedback = []
-    last_reason = "편집 검수를 통과하지 못했습니다."
-    for attempt in range(2):
-        try:
-            script = writer.write_script(plan, source, editorial_feedback=feedback)
-            validate_package(plan, script, source, recent_topics)
-        except QualityGateError as exc:
-            last_reason = str(exc)
-            feedback = [last_reason]
-            LOGGER.warning("자동 품질 기준 미달로 대본을 다시 작성합니다(%s/2): %s", attempt + 1, exc)
-            continue
-        review = writer.review_script(plan, source, script)
-        if review["approved"]:
-            return script, review
-        last_reason = ", ".join(review["issues"][:3]) or f"편집 점수 {review['score']}점"
-        feedback = review["issues"] or [
-            "검증 자료에 직접 근거한 사실만 남기고 문장을 더 자연스럽고 구체적으로 다듬으세요."
-        ]
-        LOGGER.warning(
-            "편집자 검수 미달로 대본을 다시 작성합니다(%s/2): %s점 / %s",
-            attempt + 1,
-            review["score"],
-            last_reason,
-        )
-    raise QualityGateError("최종 편집 검수를 통과하지 못했습니다: " + last_reason)
+def _refresh_metrics(records: List[Dict[str, Any]]) -> None:
+    api_key = os.getenv("YOUTUBE_DATA_API_KEY", "").strip()
+    if not api_key:
+        return
+    metrics = fetch_video_metrics(api_key, [str(item.get("video_id") or "") for item in records])
+    if metrics and update_records(records, metrics):
+        save_state({"version": 2, "videos": records})
+        LOGGER.info("기존 영상 성과를 갱신했습니다.")
 
 
 def run(dry_run: bool = False) -> Dict[str, Any]:
@@ -142,166 +108,107 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
 
     state = load_state()
     records: List[Dict[str, Any]] = state["videos"]
-    data_api_key = os.environ["YOUTUBE_DATA_API_KEY"]
-
-    metrics = fetch_video_metrics(data_api_key, [item.get("video_id", "") for item in records])
-    if update_records(records, metrics):
-        save_state(state)
-        LOGGER.info("기존 영상 성과를 갱신했습니다.")
+    _refresh_metrics(records)
 
     if WORK_DIR.exists():
         resolved = WORK_DIR.resolve()
         if DATA_DIR.resolve() not in resolved.parents:
             raise RuntimeError("작업 폴더 안전 확인에 실패했습니다.")
         shutil.rmtree(WORK_DIR)
-    media_dir = WORK_DIR / "media"
     render_dir = WORK_DIR / "render"
-    media_dir.mkdir(parents=True, exist_ok=True)
     render_dir.mkdir(parents=True, exist_ok=True)
 
-    recent_topics = [item.get("topic", "") for item in records[-12:] if item.get("topic")]
-    trends = fetch_youtube_trends(data_api_key)
-    writer = GeminiWriter()
-    top_topics = top_performing_topics(records)
-    candidate_pool = eligible_topic_plans(recent_topics)
-    ranked_candidates = writer.rank_topics(
-        trends,
-        recent_topics,
-        top_topics,
-        candidate_pool,
-        limit=min(8, len(candidate_pool)),
-    )
-    plan = None
-    source = None
-    script = None
-    editorial_review = None
-    for topic_attempt, candidate in enumerate(ranked_candidates, start=1):
-        LOGGER.info("선정 주제: %s (%s)", candidate.topic, candidate.trend_reason)
-        try:
-            candidate_source = research_exact_topic(candidate.wiki_query)
-        except Exception as exc:
-            LOGGER.warning("검증 문서 직접 조회 실패(%s): %s", candidate.wiki_query, exc)
-            continue
-        if not source_is_relevant(candidate, candidate_source):
-            LOGGER.warning("등록된 주제와 검증 문서가 일치하지 않습니다: %s", candidate_source.title)
-            continue
-        try:
-            candidate_script, candidate_review = create_editorial_script(
-                writer,
-                candidate,
-                candidate_source,
-                recent_topics,
-            )
-        except Exception as exc:
-            LOGGER.warning("주제 편집 실패로 다음 검증 후보를 시도합니다(%s): %s", topic_attempt, exc)
-            continue
-        plan = candidate
-        source = candidate_source
-        script = candidate_script
-        editorial_review = candidate_review
-        if plan is not None:
-            break
-    if plan is None or source is None or script is None or editorial_review is None:
-        raise QualityGateError("검증 자료와 최종 편집 기준을 모두 통과한 주제를 만들지 못했습니다.")
-
-    caption_chunks = split_caption_chunks(script.narration)
-    try:
-        script.caption_translations = writer.translate_caption_chunks(caption_chunks)
-    except Exception as exc:
-        # 번역 쿼터나 일시 장애가 한국어 영상 전체의 업로드를 막지는 않도록 한다.
-        script.caption_translations = []
-        LOGGER.warning("영문 자막 생성 실패로 한글 자막만 사용합니다: %s", exc)
-
-    provider = StockMediaProvider()
-    clips = provider.fetch_clips(plan.stock_queries, media_dir, limit=4)
-    final_video = render_short(
-        clips,
-        script.narration,
-        render_dir,
-        caption_translations=script.caption_translations,
-    )
+    routine = select_routine(records)
+    validate_routine(routine)
+    LOGGER.info("선정 루틴: %s / %s", routine.title_ko, routine.title_en)
+    final_video = render_pilates_short(routine, render_dir)
     duration = media_duration(final_video)
-    audio_metadata_path = render_dir / "audio_metadata.json"
-    audio_metadata = json.loads(audio_metadata_path.read_text(encoding="utf-8"))
-    caption_metadata_path = render_dir / "caption_metadata.json"
-    caption_metadata = json.loads(caption_metadata_path.read_text(encoding="utf-8"))
-    description = build_description(script, source, clips)
-    metadata = {
-        "topic": plan.topic,
-        "title": script.title,
-        "hook": script.hook,
-        "comedy_beat": script.comedy_beat,
-        "midpoint_hook": script.midpoint_hook,
-        "closing_loop": script.closing_loop,
-        "engagement_comment": build_engagement_comment(script),
-        "duration_seconds": round(duration, 2),
-        "source": {"title": source.title, "url": source.url, "license": source.license_name},
-        "editorial_review": editorial_review,
-        "source_strategy": "curated exact-title Wikipedia document",
-        "format": {
-            "version": "bgrade-edutainment-v1",
-            "audience_angle": plan.audience_angle,
-            "comedy_angle": plan.comedy_angle,
-            "tone": "deadpan everyday humor with verified fact payoff",
+    audio_metadata = json.loads((render_dir / "audio_metadata.json").read_text(encoding="utf-8"))
+    caption_metadata = json.loads((render_dir / "caption_metadata.json").read_text(encoding="utf-8"))
+    exercises = routine_exercises(routine)
+    metadata: Dict[str, Any] = {
+        "content_format": "pilates-hana-v1",
+        "routine_id": routine.routine_id,
+        "topic": routine.title_ko,
+        "title": build_title(routine),
+        "instructor": {
+            "id": INSTRUCTOR_ID,
+            "name_ko": INSTRUCTOR_NAME_KO,
+            "name_en": INSTRUCTOR_NAME_EN,
+            "identity_locked": True,
+            "adult_age": 25,
+            "synthetic": True,
         },
-        "stock_assets": [
-            {"provider": item.provider, "creator": item.creator, "url": item.source_url}
-            for item in clips
+        "exercises": [
+            {
+                "slug": item.slug,
+                "name_ko": item.name_ko,
+                "name_en": item.name_en,
+                "prescription_ko": item.prescription_ko,
+                "prescription_en": item.prescription_en,
+                "cue_ko": item.cue_ko,
+                "cue_en": item.cue_en,
+                "equipment": item.equipment,
+                "asset": item.pose_path.relative_to(ROOT).as_posix(),
+            }
+            for item in exercises
         ],
-        "tags": script.tags,
+        "narration": build_narration(routine),
+        "engagement_comment": build_engagement_comment(routine),
+        "duration_seconds": round(duration, 2),
         "audio": audio_metadata,
-        "captions": {
-            **caption_metadata,
-            "translation_count": len(script.caption_translations),
-        },
+        "captions": caption_metadata,
+        "safety": {"medical_claims": False, "stop_on_pain": True, "beginner_intensity": True},
+        "tags": ["필라테스", "홈트", "코어운동", "Pilates", "Workout"],
         "dry_run": dry_run,
     }
-    write_preview_metadata(WORK_DIR / "metadata.json", metadata)
+    write_metadata(WORK_DIR / "metadata.json", metadata)
 
     if dry_run:
         LOGGER.info("건식 실행 완료: 업로드하지 않았습니다.")
         return metadata
 
-    # 설정 점검과 건식 실행은 YouTube 인증 패키지를 불러오지 않아도 된다.
     from youtube_uploader import YouTubeUploader
 
     uploader = YouTubeUploader()
     result = uploader.upload_video(
         final_video,
-        title=f"{script.title} #shorts",
-        description=description,
-        tags=["shorts", "한입지식", "웃긴지식", *script.tags],
+        title=f"{build_title(routine)} #shorts",
+        description=build_description(routine),
+        tags=["shorts", "필라테스", "홈트", "코어운동", "Pilates", "Workout"],
         privacy=os.getenv("YOUTUBE_PRIVACY", "public"),
+        category_id="26",
     )
-    now = datetime.now(timezone.utc).isoformat()
     record = {
-        "published_at": now,
-        "topic": plan.topic,
-        "title": script.title,
+        "published_at": datetime.now(timezone.utc).isoformat(),
+        "content_format": "pilates-hana-v1",
+        "routine_id": routine.routine_id,
+        "topic": routine.title_ko,
+        "title": build_title(routine),
+        "instructor_id": INSTRUCTOR_ID,
         "video_id": result["video_id"],
         "video_url": result["video_url"],
-        "source_url": source.url,
-        "asset_urls": [item.source_url for item in clips],
-        "engagement_comment": build_engagement_comment(script),
-        "editorial_score": editorial_review["score"],
+        "exercise_slugs": list(routine.exercise_slugs),
+        "engagement_comment": build_engagement_comment(routine),
         "metrics": {"views": 0, "likes": 0, "comments": 0},
     }
     records.append(record)
+    state["version"] = 2
     state["videos"] = records[-365:]
     save_state(state)
-    write_preview_metadata(WORK_DIR / "metadata.json", {**metadata, **result, "dry_run": False})
+    completed = {**metadata, **result, "dry_run": False}
+    write_metadata(WORK_DIR / "metadata.json", completed)
     send_notification(
-        f"[한입지식 쇼츠] 업로드 완료 - {script.title}",
-        f"주제: {plan.topic}\n영상: {result['video_url']}\n출처: {source.url}\n\n"
-        f"고정 댓글 추천 문구:\n{build_engagement_comment(script)}",
+        f"[하나 필라테스] 업로드 완료 - {routine.title_ko}",
+        f"영상: {result['video_url']}\n\n고정 댓글 추천 문구:\n{build_engagement_comment(routine)}",
     )
-    return {**metadata, **result}
+    return completed
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="원본 AI B급 교양 예능 쇼츠 자동화")
+    parser = argparse.ArgumentParser(description="하나 필라테스 쇼츠 자동화")
     parser.add_argument("--dry-run", action="store_true", help="영상만 만들고 업로드하지 않음")
-    parser.add_argument("--check-config", action="store_true", help="비밀키 이름만 점검")
+    parser.add_argument("--check-config", action="store_true", help="필수 설정 이름만 점검")
     return parser.parse_args()
 
 
@@ -312,17 +219,16 @@ def main() -> int:
             missing = check_configuration(for_upload=not args.dry_run)
             if missing:
                 raise RuntimeError("GitHub Secrets 누락: " + ", ".join(missing))
-            LOGGER.info("필수 GitHub Secrets 이름 확인 완료")
+            LOGGER.info("필수 설정 확인 완료")
             return 0
         result = run(dry_run=args.dry_run)
         LOGGER.info("작업 완료: %s", result.get("video_url", "건식 실행"))
         return 0
     except Exception as exc:
         LOGGER.exception("자동화 실패: %s", exc)
-        send_notification("[지식 쇼츠] 자동화 실패", str(exc))
+        send_notification("[하나 필라테스] 자동화 실패", str(exc))
         return 1
 
 
 if __name__ == "__main__":
     sys.exit(main())
-
