@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "videos": [
     {
       "published_at": "2026-07-14T02:59:47.391393+00:00",
@@ -471,7 +471,7 @@
       "engagement_comment": "💬 딸꾹질을 멈출 때 물 마시기와 귀 막기 중 무엇을 선호하시나요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 98,
       "metrics": {
-        "views": 2,
+        "views": 3,
         "likes": 0,
         "comments": 0
       }
