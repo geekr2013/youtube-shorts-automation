@@ -471,7 +471,7 @@
       "engagement_comment": "💬 딸꾹질을 멈출 때 물 마시기와 귀 막기 중 무엇을 선호하시나요?\n한 단어로 답해도 됩니다.",
       "editorial_score": 98,
       "metrics": {
-        "views": 3,
+        "views": 2,
         "likes": 0,
         "comments": 0
       }
@@ -591,6 +591,27 @@
         "ring-side-bend"
       ],
       "engagement_comment": "💬 균형 동작에서 어느 방향이 더 흔들렸나요?\n무리하지 않은 범위에서 알려주세요.",
+      "metrics": {
+        "views": 1,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-20T10:59:47.499123+00:00",
+      "content_format": "pilates-hana-v1",
+      "routine_id": "beginner-core",
+      "topic": "초보 코어 삼종 세트",
+      "title": "초보 코어 삼종 세트 | BEGINNER CORE",
+      "instructor_id": "hana-v1",
+      "video_id": "iW1xcKgdYFM",
+      "video_url": "https://www.youtube.com/shorts/iW1xcKgdYFM",
+      "exercise_slugs": [
+        "dead-bug",
+        "modified-plank",
+        "glute-bridge"
+      ],
+      "engagement_comment": "💬 세 동작 중 저장해두고 싶은 동작은 무엇인가요?\n무리하지 않은 범위에서 알려주세요.",
       "metrics": {
         "views": 0,
         "likes": 0,
