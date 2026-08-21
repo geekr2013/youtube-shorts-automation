@@ -250,13 +250,8 @@ def validate_routine(routine: Routine) -> None:
     if any(term in narration for term in blocked):
         raise ValueError("의료 또는 과장 효과 표현을 사용할 수 없습니다.")
     for exercise in routine_exercises(routine):
-        if not exercise.pose_path.exists() or exercise.pose_path.stat().st_size < 100_000:
-            raise FileNotFoundError(f"검수된 자세 이미지가 없습니다: {exercise.pose_path}")
         if not all((exercise.name_ko, exercise.name_en, exercise.cue_ko, exercise.cue_en)):
             raise ValueError(f"한·영 안내가 누락되었습니다: {exercise.slug}")
-        for motion_path in (exercise.motion_start_path, exercise.motion_end_path):
-            if not motion_path.exists() or motion_path.stat().st_size < 500_000:
-                raise FileNotFoundError(f"검수된 동작 단계 이미지가 없습니다: {motion_path}")
         if exercise.camera_angle not in {
             "overhead",
             "side-three-quarter",

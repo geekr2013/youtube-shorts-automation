@@ -99,7 +99,7 @@ class YouTubeUploader:
             "status": {
                 "privacyStatus": privacy,
                 "selfDeclaredMadeForKids": False,
-                # 사실적으로 보이는 가상 강사와 AI 음성을 사용하므로 반드시 공개한다.
+                # 실제 운동 영상에도 AI 안내 음성이 포함되므로 투명하게 공개한다.
                 "containsSyntheticMedia": True,
             },
         }

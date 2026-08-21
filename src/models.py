@@ -43,4 +43,9 @@ class StockClip:
     provider: str
     source_url: str
     creator: str = ""
+    query: str = ""
+    source_id: str = ""
+    width: int = 0
+    height: int = 0
+    duration: float = 0.0
 
