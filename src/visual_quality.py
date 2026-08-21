@@ -16,7 +16,13 @@ from pilates_catalog import Exercise
 
 
 LOGGER = logging.getLogger(__name__)
-GEMINI_VISION_MODEL = os.getenv("GEMINI_VISION_MODEL", "gemini-2.5-flash-lite")
+GEMINI_VISION_MODEL = os.getenv("GEMINI_VISION_MODEL", "gemini-3.7-flash")
+GEMINI_VISION_FALLBACKS = (
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+)
 MIN_EXERCISE_MATCH = 0.82
 MIN_REALISM = 0.85
 MIN_VISIBILITY = 0.78
@@ -113,6 +119,32 @@ class GeminiVisualQualityGate:
         if not self.api_key:
             raise VisualQualityError("실제 운동 영상의 AI 화면 검수 키가 없습니다.")
 
+    def _generate(self, parts: List[Dict[str, Any]]) -> tuple[Dict[str, Any], str]:
+        models = list(dict.fromkeys((self.model, *GEMINI_VISION_FALLBACKS)))
+        for model in models:
+            try:
+                response = requests.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
+                    json={
+                        "contents": [{"role": "user", "parts": parts}],
+                        "generationConfig": {
+                            "temperature": 0,
+                            "responseMimeType": "application/json",
+                            "responseSchema": _schema(),
+                        },
+                    },
+                    timeout=60,
+                )
+                if response.status_code == 404:
+                    LOGGER.warning("Gemini 화면 검수 모델 미지원, 무료 대체 모델 시도: %s", model)
+                    continue
+                response.raise_for_status()
+                return response.json(), model
+            except (requests.RequestException, ValueError) as exc:
+                raise VisualQualityError("무료 AI 화면 검수 요청에 실패해 업로드를 중단합니다.") from exc
+        raise VisualQualityError("사용 가능한 무료 Gemini 화면 검수 모델을 찾지 못했습니다.")
+
     def review(self, clip: StockClip, exercise: Exercise, output_dir: Path) -> Dict[str, Any]:
         frames = extract_review_frames(clip, output_dir)
         prompt = (
@@ -138,24 +170,7 @@ class GeminiVisualQualityGate:
                     }
                 }
             )
-        try:
-            response = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
-                headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
-                json={
-                    "contents": [{"role": "user", "parts": parts}],
-                    "generationConfig": {
-                        "temperature": 0,
-                        "responseMimeType": "application/json",
-                        "responseSchema": _schema(),
-                    },
-                },
-                timeout=60,
-            )
-            response.raise_for_status()
-            payload = response.json()
-        except (requests.RequestException, ValueError) as exc:
-            raise VisualQualityError("무료 AI 화면 검수 요청에 실패해 업로드를 중단합니다.") from exc
+        payload, selected_model = self._generate(parts)
         try:
             raw = payload["candidates"][0]["content"]["parts"][0]["text"]
             result = json.loads(raw)
@@ -169,7 +184,7 @@ class GeminiVisualQualityGate:
             "professional_attire": _score(result.get("professional_attire")),
             "safe_framing": bool(result.get("safe_framing")),
             "reason": str(result.get("reason") or "검수 사유 없음")[:240],
-            "model": self.model,
+            "model": selected_model,
             "sample_count": len(frames),
         }
         normalized["passed"] = meets_visual_thresholds(normalized)

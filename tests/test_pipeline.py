@@ -265,7 +265,7 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("실제 움직임을 담은 연속 프레임", source)
 
     def test_visual_quality_gate_requires_exact_exercise_and_realistic_frames(self):
-        self.assertEqual(GEMINI_VISION_MODEL, "gemini-2.5-flash-lite")
+        self.assertEqual(GEMINI_VISION_MODEL, "gemini-3.7-flash")
         approved = {
             "approved": True,
             "exercise_match": 0.92,
@@ -315,6 +315,19 @@ class PilatesPipelineTests(unittest.TestCase):
         config = kwargs["json"]["generationConfig"]
         self.assertEqual(config["responseMimeType"], "application/json")
         self.assertIn("responseSchema", config)
+
+    def test_gemini_visual_review_falls_back_when_a_model_is_retired(self):
+        missing = Mock(status_code=404)
+        available = Mock(status_code=200)
+        available.raise_for_status.return_value = None
+        available.json.return_value = {"candidates": []}
+        with patch(
+            "visual_quality.requests.post", side_effect=[missing, available], create=True
+        ) as request:
+            payload, model = GeminiVisualQualityGate("key")._generate([{"text": "review"}])
+        self.assertEqual(payload, {"candidates": []})
+        self.assertEqual(model, "gemini-3.5-flash")
+        self.assertEqual(request.call_count, 2)
 
     def test_media_provider_rejects_mismatch_and_tries_next_candidate(self):
         with patch("media_provider.requests.Session", create=True):
