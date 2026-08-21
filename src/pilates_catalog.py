@@ -11,6 +11,7 @@ INSTRUCTOR_ID = "hana-v1"
 INSTRUCTOR_NAME_KO = "하나"
 INSTRUCTOR_NAME_EN = "HANA"
 POSE_DIR = ROOT / "assets" / "instructor" / "poses"
+MOTION_STILL_DIR = ROOT / "assets" / "instructor" / "motion-stills"
 
 
 @dataclass(frozen=True)
@@ -24,11 +25,24 @@ class Exercise:
     cue_ko: str
     cue_en: str
     voice_ko: str
+    motion_start_file: str
+    motion_end_file: str
+    camera_angle: str
+    muscle_focus: str
+    bilateral: bool = False
     equipment: str = "매트"
 
     @property
     def pose_path(self) -> Path:
-        return POSE_DIR / self.pose_file
+        return (POSE_DIR / self.pose_file).resolve()
+
+    @property
+    def motion_start_path(self) -> Path:
+        return MOTION_STILL_DIR / self.motion_start_file
+
+    @property
+    def motion_end_path(self) -> Path:
+        return MOTION_STILL_DIR / self.motion_end_file
 
 
 @dataclass(frozen=True)
@@ -52,6 +66,11 @@ EXERCISES: Dict[str, Exercise] = {
         cue_ko="허리가 뜨지 않게",
         cue_en="KEEP YOUR BACK HEAVY",
         voice_ko="허리가 뜨지 않게, 내쉬며 좌우 여섯 번씩 움직여요.",
+        motion_start_file="dead-bug-start.png",
+        motion_end_file="dead-bug-extend.png",
+        camera_angle="overhead",
+        muscle_focus="복부·고관절·대퇴부",
+        bilateral=True,
     ),
     "glute-bridge": Exercise(
         slug="glute-bridge",
@@ -63,6 +82,10 @@ EXERCISES: Dict[str, Exercise] = {
         cue_ko="무릎은 나란히 유지",
         cue_en="KEEP KNEES PARALLEL",
         voice_ko="무릎을 나란히 두고, 내쉬며 골반을 여덟 번 들어 올려요.",
+        motion_start_file="glute-bridge-down.png",
+        motion_end_file="glute-bridge-up.png",
+        camera_angle="side-three-quarter",
+        muscle_focus="복부·둔근·햄스트링",
     ),
     "bird-dog": Exercise(
         slug="bird-dog",
@@ -74,6 +97,11 @@ EXERCISES: Dict[str, Exercise] = {
         cue_ko="골반은 바닥과 평행",
         cue_en="KEEP HIPS LEVEL",
         voice_ko="골반이 돌아가지 않게, 팔과 반대쪽 다리를 좌우 다섯 번씩 뻗어요.",
+        motion_start_file="bird-dog-start.png",
+        motion_end_file="bird-dog-extend.png",
+        camera_angle="side-three-quarter",
+        muscle_focus="복부·둔근·대퇴부",
+        bilateral=True,
     ),
     "side-leg-lift": Exercise(
         slug="side-leg-lift",
@@ -85,6 +113,11 @@ EXERCISES: Dict[str, Exercise] = {
         cue_ko="골반은 포개서 고정",
         cue_en="STACK YOUR HIPS",
         voice_ko="골반을 포개어 고정하고, 위쪽 다리를 좌우 여덟 번씩 들어요.",
+        motion_start_file="side-leg-lift-down.png",
+        motion_end_file="side-leg-lift-up.png",
+        camera_angle="side-full-body",
+        muscle_focus="옆구리·중둔근·외측 대퇴부",
+        bilateral=True,
     ),
     "spine-twist": Exercise(
         slug="spine-twist",
@@ -96,6 +129,11 @@ EXERCISES: Dict[str, Exercise] = {
         cue_ko="허리를 길게 세우기",
         cue_en="SIT TALL",
         voice_ko="허리를 길게 세우고, 내쉬며 상체를 좌우 다섯 번씩 돌려요.",
+        motion_start_file="spine-twist-center.png",
+        motion_end_file="spine-twist-right.png",
+        camera_angle="front-three-quarter",
+        muscle_focus="복부·복사근·흉곽",
+        bilateral=True,
     ),
     "ring-side-bend": Exercise(
         slug="ring-side-bend",
@@ -107,6 +145,11 @@ EXERCISES: Dict[str, Exercise] = {
         cue_ko="골반은 가운데 고정",
         cue_en="KEEP HIPS CENTERED",
         voice_ko="링을 머리 위로 들고, 골반을 가운데 둔 채 좌우 다섯 번씩 기울여요.",
+        motion_start_file="ring-side-center.png",
+        motion_end_file="ring-side-bend.png",
+        camera_angle="front-alignment",
+        muscle_focus="복부·복사근·골반",
+        bilateral=True,
         equipment="필라테스 링",
     ),
     "modified-plank": Exercise(
@@ -119,6 +162,41 @@ EXERCISES: Dict[str, Exercise] = {
         cue_ko="어깨 아래 팔꿈치",
         cue_en="ELBOWS UNDER SHOULDERS",
         voice_ko="어깨 아래에 팔꿈치를 두고, 머리부터 무릎까지 길게 스무 초 버텨요.",
+        motion_start_file="modified-plank-prep.png",
+        motion_end_file="modified-plank-hold.png",
+        camera_angle="side-three-quarter",
+        muscle_focus="복부·둔근·대퇴부",
+    ),
+    "kneeling-push-up": Exercise(
+        slug="kneeling-push-up",
+        name_ko="무릎 푸시업",
+        name_en="KNEELING PUSH-UP",
+        pose_file="../motion-stills/kneeling-push-up-bottom.png",
+        prescription_ko="여섯 번",
+        prescription_en="6 REPS",
+        cue_ko="가슴과 골반을 함께 내리기",
+        cue_en="LOWER CHEST AND HIPS TOGETHER",
+        voice_ko="가슴과 골반이 함께 내려가도록, 팔꿈치를 뒤로 접으며 여섯 번 움직여요.",
+        motion_start_file="kneeling-push-up-top.png",
+        motion_end_file="kneeling-push-up-bottom.png",
+        camera_angle="side-front-three-quarter",
+        muscle_focus="가슴·전면 어깨·삼두근·복부",
+    ),
+    "inner-thigh-lift": Exercise(
+        slug="inner-thigh-lift",
+        name_ko="이너 타이 리프트",
+        name_en="INNER THIGH LIFT",
+        pose_file="../motion-stills/inner-thigh-lift-up.png",
+        prescription_ko="좌우 여덟 번씩",
+        prescription_en="8 EACH SIDE",
+        cue_ko="골반은 고정하고 안쪽 허벅지로",
+        cue_en="LIFT FROM YOUR INNER THIGH",
+        voice_ko="골반을 고정하고, 아래쪽 다리를 안쪽 허벅지 힘으로 좌우 여덟 번씩 들어요.",
+        motion_start_file="inner-thigh-lift-down.png",
+        motion_end_file="inner-thigh-lift-up.png",
+        camera_angle="side-front-lower-body",
+        muscle_focus="내전근·하복부·고관절·대퇴부",
+        bilateral=True,
     ),
 }
 
@@ -134,6 +212,8 @@ ROUTINES: Tuple[Routine, ...] = (
     Routine("balance-control", "균형 잡는 코어", "BALANCE & CONTROL", "흔들림을 줄이고 천천히 조절하는 세 동작입니다.", ("bird-dog", "dead-bug", "ring-side-bend"), "균형 동작에서 어느 방향이 더 흔들렸나요?"),
     Routine("mat-essential", "매트 필라테스 기본", "MAT ESSENTIALS", "매트 한 장으로 연습하는 기본 세 동작입니다.", ("glute-bridge", "spine-twist", "dead-bug"), "매트 운동은 맨발과 양말 중 어느 쪽을 선호하나요?"),
     Routine("posture-flow", "상체 정렬 플로우", "POSTURE FLOW", "상체를 길게 세우는 감각에 집중하는 세 동작입니다.", ("spine-twist", "ring-side-bend", "bird-dog"), "오늘 가장 시원하게 느껴진 동작은 무엇인가요?"),
+    Routine("upper-body-core", "가슴과 코어 컨트롤", "UPPER BODY CORE", "가슴과 팔, 중심을 함께 쓰는 초급 세 동작입니다.", ("kneeling-push-up", "modified-plank", "bird-dog"), "가슴과 팔 중 어느 부위가 먼저 힘들어졌나요?"),
+    Routine("inner-thigh-control", "힙과 안쪽 허벅지", "HIPS & INNER THIGHS", "골반을 고정하고 둔근과 내전근을 차분히 쓰는 세 동작입니다.", ("inner-thigh-lift", "glute-bridge", "side-leg-lift"), "안쪽 허벅지와 엉덩이 중 어느 부위가 더 잘 느껴졌나요?"),
 )
 
 
@@ -174,6 +254,19 @@ def validate_routine(routine: Routine) -> None:
             raise FileNotFoundError(f"검수된 자세 이미지가 없습니다: {exercise.pose_path}")
         if not all((exercise.name_ko, exercise.name_en, exercise.cue_ko, exercise.cue_en)):
             raise ValueError(f"한·영 안내가 누락되었습니다: {exercise.slug}")
+        for motion_path in (exercise.motion_start_path, exercise.motion_end_path):
+            if not motion_path.exists() or motion_path.stat().st_size < 500_000:
+                raise FileNotFoundError(f"검수된 동작 단계 이미지가 없습니다: {motion_path}")
+        if exercise.camera_angle not in {
+            "overhead",
+            "side-three-quarter",
+            "side-full-body",
+            "front-three-quarter",
+            "front-alignment",
+            "side-front-three-quarter",
+            "side-front-lower-body",
+        }:
+            raise ValueError(f"검수되지 않은 카메라 구도입니다: {exercise.camera_angle}")
 
 
 def all_pose_paths() -> Sequence[Path]:

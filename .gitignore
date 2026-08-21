@@ -65,3 +65,9 @@ Thumbs.db
 
 # 매 실행마다 생성되는 임시 결과
 data/work/
+
+# 로컬 영상 QA 및 임시 도구
+data/motion-qa/
+data/test-bin/
+data/test-deps/
+data/qa-run-*/
