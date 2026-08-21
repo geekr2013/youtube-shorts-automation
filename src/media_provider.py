@@ -6,7 +6,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import requests
 
@@ -18,6 +18,7 @@ MIN_VIDEO_SECONDS = 4.0
 MAX_VIDEO_SECONDS = 90.0
 MIN_VIDEO_EDGE = 720
 MIN_FRAME_RATE = 20.0
+MAX_REVIEW_CANDIDATES_PER_QUERY = 8
 
 
 class MediaError(RuntimeError):
@@ -230,6 +231,7 @@ class StockMediaProvider:
         limit: int = 4,
         min_required: int = 2,
         one_per_query: bool = False,
+        visual_validator: Optional[Callable[[StockClip], Dict[str, Any]]] = None,
     ) -> List[StockClip]:
         if not self.pexels_key and not self.pixabay_key:
             raise MediaError("PEXELS_API_KEY 또는 PIXABAY_API_KEY가 필요합니다.")
@@ -252,7 +254,7 @@ class StockMediaProvider:
                 ),
                 reverse=True,
             )
-            for candidate in candidates:
+            for candidate in candidates[:MAX_REVIEW_CANDIDATES_PER_QUERY]:
                 identity = (
                     str(candidate.get("provider") or ""),
                     str(candidate.get("source_id") or candidate.get("download_url") or ""),
@@ -260,13 +262,27 @@ class StockMediaProvider:
                 if identity in seen:
                     continue
                 seen.add(identity)
+                download_path = output_dir / f"clip_{len(clips) + 1}.mp4"
                 try:
-                    clip = self._download(candidate, output_dir / f"clip_{len(clips) + 1}.mp4")
-                    clips.append(clip)
-                    LOGGER.info("스톡 영상 확보: %s / %s", candidate["provider"], query)
-                    break
+                    clip = self._download(candidate, download_path)
                 except Exception as exc:
+                    download_path.unlink(missing_ok=True)
                     LOGGER.warning("스톡 영상 다운로드 실패: %s", exc)
+                    continue
+                if visual_validator:
+                    try:
+                        review = visual_validator(clip)
+                    except Exception:
+                        clip.path.unlink(missing_ok=True)
+                        raise
+                    clip.visual_quality = review
+                    if not review.get("passed"):
+                        clip.path.unlink(missing_ok=True)
+                        LOGGER.warning("동작·화면 검수 거절(%s): %s", query, review.get("reason"))
+                        continue
+                clips.append(clip)
+                LOGGER.info("스톡 영상 확보: %s / %s", candidate["provider"], query)
+                break
             if one_per_query and len(clips) == clips_before_query:
                 raise MediaError(f"동작과 직접 연결된 실제 영상을 찾지 못했습니다: {query}")
             if len(clips) >= limit:

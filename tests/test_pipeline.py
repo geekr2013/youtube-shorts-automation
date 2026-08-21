@@ -42,13 +42,20 @@ from pilates_renderer import (
 from pilates_video_strategy import (
     EXERCISE_VIDEO_SEARCH,
     MUSCLE_CLOSEUP_Y,
+    REAL_VIDEO_ROUTINE_IDS,
     SOURCE_REQUIREMENTS,
     build_clip_queries,
+    real_video_routine_candidates,
 )
 from publish_preview import build_preview_description
 from run_status import build_status
 from secret_utils import clean_secret
 from trend_scout import editing_profile, fetch_pilates_short_benchmarks
+from visual_quality import (
+    GEMINI_VISION_MODEL,
+    GeminiVisualQualityGate,
+    meets_visual_thresholds,
+)
 
 
 class PilatesPipelineTests(unittest.TestCase):
@@ -122,6 +129,12 @@ class PilatesPipelineTests(unittest.TestCase):
         records = [{"routine_id": item.routine_id} for item in ROUTINES[:5]]
         selected = select_routine(records, today=date(2026, 8, 19))
         self.assertNotIn(selected.routine_id, {item.routine_id for item in ROUTINES[:5]})
+
+    def test_real_video_candidates_avoid_hard_to_match_prop_routines(self):
+        candidates = real_video_routine_candidates([], today=date(2026, 8, 21), limit=3)
+        self.assertEqual(len(candidates), 3)
+        self.assertTrue(all(item.routine_id in REAL_VIDEO_ROUTINE_IDS for item in candidates))
+        self.assertTrue(all("ring-side-bend" not in item.exercise_slugs for item in candidates))
 
     def test_routine_selection_is_stable_for_the_same_day(self):
         first = select_routine([], today=date(2026, 8, 19))
@@ -251,10 +264,94 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("nb_frames", source)
         self.assertIn("실제 움직임을 담은 연속 프레임", source)
 
+    def test_visual_quality_gate_requires_exact_exercise_and_realistic_frames(self):
+        self.assertEqual(GEMINI_VISION_MODEL, "gemini-2.5-flash-lite")
+        approved = {
+            "approved": True,
+            "exercise_match": 0.92,
+            "realism": 0.94,
+            "visibility": 0.88,
+            "professional_attire": 0.9,
+            "safe_framing": True,
+        }
+        self.assertTrue(meets_visual_thresholds(approved))
+        self.assertFalse(meets_visual_thresholds({**approved, "exercise_match": 0.5}))
+        self.assertFalse(meets_visual_thresholds({**approved, "safe_framing": False}))
+
+    def test_gemini_visual_review_uses_three_frames_and_structured_json(self):
+        result_payload = {
+            "approved": True,
+            "exercise_match": 0.95,
+            "realism": 0.93,
+            "visibility": 0.9,
+            "professional_attire": 0.88,
+            "safe_framing": True,
+            "reason": "Correct dead bug with clear alignment.",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frames = []
+            for index in range(3):
+                frame = root / f"frame-{index}.jpg"
+                frame.write_bytes(b"test-jpeg-data")
+                frames.append(frame)
+            clip = StockClip(root / "clip.mp4", "Pexels", "https://example.com", duration=10)
+            response = Mock()
+            response.raise_for_status.return_value = None
+            response.json.return_value = {
+                "candidates": [{"content": {"parts": [{"text": json.dumps(result_payload)}]}}]
+            }
+            with patch("visual_quality.extract_review_frames", return_value=frames), patch(
+                "visual_quality.requests.post", return_value=response, create=True
+            ) as request:
+                review = GeminiVisualQualityGate("key").review(
+                    clip, EXERCISES["dead-bug"], root / "review"
+                )
+        self.assertTrue(review["passed"])
+        _, kwargs = request.call_args
+        self.assertNotIn("key", request.call_args.args[0])
+        self.assertEqual(kwargs["headers"]["x-goog-api-key"], "key")
+        self.assertEqual(len(kwargs["json"]["contents"][0]["parts"]), 4)
+        config = kwargs["json"]["generationConfig"]
+        self.assertEqual(config["responseMimeType"], "application/json")
+        self.assertIn("responseSchema", config)
+
+    def test_media_provider_rejects_mismatch_and_tries_next_candidate(self):
+        with patch("media_provider.requests.Session", create=True):
+            provider = StockMediaProvider(pexels_key="key")
+        candidates = [
+            {"provider": "Pexels", "source_id": "bad", "download_url": "bad", "height": 1920, "width": 1080, "duration": 10},
+            {"provider": "Pexels", "source_id": "good", "download_url": "good", "height": 1920, "width": 1080, "duration": 10},
+        ]
+        reviews = iter([
+            {"passed": False, "reason": "different exercise"},
+            {"passed": True, "reason": "exact exercise"},
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            def download(candidate, path):
+                path.write_bytes(b"video")
+                return StockClip(path, "Pexels", "https://example.com", source_id=candidate["source_id"])
+
+            with patch.object(provider, "_search_pexels", return_value=candidates), patch.object(
+                provider, "_search_pixabay", return_value=[]
+            ), patch.object(provider, "_download", side_effect=download):
+                clips = provider.fetch_clips(
+                    ["dead bug"],
+                    Path(directory),
+                    limit=1,
+                    min_required=1,
+                    one_per_query=True,
+                    visual_validator=lambda clip: next(reviews),
+                )
+        self.assertEqual(clips[0].source_id, "good")
+        self.assertTrue(clips[0].visual_quality["passed"])
+
     def test_configuration_requires_one_free_video_provider(self):
         with patch.dict("os.environ", {}, clear=True):
             self.assertIn("PEXELS_API_KEY 또는 PIXABAY_API_KEY", check_configuration(False))
-        with patch.dict("os.environ", {"PEXELS_API_KEY": "key"}, clear=True):
+        with patch.dict(
+            "os.environ", {"PEXELS_API_KEY": "key", "GEMINI_API_KEY": "key"}, clear=True
+        ):
             self.assertEqual(check_configuration(False), [])
 
     def test_trend_profile_uses_public_short_performance_without_copying(self):
@@ -298,6 +395,7 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("assets/instructor/**", source)
         self.assertIn("PEXELS_API_KEY", source)
         self.assertIn("PIXABAY_API_KEY", source)
+        self.assertIn("contact-sheet.jpg", source)
         self.assertIn("YOUTUBE_PRIVACY: public", source)
 
     def test_push_event_is_recorded_as_dry_run(self):

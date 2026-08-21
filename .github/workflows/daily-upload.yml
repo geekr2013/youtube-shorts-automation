@@ -138,6 +138,7 @@ jobs:
           path: |
             data/work/metadata.json
             data/work/render/final_short.mp4
+            data/work/render/contact-sheet.jpg
           if-no-files-found: ignore
           retention-days: 3
 

@@ -20,12 +20,16 @@ from pilates_catalog import (
     INSTRUCTOR_NAME_KO,
     build_narration,
     routine_exercises,
-    select_routine,
     validate_routine,
 )
 from pilates_renderer import media_duration, render_pilates_short
-from pilates_video_strategy import SOURCE_REQUIREMENTS, build_clip_queries
+from pilates_video_strategy import (
+    SOURCE_REQUIREMENTS,
+    build_clip_queries,
+    real_video_routine_candidates,
+)
 from trend_scout import editing_profile, fetch_pilates_short_benchmarks
+from visual_quality import GeminiVisualQualityGate, VisualQualityError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,6 +63,8 @@ def check_configuration(for_upload: bool) -> List[str]:
     missing: List[str] = []
     if not (os.getenv("PEXELS_API_KEY") or os.getenv("PIXABAY_API_KEY")):
         missing.append("PEXELS_API_KEY 또는 PIXABAY_API_KEY")
+    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+        missing.append("GEMINI_API_KEY 또는 GOOGLE_API_KEY")
     if for_upload:
         required = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
         missing.extend(name for name in required if not os.getenv(name))
@@ -115,6 +121,47 @@ def _refresh_metrics(records: List[Dict[str, Any]]) -> None:
         LOGGER.info("기존 영상 성과를 갱신했습니다.")
 
 
+def _fetch_validated_routine(records: List[Dict[str, Any]]):
+    """무료 스톡 루틴을 순서대로 시도하고 AI 검수를 모두 통과한 한 세트만 반환한다."""
+    provider = StockMediaProvider()
+    quality_gate = GeminiVisualQualityGate()
+    failures: List[str] = []
+    for routine in real_video_routine_candidates(records, limit=3):
+        validate_routine(routine)
+        exercises = routine_exercises(routine)
+        queries = build_clip_queries(routine)
+        exercise_by_query = dict(zip(queries, exercises))
+
+        def review(clip: StockClip) -> Dict[str, Any]:
+            exercise = exercise_by_query[clip.query]
+            review_dir = WORK_DIR / "visual-review" / routine.routine_id / exercise.slug / (
+                f"{clip.provider.lower()}-{clip.source_id or 'unknown'}"
+            )
+            return quality_gate.review(clip, exercise, review_dir)
+
+        try:
+            clips = provider.fetch_clips(
+                queries,
+                WORK_DIR / "licensed-source" / routine.routine_id,
+                limit=3,
+                min_required=3,
+                one_per_query=True,
+                visual_validator=review,
+            )
+            if len(clips) != len(routine.exercise_slugs):
+                raise RuntimeError("세 동작과 실제 영상 소스의 수가 일치하지 않습니다.")
+            return routine, clips
+        except VisualQualityError:
+            raise
+        except Exception as exc:
+            failures.append(f"{routine.routine_id}: {exc}")
+            LOGGER.warning("루틴 영상 세트 검수 실패(%s): %s", routine.routine_id, exc)
+    raise RuntimeError(
+        "운동과 정확히 일치하는 실제 영상 세 동작을 확보하지 못해 공개를 중단했습니다. "
+        + " | ".join(failures)
+    )
+
+
 def run(dry_run: bool = False) -> Dict[str, Any]:
     missing = check_configuration(for_upload=not dry_run)
     if missing:
@@ -132,20 +179,8 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     render_dir = WORK_DIR / "render"
     render_dir.mkdir(parents=True, exist_ok=True)
 
-    routine = select_routine(records)
-    validate_routine(routine)
+    routine, clips = _fetch_validated_routine(records)
     LOGGER.info("선정 루틴: %s / %s", routine.title_ko, routine.title_en)
-    clip_queries = build_clip_queries(routine)
-    provider = StockMediaProvider()
-    clips = provider.fetch_clips(
-        clip_queries,
-        WORK_DIR / "licensed-source",
-        limit=3,
-        min_required=3,
-        one_per_query=True,
-    )
-    if len(clips) != len(routine.exercise_slugs):
-        raise RuntimeError("세 동작과 실제 영상 소스의 수가 일치하지 않습니다.")
     api_key = os.getenv("YOUTUBE_DATA_API_KEY", "").strip()
     benchmarks = fetch_pilates_short_benchmarks(api_key) if api_key else []
     trend_profile = editing_profile(benchmarks)
@@ -185,6 +220,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
                 "source_url": clip.source_url,
                 "source_id": clip.source_id,
                 "search_query": clip.query,
+                "visual_quality": clip.visual_quality,
                 "camera_angle": item.camera_angle,
                 "muscle_focus": item.muscle_focus,
             }

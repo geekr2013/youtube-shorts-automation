@@ -579,6 +579,25 @@ def render_pilates_short(
     )
     if not final_path.exists() or final_path.stat().st_size < 500_000:
         raise PilatesRenderError("최종 필라테스 영상 파일이 생성되지 않았습니다.")
+    contact_sheet = output_dir / "contact-sheet.jpg"
+    _run(
+        [
+            FFMPEG_BINARY,
+            "-y",
+            "-i",
+            str(final_path),
+            "-vf",
+            (
+                "fps=1/4,scale=270:480:force_original_aspect_ratio=decrease,"
+                "pad=270:480:(ow-iw)/2:(oh-ih)/2:black,tile=3x3"
+            ),
+            "-frames:v",
+            "1",
+            "-q:v",
+            "3",
+            str(contact_sheet),
+        ]
+    )
     (output_dir / "audio_metadata.json").write_text(
         json.dumps(audio_metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -607,9 +626,11 @@ def render_pilates_short(
                         "query": clip.query,
                         "resolution": f"{clip.width}x{clip.height}",
                         "duration": round(clip.duration, 2),
+                        "visual_quality": clip.visual_quality,
                     }
                     for clip in clips
                 ],
+                "contact_sheet": contact_sheet.name,
             },
             ensure_ascii=False,
             indent=2,
