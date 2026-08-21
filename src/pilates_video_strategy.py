@@ -13,7 +13,7 @@ EXERCISE_VIDEO_SEARCH: Dict[str, str] = {
     "side-leg-lift": "woman side lying leg lift exercise stacked hips mat",
     "spine-twist": "woman seated pilates twist studio",
     "ring-side-bend": "woman pilates ring exercise studio",
-    "modified-plank": "woman forearm plank on knees side view exercise mat",
+    "modified-plank": "woman forearm plank side view exercise mat",
     "kneeling-push-up": "woman kneeling push up side view exercise mat",
     "inner-thigh-lift": "woman side lying inner thigh leg lift exercise mat",
 }

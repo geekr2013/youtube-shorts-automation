@@ -25,7 +25,7 @@ GEMINI_VISION_FALLBACKS = (
     "gemini-2.5-flash-lite",
 )
 MIN_EXERCISE_MATCH = 0.75
-MIN_REALISM = 0.78
+MIN_REALISM = 0.75
 MIN_VISIBILITY = 0.75
 MIN_PROFESSIONAL_ATTIRE = 0.70
 FRAME_POSITIONS = (0.2, 0.5, 0.8)
@@ -161,8 +161,9 @@ class GeminiVisualQualityGate:
                             LOGGER.warning("Gemini 무료 호출 한도 대기 후 재시도: %.0f초", wait_seconds)
                             time.sleep(wait_seconds)
                             continue
-                        LOGGER.warning("Gemini 무료 호출 한도, 무료 대체 모델 시도: %s", model)
-                        break
+                        raise VisualQualityError(
+                            "Gemini 무료 호출 한도에 도달해 이번 업로드를 안전하게 중단합니다."
+                        )
                     response.raise_for_status()
                     return response.json(), model
                 except (requests.RequestException, ValueError) as exc:

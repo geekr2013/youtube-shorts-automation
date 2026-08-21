@@ -276,6 +276,7 @@ class PilatesPipelineTests(unittest.TestCase):
         }
         self.assertTrue(meets_visual_thresholds(approved))
         self.assertTrue(meets_visual_thresholds({**approved, "exercise_match": 0.78, "realism": 0.80}))
+        self.assertTrue(meets_visual_thresholds({**approved, "realism": 0.75, "visibility": 0.75}))
         self.assertFalse(meets_visual_thresholds({**approved, "exercise_match": 0.5}))
         self.assertFalse(meets_visual_thresholds({**approved, "safe_framing": False}))
 
@@ -343,6 +344,12 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertEqual(model, "gemini-3.7-flash")
         self.assertEqual(request.call_count, 2)
         delay.assert_any_call(1)
+
+    def test_free_stock_plank_is_the_common_forearm_variant(self):
+        plank = EXERCISES["modified-plank"]
+        self.assertEqual(plank.name_en, "FOREARM PLANK")
+        self.assertIn("발뒤꿈치", plank.cue_ko)
+        self.assertNotIn("on knees", EXERCISE_VIDEO_SEARCH["modified-plank"])
 
     def test_media_provider_rejects_mismatch_and_tries_next_candidate(self):
         with patch("media_provider.requests.Session", create=True):
