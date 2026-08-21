@@ -79,11 +79,30 @@ def save_state(state: Dict[str, Any]) -> None:
     )
 
 
+def resolve_preview_dir(preview_dir: Path) -> Path:
+    """Find the artifact root regardless of GitHub's preserved upload prefix."""
+    candidates = [preview_dir, preview_dir / "work"]
+    if preview_dir.exists():
+        candidates.extend(path.parent for path in preview_dir.rglob("metadata.json"))
+
+    seen = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if (
+            (candidate / "metadata.json").is_file()
+            and (candidate / "render" / "final_short.mp4").is_file()
+        ):
+            return candidate
+    raise FileNotFoundError("검증 영상 또는 메타데이터를 찾지 못했습니다.")
+
+
 def publish_preview(preview_dir: Path) -> Dict[str, Any]:
+    preview_dir = resolve_preview_dir(preview_dir)
     metadata_path = preview_dir / "metadata.json"
     video_path = preview_dir / "render" / "final_short.mp4"
-    if not metadata_path.exists() or not video_path.exists():
-        raise FileNotFoundError("검증 영상 또는 메타데이터를 찾지 못했습니다.")
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     preview_run_id = os.getenv("PREVIEW_RUN_ID", "")

@@ -48,7 +48,7 @@ from pilates_video_strategy import (
     build_clip_queries,
     real_video_routine_candidates,
 )
-from publish_preview import build_preview_description
+from publish_preview import build_preview_description, resolve_preview_dir
 from run_status import build_status
 from secret_utils import clean_secret
 from trend_scout import editing_profile, fetch_pilates_short_benchmarks
@@ -236,6 +236,15 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("https://www.pexels.com/video/123", value)
         self.assertIn(exercise.name_en, value)
         self.assertIn("#필라테스", value)
+
+    def test_preview_artifact_root_accepts_preserved_work_prefix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifact_root = Path(directory) / "preview-promotion"
+            nested_root = artifact_root / "work"
+            (nested_root / "render").mkdir(parents=True)
+            (nested_root / "metadata.json").write_text("{}", encoding="utf-8")
+            (nested_root / "render" / "final_short.mp4").write_bytes(b"video")
+            self.assertEqual(resolve_preview_dir(artifact_root), nested_root)
 
     def test_main_requires_licensed_real_video_provider(self):
         source = (ROOT / "src" / "main.py").read_text(encoding="utf-8")
