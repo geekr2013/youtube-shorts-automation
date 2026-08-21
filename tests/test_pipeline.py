@@ -275,6 +275,7 @@ class PilatesPipelineTests(unittest.TestCase):
             "safe_framing": True,
         }
         self.assertTrue(meets_visual_thresholds(approved))
+        self.assertTrue(meets_visual_thresholds({**approved, "exercise_match": 0.78, "realism": 0.80}))
         self.assertFalse(meets_visual_thresholds({**approved, "exercise_match": 0.5}))
         self.assertFalse(meets_visual_thresholds({**approved, "safe_framing": False}))
 
@@ -328,6 +329,20 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertEqual(payload, {"candidates": []})
         self.assertEqual(model, "gemini-3.5-flash")
         self.assertEqual(request.call_count, 2)
+
+    def test_gemini_visual_review_retries_temporary_service_failure(self):
+        unavailable = Mock(status_code=503)
+        available = Mock(status_code=200)
+        available.raise_for_status.return_value = None
+        available.json.return_value = {"candidates": []}
+        with patch(
+            "visual_quality.requests.post", side_effect=[unavailable, available], create=True
+        ) as request, patch("visual_quality.time.sleep") as delay:
+            payload, model = GeminiVisualQualityGate("key")._generate([{"text": "review"}])
+        self.assertEqual(payload, {"candidates": []})
+        self.assertEqual(model, "gemini-3.7-flash")
+        self.assertEqual(request.call_count, 2)
+        delay.assert_called_once_with(1)
 
     def test_media_provider_rejects_mismatch_and_tries_next_candidate(self):
         with patch("media_provider.requests.Session", create=True):

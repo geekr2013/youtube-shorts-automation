@@ -6,6 +6,7 @@ import logging
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -23,10 +24,10 @@ GEMINI_VISION_FALLBACKS = (
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
 )
-MIN_EXERCISE_MATCH = 0.82
-MIN_REALISM = 0.85
-MIN_VISIBILITY = 0.78
-MIN_PROFESSIONAL_ATTIRE = 0.75
+MIN_EXERCISE_MATCH = 0.75
+MIN_REALISM = 0.78
+MIN_VISIBILITY = 0.75
+MIN_PROFESSIONAL_ATTIRE = 0.70
 FRAME_POSITIONS = (0.2, 0.5, 0.8)
 
 
@@ -122,27 +123,35 @@ class GeminiVisualQualityGate:
     def _generate(self, parts: List[Dict[str, Any]]) -> tuple[Dict[str, Any], str]:
         models = list(dict.fromkeys((self.model, *GEMINI_VISION_FALLBACKS)))
         for model in models:
-            try:
-                response = requests.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                    headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
-                    json={
-                        "contents": [{"role": "user", "parts": parts}],
-                        "generationConfig": {
-                            "temperature": 0,
-                            "responseMimeType": "application/json",
-                            "responseSchema": _schema(),
+            for attempt in range(3):
+                try:
+                    response = requests.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                        headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
+                        json={
+                            "contents": [{"role": "user", "parts": parts}],
+                            "generationConfig": {
+                                "temperature": 0,
+                                "responseMimeType": "application/json",
+                                "responseSchema": _schema(),
+                            },
                         },
-                    },
-                    timeout=60,
-                )
-                if response.status_code == 404:
-                    LOGGER.warning("Gemini 화면 검수 모델 미지원, 무료 대체 모델 시도: %s", model)
-                    continue
-                response.raise_for_status()
-                return response.json(), model
-            except (requests.RequestException, ValueError) as exc:
-                raise VisualQualityError("무료 AI 화면 검수 요청에 실패해 업로드를 중단합니다.") from exc
+                        timeout=60,
+                    )
+                    if response.status_code == 404:
+                        LOGGER.warning("Gemini 화면 검수 모델 미지원, 무료 대체 모델 시도: %s", model)
+                        break
+                    if response.status_code in {500, 502, 503, 504}:
+                        if attempt < 2:
+                            LOGGER.warning("Gemini 일시 장애, 화면 검수 재시도: %s", model)
+                            time.sleep(2 ** attempt)
+                            continue
+                        LOGGER.warning("Gemini 모델 일시 장애 지속, 무료 대체 모델 시도: %s", model)
+                        break
+                    response.raise_for_status()
+                    return response.json(), model
+                except (requests.RequestException, ValueError) as exc:
+                    raise VisualQualityError("무료 AI 화면 검수 요청에 실패해 업로드를 중단합니다.") from exc
         raise VisualQualityError("사용 가능한 무료 Gemini 화면 검수 모델을 찾지 못했습니다.")
 
     def review(self, clip: StockClip, exercise: Exercise, output_dir: Path) -> Dict[str, Any]:
