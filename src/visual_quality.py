@@ -166,6 +166,14 @@ class GeminiVisualQualityGate:
                         )
                     response.raise_for_status()
                     return response.json(), model
+                except (requests.Timeout, requests.ConnectionError) as exc:
+                    if attempt < 1:
+                        LOGGER.warning("Gemini 연결 지연, 화면 검수 한 번 재시도: %s", model)
+                        time.sleep(2)
+                        continue
+                    raise VisualQualityError(
+                        "무료 AI 화면 검수 연결이 지연돼 업로드를 중단합니다."
+                    ) from exc
                 except (requests.RequestException, ValueError) as exc:
                     raise VisualQualityError("무료 AI 화면 검수 요청에 실패해 업로드를 중단합니다.") from exc
         raise VisualQualityError("사용 가능한 무료 Gemini 화면 검수 모델을 찾지 못했습니다.")

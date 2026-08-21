@@ -42,12 +42,10 @@ SOURCE_REQUIREMENTS: Tuple[str, ...] = (
 # 무료 스톡 검색에서 비교적 반복 확보가 가능한 맨몸 동작 중심 루틴이다.
 # 링·세부 회전처럼 검색 결과 오차가 큰 루틴은 자동 공개 대상에서 제외한다.
 REAL_VIDEO_ROUTINE_IDS: Tuple[str, ...] = (
-    "morning-core",
-    "hip-stability",
-    "beginner-core",
     "no-jump",
+    "morning-core",
+    "beginner-core",
     "upper-body-core",
-    "inner-thigh-control",
 )
 
 
@@ -65,8 +63,7 @@ def real_video_routine_candidates(
 ) -> List[Routine]:
     """최근 반복을 피하면서, 검수 실패 시 시도할 무료 실제 영상 루틴을 정한다."""
     recent = {str(item.get("routine_id") or "") for item in list(records)[-5:]}
-    supported = [item for item in ROUTINES if item.routine_id in REAL_VIDEO_ROUTINE_IDS]
+    by_id = {item.routine_id: item for item in ROUTINES}
+    supported = [by_id[routine_id] for routine_id in REAL_VIDEO_ROUTINE_IDS]
     available = [item for item in supported if item.routine_id not in recent] or supported
-    start = (today or date.today()).toordinal() % len(available)
-    ordered = available[start:] + available[:start]
-    return ordered[: max(1, limit)]
+    return available[: max(1, limit)]

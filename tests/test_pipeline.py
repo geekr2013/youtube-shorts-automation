@@ -133,8 +133,10 @@ class PilatesPipelineTests(unittest.TestCase):
     def test_real_video_candidates_avoid_hard_to_match_prop_routines(self):
         candidates = real_video_routine_candidates([], today=date(2026, 8, 21), limit=3)
         self.assertEqual(len(candidates), 3)
+        self.assertEqual(candidates[0].routine_id, "no-jump")
         self.assertTrue(all(item.routine_id in REAL_VIDEO_ROUTINE_IDS for item in candidates))
         self.assertTrue(all("ring-side-bend" not in item.exercise_slugs for item in candidates))
+        self.assertTrue(all("side-leg-lift" not in item.exercise_slugs for item in candidates))
 
     def test_routine_selection_is_stable_for_the_same_day(self):
         first = select_routine([], today=date(2026, 8, 19))
