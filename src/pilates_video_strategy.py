@@ -9,7 +9,7 @@ from pilates_catalog import ROUTINES, Routine, routine_exercises
 EXERCISE_VIDEO_SEARCH: Dict[str, str] = {
     "dead-bug": "woman lying dead bug exercise arms legs yoga mat",
     "glute-bridge": "woman glute bridge workout yoga mat fitted activewear",
-    "bird-dog": "woman quadruped bird dog exercise opposite arm leg mat",
+    "bird-dog": "woman side plank leg reach exercise mat",
     "side-leg-lift": "woman side lying leg lift exercise stacked hips mat",
     "spine-twist": "woman seated pilates twist studio",
     "ring-side-bend": "woman pilates ring exercise studio",
@@ -47,6 +47,14 @@ REAL_VIDEO_ROUTINE_IDS: Tuple[str, ...] = (
     "beginner-core",
     "upper-body-core",
 )
+
+# 화면표로 초·중·후반을 사람이 직접 확인한 공개 Pexels 소스다.
+# API 검색 결과에 남아 있는 동안 우선 사용하며, 사라지면 일반 검색과 AI 검수로 돌아간다.
+PREFERRED_SOURCE_IDS: Dict[str, Tuple[str, ...]] = {
+    "bird-dog": ("6437919",),
+    "glute-bridge": ("6525525",),
+    "modified-plank": ("7589753",),
+}
 
 
 def build_clip_queries(routine: Routine) -> List[str]:

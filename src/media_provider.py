@@ -232,6 +232,7 @@ class StockMediaProvider:
         min_required: int = 2,
         one_per_query: bool = False,
         visual_validator: Optional[Callable[[StockClip], Dict[str, Any]]] = None,
+        preferred_source_ids: Iterable[str] = (),
     ) -> List[StockClip]:
         if not self.pexels_key and not self.pixabay_key:
             raise MediaError("PEXELS_API_KEY 또는 PIXABAY_API_KEY가 필요합니다.")
@@ -240,7 +241,7 @@ class StockMediaProvider:
         seen = set()
         for query in [item.strip() for item in queries if item.strip()]:
             clips_before_query = len(clips)
-            candidates = self.search_candidates(query)
+            candidates = self.search_candidates(query, preferred_source_ids)
             for candidate in candidates[:MAX_REVIEW_CANDIDATES_PER_QUERY]:
                 identity = (
                     str(candidate.get("provider") or ""),
@@ -278,8 +279,11 @@ class StockMediaProvider:
             raise MediaError(f"서로 다른 실제 운동 영상을 {min_required}개 이상 확보하지 못했습니다.")
         return clips
 
-    def search_candidates(self, query: str) -> List[Dict[str, Any]]:
+    def search_candidates(
+        self, query: str, preferred_source_ids: Iterable[str] = ()
+    ) -> List[Dict[str, Any]]:
         """검색 관련도 순서를 최대한 보존한 실제 영상 후보 목록을 반환한다."""
+        preferred = {str(item) for item in preferred_source_ids if str(item)}
         candidates: List[Dict[str, Any]] = []
         for searcher in (self._search_pexels, self._search_pixabay):
             try:
@@ -288,6 +292,7 @@ class StockMediaProvider:
                 LOGGER.warning("%s 스톡 검색 실패(%s): %s", searcher.__name__, query, exc)
         candidates.sort(
             key=lambda item: (
+                int(str(item.get("source_id") or "") in preferred),
                 int(item.get("height", 0) >= item.get("width", 0)),
                 int(MIN_VIDEO_SECONDS <= float(item.get("duration", 0) or 0) <= 45),
             ),

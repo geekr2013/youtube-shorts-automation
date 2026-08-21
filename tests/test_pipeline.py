@@ -42,6 +42,7 @@ from pilates_renderer import (
 from pilates_video_strategy import (
     EXERCISE_VIDEO_SEARCH,
     MUSCLE_CLOSEUP_Y,
+    PREFERRED_SOURCE_IDS,
     REAL_VIDEO_ROUTINE_IDS,
     SOURCE_REQUIREMENTS,
     build_clip_queries,
@@ -368,6 +369,12 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertEqual(plank.name_en, "FOREARM PLANK")
         self.assertIn("발뒤꿈치", plank.cue_ko)
         self.assertNotIn("on knees", EXERCISE_VIDEO_SEARCH["modified-plank"])
+
+    def test_manually_reviewed_real_sources_cover_the_priority_routine(self):
+        priority = real_video_routine_candidates([], limit=1)[0]
+        self.assertEqual(priority.routine_id, "no-jump")
+        self.assertTrue(all(slug in PREFERRED_SOURCE_IDS for slug in priority.exercise_slugs))
+        self.assertEqual(EXERCISES["bird-dog"].name_en, "SIDE PLANK FLOW")
 
     def test_media_provider_rejects_mismatch_and_tries_next_candidate(self):
         with patch("media_provider.requests.Session", create=True):

@@ -24,6 +24,7 @@ from pilates_catalog import (
 )
 from pilates_renderer import media_duration, render_pilates_short
 from pilates_video_strategy import (
+    PREFERRED_SOURCE_IDS,
     SOURCE_REQUIREMENTS,
     build_clip_queries,
     real_video_routine_candidates,
@@ -121,7 +122,7 @@ def _refresh_metrics(records: List[Dict[str, Any]]) -> None:
         LOGGER.info("기존 영상 성과를 갱신했습니다.")
 
 
-def _fetch_validated_routine(records: List[Dict[str, Any]]):
+def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: bool = False):
     """무료 스톡 루틴을 순서대로 시도하고 AI 검수를 모두 통과한 한 세트만 반환한다."""
     provider = StockMediaProvider()
     quality_gate = GeminiVisualQualityGate()
@@ -146,7 +147,23 @@ def _fetch_validated_routine(records: List[Dict[str, Any]]):
                     review_dir = WORK_DIR / "visual-review" / exercise.slug / (
                         f"{clip.provider.lower()}-{clip.source_id or 'unknown'}"
                     )
-                    result = quality_gate.review(clip, exercise, review_dir)
+                    preferred_ids = PREFERRED_SOURCE_IDS.get(exercise.slug, ())
+                    if curated_preview:
+                        passed = clip.provider == "Pexels" and clip.source_id in preferred_ids
+                        result = {
+                            "passed": passed,
+                            "approved": passed,
+                            "exercise_match": 1.0 if passed else 0.0,
+                            "realism": 1.0 if passed else 0.0,
+                            "visibility": 1.0 if passed else 0.0,
+                            "professional_attire": 1.0 if passed else 0.0,
+                            "safe_framing": passed,
+                            "reason": "사람이 초·중·후반 화면표를 직접 검수한 공개 소스",
+                            "model": "human-contact-sheet-review",
+                            "sample_count": 3,
+                        }
+                    else:
+                        result = quality_gate.review(clip, exercise, review_dir)
                     if result.get("passed"):
                         used_sources.add(identity)
                     return result
@@ -158,6 +175,7 @@ def _fetch_validated_routine(records: List[Dict[str, Any]]):
                     min_required=1,
                     one_per_query=True,
                     visual_validator=review,
+                    preferred_source_ids=PREFERRED_SOURCE_IDS.get(exercise.slug, ()),
                 )
                 approved_by_exercise[exercise.slug] = fetched[0]
                 clips.append(fetched[0])
@@ -192,7 +210,8 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     render_dir = WORK_DIR / "render"
     render_dir.mkdir(parents=True, exist_ok=True)
 
-    routine, clips = _fetch_validated_routine(records)
+    curated_preview = dry_run and os.getenv("CURATED_PREVIEW", "").lower() == "true"
+    routine, clips = _fetch_validated_routine(records, curated_preview=curated_preview)
     LOGGER.info("선정 루틴: %s / %s", routine.title_ko, routine.title_en)
     api_key = os.getenv("YOUTUBE_DATA_API_KEY", "").strip()
     benchmarks = fetch_pilates_short_benchmarks(api_key) if api_key else []
