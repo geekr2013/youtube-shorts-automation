@@ -347,6 +347,22 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertEqual(request.call_count, 2)
         delay.assert_any_call(1)
 
+    def test_gemini_visual_review_uses_second_free_key_after_quota(self):
+        limited = Mock(status_code=429)
+        available = Mock(status_code=200)
+        available.raise_for_status.return_value = None
+        available.json.return_value = {"candidates": []}
+        with patch.dict(
+            "os.environ", {"GEMINI_API_KEY": "first", "GOOGLE_API_KEY": "second"}, clear=True
+        ), patch(
+            "visual_quality.requests.post", side_effect=[limited, available], create=True
+        ) as request:
+            gate = GeminiVisualQualityGate()
+            payload, _ = gate._generate([{"text": "review"}])
+        self.assertEqual(payload, {"candidates": []})
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_args.kwargs["headers"]["x-goog-api-key"], "second")
+
     def test_free_stock_plank_is_the_common_forearm_variant(self):
         plank = EXERCISES["modified-plank"]
         self.assertEqual(plank.name_en, "FOREARM PLANK")

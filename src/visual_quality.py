@@ -116,7 +116,13 @@ def meets_visual_thresholds(result: Dict[str, Any]) -> bool:
 
 class GeminiVisualQualityGate:
     def __init__(self, api_key: str = "", model: str = ""):
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+        keys = [api_key] if api_key else [
+            os.getenv("GEMINI_API_KEY", ""),
+            os.getenv("GOOGLE_API_KEY", ""),
+        ]
+        self.api_keys = list(dict.fromkeys(item for item in keys if item))
+        self.api_key_index = 0
+        self.api_key = self.api_keys[0] if self.api_keys else ""
         self.model = model or GEMINI_VISION_MODEL
         self._last_request_at = 0.0
         if not self.api_key:
@@ -155,6 +161,12 @@ class GeminiVisualQualityGate:
                         LOGGER.warning("Gemini 모델 일시 장애 지속, 무료 대체 모델 시도: %s", model)
                         break
                     if response.status_code == 429:
+                        if self.api_key_index + 1 < len(self.api_keys):
+                            self.api_key_index += 1
+                            self.api_key = self.api_keys[self.api_key_index]
+                            self._last_request_at = 0.0
+                            LOGGER.warning("첫 번째 무료 Gemini 키 한도 도달, 예비 무료 키로 전환")
+                            return self._generate(parts)
                         if attempt < 1:
                             retry_after = float(response.headers.get("Retry-After", 20) or 20)
                             wait_seconds = min(45.0, max(15.0, retry_after))
