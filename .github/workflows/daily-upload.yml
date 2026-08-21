@@ -20,6 +20,11 @@ on:
         required: false
         default: false
         type: boolean
+      candidate_review:
+        description: '업로드 없이 실제 영상 후보 화면표만 만들기'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   actions: read
@@ -91,9 +96,13 @@ jobs:
           python -m compileall -q src
           python -m unittest discover -s tests -v
 
+      - name: 실제 영상 후보 화면표 만들기
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_review == true }}
+        run: python src/candidate_review.py
+
       - name: 영상 생성만 테스트
         id: dry_run
-        if: ${{ (github.event_name == 'push' && !contains(github.event.head_commit.message, '[launch-upload]') && !contains(github.event.head_commit.message, '[publish-preview]')) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
+        if: ${{ (github.event_name == 'push' && !contains(github.event.head_commit.message, '[launch-upload]') && !contains(github.event.head_commit.message, '[publish-preview]')) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true && inputs.candidate_review != true) }}
         run: python src/main.py --dry-run
 
       - name: 영상 생성 및 공개 업로드
@@ -139,6 +148,8 @@ jobs:
             data/work/metadata.json
             data/work/render/final_short.mp4
             data/work/render/contact-sheet.jpg
+            data/candidate-review/candidates.json
+            data/candidate-review/**/*.jpg
           if-no-files-found: ignore
           retention-days: 3
 

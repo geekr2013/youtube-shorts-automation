@@ -240,20 +240,7 @@ class StockMediaProvider:
         seen = set()
         for query in [item.strip() for item in queries if item.strip()]:
             clips_before_query = len(clips)
-            candidates: List[Dict[str, Any]] = []
-            for searcher in (self._search_pexels, self._search_pixabay):
-                try:
-                    candidates.extend(searcher(query))
-                except Exception as exc:
-                    LOGGER.warning("%s 스톡 검색 실패(%s): %s", searcher.__name__, query, exc)
-            candidates.sort(
-                key=lambda item: (
-                    int(item.get("height", 0) >= item.get("width", 0)),
-                    int(MIN_VIDEO_SECONDS <= float(item.get("duration", 0) or 0) <= 45),
-                    min(int(item.get("width", 0) or 0), int(item.get("height", 0) or 0)),
-                ),
-                reverse=True,
-            )
+            candidates = self.search_candidates(query)
             for candidate in candidates[:MAX_REVIEW_CANDIDATES_PER_QUERY]:
                 identity = (
                     str(candidate.get("provider") or ""),
@@ -290,4 +277,21 @@ class StockMediaProvider:
         if len(clips) < min_required:
             raise MediaError(f"서로 다른 실제 운동 영상을 {min_required}개 이상 확보하지 못했습니다.")
         return clips
+
+    def search_candidates(self, query: str) -> List[Dict[str, Any]]:
+        """검색 관련도 순서를 최대한 보존한 실제 영상 후보 목록을 반환한다."""
+        candidates: List[Dict[str, Any]] = []
+        for searcher in (self._search_pexels, self._search_pixabay):
+            try:
+                candidates.extend(searcher(query))
+            except Exception as exc:
+                LOGGER.warning("%s 스톡 검색 실패(%s): %s", searcher.__name__, query, exc)
+        candidates.sort(
+            key=lambda item: (
+                int(item.get("height", 0) >= item.get("width", 0)),
+                int(MIN_VIDEO_SECONDS <= float(item.get("duration", 0) or 0) <= 45),
+            ),
+            reverse=True,
+        )
+        return candidates
 
