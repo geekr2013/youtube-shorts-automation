@@ -638,6 +638,25 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-21T04:52:43.388391+00:00",
+      "topic": "층간소음 없는 홈트",
+      "title": "저장하고 따라 하는 층간소음 없는 홈트 3동작 | NO-JUMP PILATES",
+      "content_format": "pilates-real-video-v1",
+      "routine_id": "no-jump",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "qDceEXKyDBQ",
+      "video_url": "https://www.youtube.com/shorts/qDceEXKyDBQ",
+      "source_url": "",
+      "asset_urls": [],
+      "engagement_comment": "💬 집에서 가장 자주 운동하는 시간대는 언제인가요?\n무리하지 않은 범위에서 알려주세요.",
+      "preview_run_id": "32447589106",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
