@@ -37,7 +37,10 @@ EDGE_TTS_VOICES = (
     "ko-KR-InJoonNeural",
 )
 AUDIO_MIX_MODE = "voice_only"
-REFERENCE_IMAGE = ROOT / "assets" / "instructor" / "hana-reference.jpg"
+REFERENCE_IMAGE = ROOT / "assets" / "instructor" / "hana-alignment-reference.png"
+MOTION_MODE = "reviewed-keyframe-sequence"
+FFMPEG_BINARY = os.getenv("FFMPEG_BINARY", "ffmpeg")
+FFPROBE_BINARY = os.getenv("FFPROBE_BINARY", "ffprobe")
 
 
 class PilatesRenderError(RuntimeError):
@@ -52,10 +55,10 @@ def _run(command: Sequence[str]) -> None:
 
 
 def media_duration(path: Path) -> float:
-    if shutil.which("ffprobe"):
+    if shutil.which(FFPROBE_BINARY):
         result = subprocess.run(
             [
-                "ffprobe",
+                FFPROBE_BINARY,
                 "-v",
                 "error",
                 "-show_entries",
@@ -71,9 +74,9 @@ def media_duration(path: Path) -> float:
             return float(result.stdout.strip())
         except (TypeError, ValueError):
             pass
-    if shutil.which("ffmpeg"):
+    if shutil.which(FFMPEG_BINARY):
         result = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-i", str(path)], capture_output=True, text=True
+            [FFMPEG_BINARY, "-hide_banner", "-i", str(path)], capture_output=True, text=True
         )
         match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", result.stderr)
         if match:
@@ -183,7 +186,7 @@ def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str
     normalized = output_dir / "narration.m4a"
     _run(
         [
-            "ffmpeg",
+            FFMPEG_BINARY,
             "-y",
             "-i",
             str(raw),
@@ -222,12 +225,10 @@ def _ass_escape(text: str) -> str:
 
 
 def segment_plan(duration: float) -> List[float]:
-    intro = min(3.4, max(2.8, duration * 0.11))
-    outro = min(2.8, max(2.2, duration * 0.08))
-    movement = (duration - intro - outro) / 3
+    movement = duration / 3
     if movement < 5.5:
         raise PilatesRenderError("동작 안내 시간이 너무 짧습니다.")
-    return [intro, movement, movement, movement, outro]
+    return [movement, movement, duration - movement * 2]
 
 
 def write_overlay_ass(path: Path, routine: Routine, duration: float) -> Dict[str, object]:
@@ -242,12 +243,11 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Brand,NanumGothic,34,&H00FFFFFF,&H00FFFFFF,&H66000000,&H00000000,-1,0,0,0,100,100,1,0,1,2,0,7,58,180,80,1
-Style: Intro,NanumGothic,66,&H00FFFFFF,&H00FFFFFF,&H88000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,5,80,210,300,1
-Style: Title,NanumGothic,58,&H00FFFFFF,&H00FFFFFF,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,7,82,220,1020,1
-Style: Cue,NanumGothic,45,&H00FFFFFF,&H00FFFFFF,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,82,220,1160,1
-Style: English,NanumGothic,29,&H00E8E1D8,&H00E8E1D8,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,82,220,1230,1
-Style: Reps,NanumGothic,39,&H0000EBD7,&H0000EBD7,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,82,220,1320,1
+Style: Hook,NanumGothic,68,&H00FFFFFF,&H00FFFFFF,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,7,82,116,160,1
+Style: Title,NanumGothic,58,&H00FFFFFF,&H00FFFFFF,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,7,82,116,160,1
+Style: Cue,NanumGothic,48,&H00FFFFFF,&H00FFFFFF,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,82,116,300,1
+Style: English,NanumGothic,31,&H00E8E1D8,&H00E8E1D8,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,82,116,370,1
+Style: Reps,NanumGothic,42,&H0000EBD7,&H0000EBD7,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,82,116,440,1
 Style: Panel,Arial,20,&H66000000,&H66000000,&H66000000,&H66000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 
 [Events]
@@ -261,36 +261,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"Dialogue: {layer},{_ass_time(start)},{_ass_time(end)},{style},,0,0,0,,{{\\fad(140,100)}}{text}\n"
         )
 
-    dialogue(0, duration, "Brand", f"{INSTRUCTOR_NAME_EN} PILATES", 4)
-    intro_end = lengths[0]
-    intro_text = f"{{\\pos(540,820)}}{_ass_escape(routine.title_ko)}\\N{{\\fs38\\c&H00E8E1D8&}}{_ass_escape(routine.title_en)}"
-    dialogue(0, intro_end, "Intro", intro_text, 3)
-    cursor = intro_end
+    hook_end = min(2.2, lengths[0] * 0.36)
+    hook_panel = r"{\p1\1c&H101820&\1a&H48&\pos(48,120)}m 0 0 l 900 0 l 900 310 l 0 310{\p0}"
+    dialogue(0, hook_end, "Panel", hook_panel, 0)
+    hook_text = (
+        f"{{\\pos(82,160)}}{_ass_escape(routine.title_ko)}\\N"
+        f"{{\\fs36\\c&H00E8E1D8&}}3 MOVES · {_ass_escape(routine.title_en)}"
+    )
+    dialogue(0, hook_end, "Hook", hook_text, 3)
 
-    for index, (exercise, length) in enumerate(zip(exercises, lengths[1:4]), start=1):
+    for index, (exercise, length) in enumerate(zip(exercises, lengths), start=1):
         end = cursor + length
-        is_standing = exercise.slug == "ring-side-bend"
-        panel_y = 990 if is_standing else 210
-        title_y = 1020 if is_standing else 250
-        cue_y = 1160 if is_standing else 390
-        english_y = 1230 if is_standing else 465
-        reps_y = 1320 if is_standing else 560
-        panel = rf"{{\p1\1c&H101820&\1a&H55&\pos(48,{panel_y})}}m 0 0 l 804 0 l 804 430 l 0 430{{\p0}}"
-        dialogue(cursor, end, "Panel", panel, 0)
-        dialogue(cursor, end, "Title", f"{{\\pos(82,{title_y})}}{index}/3  {_ass_escape(exercise.name_ko)}\\N{{\\fs34\\c&H00E8E1D8&}}{_ass_escape(exercise.name_en)}", 3)
-        dialogue(cursor, end, "Cue", f"{{\\pos(82,{cue_y})}}{_ass_escape(exercise.cue_ko)}", 3)
-        dialogue(cursor, end, "English", f"{{\\pos(82,{english_y})}}{_ass_escape(exercise.cue_en)}", 3)
-        dialogue(cursor, end, "Reps", f"{{\\pos(82,{reps_y})}}{_ass_escape(exercise.prescription_ko)}  ·  {exercise.prescription_en}", 3)
+        text_start = hook_end if index == 1 else cursor
+        text_end = end - (1.7 if index == 3 else 0.0)
+        panel = r"{\p1\1c&H101820&\1a&H48&\pos(48,120)}m 0 0 l 900 0 l 900 390 l 0 390{\p0}"
+        dialogue(text_start, text_end, "Panel", panel, 0)
+        dialogue(text_start, text_end, "Title", f"{{\\pos(82,160)}}{index}/3  {_ass_escape(exercise.name_ko)}\\N{{\\fs34\\c&H00E8E1D8&}}{_ass_escape(exercise.name_en)}", 3)
+        dialogue(text_start, text_end, "Cue", f"{{\\pos(82,300)}}{_ass_escape(exercise.cue_ko)}", 3)
+        dialogue(text_start, text_end, "English", f"{{\\pos(82,370)}}{_ass_escape(exercise.cue_en)}", 3)
+        dialogue(text_start, text_end, "Reps", f"{{\\pos(82,440)}}{_ass_escape(exercise.prescription_ko)}  ·  {exercise.prescription_en}", 3)
         cursor = end
 
-    outro_text = "{\\pos(540,820)}저장하고 천천히 따라 해요\\N{\\fs34\\c&H00E8E1D8&}SAVE & MOVE WITH CONTROL"
-    dialogue(cursor, duration, "Intro", outro_text, 3)
+    outro_start = max(0.0, duration - 1.7)
+    dialogue(outro_start, duration, "Panel", hook_panel, 0)
+    outro_text = "{\\pos(82,160)}저장하고 오늘 한 세트\\N{\\fs36\\c&H00E8E1D8&}SAVE & TRY ONE SET TODAY"
+    dialogue(outro_start, duration, "Hook", outro_text, 3)
     path.write_text(header + "".join(lines), encoding="utf-8-sig")
     return {
         "language_mode": "ko+en",
         "layout": "YouTube Shorts safe-area panels",
         "korean_title_font_size": 58,
-        "english_cue_font_size": 29,
+        "english_cue_font_size": 31,
+        "hook": "movement starts on frame one; no static intro card",
+        "wrap_mode": "explicit lines; no automatic Korean syllable splitting",
+        "movement_visibility": "top safe-area panel keeps the torso, hips, legs and major joints visible",
         "segment_durations": [round(item, 2) for item in lengths],
     }
 
@@ -302,11 +306,13 @@ def _render_still_segment(image: Path, output: Path, duration: float, punch_in: 
         "crop=1200:2134,"
         f"zoompan=z='min(zoom+{zoom_speed},1.055)':x='iw/2-(iw/zoom/2)':"
         "y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30,"
-        "eq=contrast=1.025:saturation=1.02:brightness=-0.01,format=yuv420p"
+        "eq=contrast=1.03:saturation=1.01:brightness=-0.018:gamma=0.97,"
+        "colorlevels=romax=0.95:gomax=0.95:bomax=0.95,"
+        "unsharp=5:5:0.22:3:3:0,format=yuv420p"
     )
     _run(
         [
-            "ffmpeg",
+            FFMPEG_BINARY,
             "-y",
             "-loop",
             "1",
@@ -325,13 +331,82 @@ def _render_still_segment(image: Path, output: Path, duration: float, punch_in: 
             "20",
             "-pix_fmt",
             "yuv420p",
+            "-r",
+            "30",
+            "-fps_mode",
+            "cfr",
+            "-video_track_timescale",
+            "30000",
             str(output),
         ]
     )
 
 
+def _render_motion_segment(exercise, output: Path, duration: float) -> None:
+    """검수된 시작·수축 키프레임을 짧은 디졸브로 반복 시연한다."""
+    transition = min(0.20, max(0.14, duration * 0.015))
+    phase = duration / 4
+    start_clip = output.with_name(f"{output.stem}_start.mp4")
+    end_clip = output.with_name(f"{output.stem}_end.mp4")
+    _render_still_segment(exercise.motion_start_path, start_clip, phase, punch_in=False)
+    _render_still_segment(exercise.motion_end_path, end_clip, phase, punch_in=True)
+    split_start = "[0:v]fps=30,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS,split=4[s0][s1][s2raw][s3raw]"
+    split_end = "[1:v]fps=30,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS,split=4[e0][e1][e2raw][e3raw]"
+    filters: List[str] = [split_start, split_end]
+    if exercise.bilateral:
+        filters.extend(("[s2raw]hflip[s2]", "[s3raw]hflip[s3]", "[e2raw]hflip[e2]", "[e3raw]hflip[e3]"))
+    else:
+        filters.extend(("[s2raw]null[s2]", "[s3raw]null[s3]", "[e2raw]null[e2]", "[e3raw]null[e3]"))
+    blend_start = max(0.0, phase - transition)
+    progress = f"min(max((T-{blend_start:.3f})/{transition:.3f},0),1)"
+    blend = f"if(lt(T,{blend_start:.3f}),A,A*(1-{progress})+B*{progress})"
+    filters.extend(
+        (
+            f"[s0][e0]blend=all_expr='{blend}':shortest=1[p0]",
+            f"[e1][s1]blend=all_expr='{blend}':shortest=1[p1]",
+            f"[s2][e2]blend=all_expr='{blend}':shortest=1[p2]",
+            f"[e3][s3]blend=all_expr='{blend}':shortest=1[p3]",
+            "[p0][p1][p2][p3]concat=n=4:v=1:a=0[outv]",
+        )
+    )
+    try:
+        _run(
+            [
+                FFMPEG_BINARY,
+                "-y",
+                "-i",
+                str(start_clip),
+                "-i",
+                str(end_clip),
+                "-filter_complex",
+                ";".join(filters),
+                "-map",
+                "[outv]",
+                "-t",
+                f"{duration:.3f}",
+                "-an",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "fast",
+                "-crf",
+                "20",
+                "-pix_fmt",
+                "yuv420p",
+                "-r",
+                "30",
+                "-fps_mode",
+                "cfr",
+                "-video_track_timescale",
+                "30000",
+                str(output),
+            ]
+        )
+    finally:
+        start_clip.unlink(missing_ok=True)
+        end_clip.unlink(missing_ok=True)
 def render_pilates_short(routine: Routine, output_dir: Path, output_name: str = "final_short.mp4") -> Path:
-    if not shutil.which("ffmpeg"):
+    if not shutil.which(FFMPEG_BINARY):
         raise PilatesRenderError("FFmpeg가 설치되어 있지 않습니다.")
     if not REFERENCE_IMAGE.exists():
         raise PilatesRenderError("하나 강사 기준 이미지가 없습니다.")
@@ -340,33 +415,46 @@ def render_pilates_short(routine: Routine, output_dir: Path, output_name: str = 
     narration = build_narration(routine)
     narration_path, duration, audio_metadata = create_narration(narration, output_dir)
     lengths = segment_plan(duration)
-    images = [REFERENCE_IMAGE, *(item.pose_path for item in routine_exercises(routine)), REFERENCE_IMAGE]
+    exercises = routine_exercises(routine)
     segments: List[Path] = []
-    for index, (image, length) in enumerate(zip(images, lengths)):
-        segment = output_dir / f"segment_{index + 1}.mp4"
-        _render_still_segment(image, segment, length, punch_in=index % 2 == 1)
+    for index, (exercise, length) in enumerate(zip(exercises, lengths), start=1):
+        segment = output_dir / f"segment_{index}.mp4"
+        _render_motion_segment(exercise, segment, length)
         segments.append(segment)
 
-    concat_file = output_dir / "segments.txt"
-    concat_file.write_text(
-        "".join(f"file '{item.resolve().as_posix()}'\n" for item in segments),
-        encoding="utf-8",
-    )
     visual = output_dir / "visual.mp4"
+    concat_inputs: List[str] = []
+    concat_filters: List[str] = []
+    for index, segment in enumerate(segments):
+        concat_inputs.extend(("-i", str(segment)))
+        concat_filters.append(f"[{index}:v]fps=30,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v{index}]")
+    concat_filters.append("[v0][v1][v2]concat=n=3:v=1:a=0[outv]")
     _run(
         [
-            "ffmpeg",
+            FFMPEG_BINARY,
             "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(concat_file),
+            *concat_inputs,
+            "-filter_complex",
+            ";".join(concat_filters),
+            "-map",
+            "[outv]",
             "-t",
             f"{duration:.3f}",
-            "-c",
-            "copy",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-r",
+            "30",
+            "-fps_mode",
+            "cfr",
+            "-video_track_timescale",
+            "30000",
             str(visual),
         ]
     )
@@ -376,7 +464,7 @@ def render_pilates_short(routine: Routine, output_dir: Path, output_name: str = 
     final_path = output_dir / output_name
     _run(
         [
-            "ffmpeg",
+            FFMPEG_BINARY,
             "-y",
             "-i",
             str(visual),
@@ -414,6 +502,24 @@ def render_pilates_short(routine: Routine, output_dir: Path, output_name: str = 
     )
     (output_dir / "caption_metadata.json").write_text(
         json.dumps(caption_metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    (output_dir / "visual_metadata.json").write_text(
+        json.dumps(
+            {
+                "motion_mode": MOTION_MODE,
+                "paid_video_generation": False,
+                "identity_locked": True,
+                "wardrobe": "sage longline training top and slate alignment shorts",
+                "lighting": "diffused matte skin with compressed highlights and gentle side definition",
+                "sequence": "start-contraction-return-opposite-side",
+                "camera_angles": [item.camera_angle for item in exercises],
+                "muscle_focus": [item.muscle_focus for item in exercises],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
     )
     LOGGER.info("필라테스 쇼츠 생성: %.1f초 / %.1fMB", duration, final_path.stat().st_size / 1024 / 1024)
     return final_path

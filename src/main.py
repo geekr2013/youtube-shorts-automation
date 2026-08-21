@@ -60,7 +60,7 @@ def check_configuration(for_upload: bool) -> List[str]:
 
 
 def build_title(routine) -> str:
-    return f"{routine.title_ko} | {routine.title_en}"
+    return f"{routine.title_ko} 3동작 | {routine.title_en}"
 
 
 def build_engagement_comment(routine) -> str:
@@ -74,13 +74,14 @@ def build_description(routine) -> str:
         for index, item in enumerate(exercises, start=1)
     ]
     return (
-        f"{routine.intro_ko}\n\n"
+        f"첫 화면부터 바로 따라 하는 {routine.intro_ko}\n\n"
         + "\n".join(movement_lines)
         + "\n\n호흡을 멈추지 말고 천천히 진행하세요. 통증, 어지러움 또는 불편함이 느껴지면 즉시 중단하세요. "
         "부상, 질환, 임신 등 개인 상황이 있다면 운동 전에 의료진 또는 자격을 갖춘 지도자와 상담하세요.\n\n"
         f"강사 캐릭터: {INSTRUCTOR_NAME_KO} / {INSTRUCTOR_NAME_EN}\n"
         "영상 속 인물은 AI로 만든 가상 성인 강사이며 실제 인물이 아닙니다. "
-        "운동 자세 이미지는 매일 새로 생성하지 않고 검수된 동일 인물 자산만 사용합니다.\n"
+        "검수된 동일 인물의 동작 단계 자산을 사용해 시작 자세와 수축 자세를 반복 시연합니다. "
+        "정지화면 도입 없이 동작으로 시작합니다.\n"
         "배경음악 없이 한국어 여성 안내 음성과 한·영 자막으로 제작했습니다.\n\n"
         f"댓글 질문: {routine.engagement_question}\n\n"
         "#shorts #필라테스 #홈트 #Pilates #Workout"
@@ -125,9 +126,10 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     duration = media_duration(final_video)
     audio_metadata = json.loads((render_dir / "audio_metadata.json").read_text(encoding="utf-8"))
     caption_metadata = json.loads((render_dir / "caption_metadata.json").read_text(encoding="utf-8"))
+    visual_metadata = json.loads((render_dir / "visual_metadata.json").read_text(encoding="utf-8"))
     exercises = routine_exercises(routine)
     metadata: Dict[str, Any] = {
-        "content_format": "pilates-hana-v1",
+        "content_format": "pilates-hana-motion-v3",
         "routine_id": routine.routine_id,
         "topic": routine.title_ko,
         "title": build_title(routine),
@@ -150,6 +152,10 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
                 "cue_en": item.cue_en,
                 "equipment": item.equipment,
                 "asset": item.pose_path.relative_to(ROOT).as_posix(),
+                "motion_start_asset": item.motion_start_path.relative_to(ROOT).as_posix(),
+                "motion_end_asset": item.motion_end_path.relative_to(ROOT).as_posix(),
+                "camera_angle": item.camera_angle,
+                "muscle_focus": item.muscle_focus,
             }
             for item in exercises
         ],
@@ -158,6 +164,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "duration_seconds": round(duration, 2),
         "audio": audio_metadata,
         "captions": caption_metadata,
+        "visuals": visual_metadata,
         "safety": {"medical_claims": False, "stop_on_pain": True, "beginner_intensity": True},
         "tags": ["필라테스", "홈트", "코어운동", "Pilates", "Workout"],
         "dry_run": dry_run,
@@ -181,7 +188,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     )
     record = {
         "published_at": datetime.now(timezone.utc).isoformat(),
-        "content_format": "pilates-hana-v1",
+        "content_format": "pilates-hana-motion-v3",
         "routine_id": routine.routine_id,
         "topic": routine.title_ko,
         "title": build_title(routine),

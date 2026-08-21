@@ -28,6 +28,8 @@ from pilates_renderer import (
     EDGE_TTS_VOICES,
     GEMINI_TTS_MODEL,
     GEMINI_TTS_VOICE,
+    MOTION_MODE,
+    REFERENCE_IMAGE,
     _synthesize_gemini_tts,
     narration_audio_filter,
     prepare_narration_text,
@@ -45,9 +47,10 @@ class PilatesPipelineTests(unittest.TestCase):
 
     def test_instructor_identity_is_locked(self):
         self.assertEqual(INSTRUCTOR_ID, "hana-v1")
-        reference = ROOT / "assets" / "instructor" / "hana-reference.jpg"
+        reference = REFERENCE_IMAGE
         self.assertTrue(reference.exists())
-        self.assertGreater(reference.stat().st_size, 100_000)
+        self.assertGreater(reference.stat().st_size, 500_000)
+        self.assertEqual(reference.name, "hana-alignment-reference.png")
 
     def test_catalog_has_long_term_rotation(self):
         self.assertGreaterEqual(len(ROUTINES), 10)
@@ -61,7 +64,27 @@ class PilatesPipelineTests(unittest.TestCase):
         for exercise in EXERCISES.values():
             self.assertTrue(exercise.pose_path.exists(), exercise.pose_path)
             self.assertGreater(exercise.pose_path.stat().st_size, 100_000)
-            self.assertEqual(exercise.pose_path.suffix, ".jpg")
+            self.assertIn(exercise.pose_path.suffix, {".jpg", ".png"})
+
+    def test_every_exercise_has_reviewed_motion_keyframes(self):
+        angles = set()
+        for exercise in EXERCISES.values():
+            for path in (exercise.motion_start_path, exercise.motion_end_path):
+                self.assertTrue(path.exists(), path)
+                self.assertGreater(path.stat().st_size, 500_000)
+                self.assertEqual(path.suffix, ".png")
+            self.assertTrue(exercise.muscle_focus)
+            angles.add(exercise.camera_angle)
+        self.assertIn("overhead", angles)
+        self.assertIn("side-three-quarter", angles)
+        self.assertIn("front-alignment", angles)
+        self.assertEqual(MOTION_MODE, "reviewed-keyframe-sequence")
+
+    def test_catalog_covers_chest_glutes_and_inner_thighs(self):
+        self.assertIn("가슴", EXERCISES["kneeling-push-up"].muscle_focus)
+        self.assertIn("둔근", EXERCISES["glute-bridge"].muscle_focus)
+        self.assertIn("내전근", EXERCISES["inner-thigh-lift"].muscle_focus)
+        self.assertEqual(EXERCISES["dead-bug"].camera_angle, "overhead")
 
     def test_every_exercise_has_korean_and_english_guidance(self):
         for exercise in EXERCISES.values():
@@ -93,11 +116,11 @@ class PilatesPipelineTests(unittest.TestCase):
         second = select_routine([], today=date(2026, 8, 19))
         self.assertEqual(first.routine_id, second.routine_id)
 
-    def test_segment_plan_reserves_three_readable_movement_sections(self):
+    def test_segment_plan_starts_with_three_readable_movement_sections(self):
         lengths = segment_plan(32.0)
-        self.assertEqual(len(lengths), 5)
+        self.assertEqual(len(lengths), 3)
         self.assertAlmostEqual(sum(lengths), 32.0)
-        self.assertTrue(all(item >= 5.5 for item in lengths[1:4]))
+        self.assertTrue(all(item >= 5.5 for item in lengths))
 
     def test_overlay_is_bilingual_and_inside_shorts_safe_area(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -109,11 +132,14 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn(first.name_en, content)
         self.assertIn(first.cue_ko, content)
         self.assertIn(first.cue_en, content)
-        self.assertIn(r"\pos(48,210)", content)
-        self.assertIn(r"\pos(540,820)", content)
+        self.assertIn(r"\pos(48,120)", content)
+        self.assertIn(r"\pos(82,160)", content)
         self.assertIn("NanumGothic", content)
         self.assertNotRegex(content, r"\\pos\([^,]+,1[5-9]\d{2}\)")
         self.assertEqual(metadata["language_mode"], "ko+en")
+        self.assertIn("no automatic Korean syllable splitting", metadata["wrap_mode"])
+        self.assertIn("movement starts on frame one", metadata["hook"])
+        self.assertIn("movement_visibility", metadata)
 
     def test_voice_is_young_female_and_voice_only(self):
         self.assertEqual(GEMINI_TTS_MODEL, "gemini-3.1-flash-tts-preview")
@@ -161,7 +187,7 @@ class PilatesPipelineTests(unittest.TestCase):
     def test_preview_description_matches_pilates_format(self):
         exercise = routine_exercises(self.routine)[0]
         value = build_preview_description({
-            "content_format": "pilates-hana-v1",
+            "content_format": "pilates-hana-motion-v3",
             "title": "아침 코어",
             "exercises": [{
                 "name_ko": exercise.name_ko,
@@ -179,6 +205,17 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertNotIn("StockMediaProvider", source)
         self.assertNotIn("research_exact_topic", source)
         self.assertNotIn("GeminiWriter", source)
+
+    def test_renderer_compresses_skin_highlights(self):
+        source = (ROOT / "src" / "pilates_renderer.py").read_text(encoding="utf-8")
+        self.assertIn("colorlevels=romax=0.95", source)
+        self.assertIn("diffused matte skin", source)
+
+    def test_renderer_reencodes_all_three_motion_segments(self):
+        source = (ROOT / "src" / "pilates_renderer.py").read_text(encoding="utf-8")
+        self.assertIn("[v0][v1][v2]concat=n=3:v=1:a=0[outv]", source)
+        self.assertIn("blend=all_expr", source)
+        self.assertNotIn('str(concat_file)', source)
 
     def test_upload_declares_synthetic_media(self):
         source = (ROOT / "src" / "youtube_uploader.py").read_text(encoding="utf-8")

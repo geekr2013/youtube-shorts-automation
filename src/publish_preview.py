@@ -14,7 +14,7 @@ LOGGER = logging.getLogger("publish-preview")
 
 
 def build_preview_description(metadata: Dict[str, Any]) -> str:
-    if metadata.get("content_format") == "pilates-hana-v1":
+    if str(metadata.get("content_format") or "").startswith("pilates-hana-"):
         exercises = metadata.get("exercises") or []
         lines = [
             f"{index}. {item.get('name_ko', '')} / {item.get('name_en', '')} — {item.get('prescription_ko', '')}"
@@ -97,7 +97,7 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         description=build_preview_description(metadata),
         tags=["shorts", *metadata.get("tags", [])],
         privacy="public",
-        category_id="26" if metadata.get("content_format") == "pilates-hana-v1" else "27",
+        category_id="26" if str(metadata.get("content_format") or "").startswith("pilates-hana-") else "27",
     )
 
     record = {
