@@ -126,28 +126,41 @@ def _fetch_validated_routine(records: List[Dict[str, Any]]):
     provider = StockMediaProvider()
     quality_gate = GeminiVisualQualityGate()
     failures: List[str] = []
+    approved_by_exercise: Dict[str, StockClip] = {}
+    used_sources = set()
     for routine in real_video_routine_candidates(records, limit=3):
         validate_routine(routine)
         exercises = routine_exercises(routine)
         queries = build_clip_queries(routine)
-        exercise_by_query = dict(zip(queries, exercises))
-
-        def review(clip: StockClip) -> Dict[str, Any]:
-            exercise = exercise_by_query[clip.query]
-            review_dir = WORK_DIR / "visual-review" / routine.routine_id / exercise.slug / (
-                f"{clip.provider.lower()}-{clip.source_id or 'unknown'}"
-            )
-            return quality_gate.review(clip, exercise, review_dir)
-
         try:
-            clips = provider.fetch_clips(
-                queries,
-                WORK_DIR / "licensed-source" / routine.routine_id,
-                limit=3,
-                min_required=3,
-                one_per_query=True,
-                visual_validator=review,
-            )
+            clips: List[StockClip] = []
+            for exercise, query in zip(exercises, queries):
+                if exercise.slug in approved_by_exercise:
+                    clips.append(approved_by_exercise[exercise.slug])
+                    continue
+
+                def review(clip: StockClip) -> Dict[str, Any]:
+                    identity = (clip.provider, clip.source_id or clip.source_url)
+                    if identity in used_sources:
+                        return {"passed": False, "reason": "다른 동작에 이미 사용한 영상"}
+                    review_dir = WORK_DIR / "visual-review" / exercise.slug / (
+                        f"{clip.provider.lower()}-{clip.source_id or 'unknown'}"
+                    )
+                    result = quality_gate.review(clip, exercise, review_dir)
+                    if result.get("passed"):
+                        used_sources.add(identity)
+                    return result
+
+                fetched = provider.fetch_clips(
+                    [query],
+                    WORK_DIR / "licensed-source" / exercise.slug,
+                    limit=1,
+                    min_required=1,
+                    one_per_query=True,
+                    visual_validator=review,
+                )
+                approved_by_exercise[exercise.slug] = fetched[0]
+                clips.append(fetched[0])
             if len(clips) != len(routine.exercise_slugs):
                 raise RuntimeError("세 동작과 실제 영상 소스의 수가 일치하지 않습니다.")
             return routine, clips

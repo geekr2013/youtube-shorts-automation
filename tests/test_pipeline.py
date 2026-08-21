@@ -324,7 +324,7 @@ class PilatesPipelineTests(unittest.TestCase):
         available.json.return_value = {"candidates": []}
         with patch(
             "visual_quality.requests.post", side_effect=[missing, available], create=True
-        ) as request:
+        ) as request, patch("visual_quality.time.sleep"):
             payload, model = GeminiVisualQualityGate("key")._generate([{"text": "review"}])
         self.assertEqual(payload, {"candidates": []})
         self.assertEqual(model, "gemini-3.5-flash")
@@ -342,7 +342,7 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertEqual(payload, {"candidates": []})
         self.assertEqual(model, "gemini-3.7-flash")
         self.assertEqual(request.call_count, 2)
-        delay.assert_called_once_with(1)
+        delay.assert_any_call(1)
 
     def test_media_provider_rejects_mismatch_and_tries_next_candidate(self):
         with patch("media_provider.requests.Session", create=True):

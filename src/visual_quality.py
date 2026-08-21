@@ -29,6 +29,7 @@ MIN_REALISM = 0.78
 MIN_VISIBILITY = 0.75
 MIN_PROFESSIONAL_ATTIRE = 0.70
 FRAME_POSITIONS = (0.2, 0.5, 0.8)
+MIN_REQUEST_INTERVAL_SECONDS = 13.0
 
 
 class VisualQualityError(RuntimeError):
@@ -117,14 +118,18 @@ class GeminiVisualQualityGate:
     def __init__(self, api_key: str = "", model: str = ""):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
         self.model = model or GEMINI_VISION_MODEL
+        self._last_request_at = 0.0
         if not self.api_key:
             raise VisualQualityError("실제 운동 영상의 AI 화면 검수 키가 없습니다.")
 
     def _generate(self, parts: List[Dict[str, Any]]) -> tuple[Dict[str, Any], str]:
         models = list(dict.fromkeys((self.model, *GEMINI_VISION_FALLBACKS)))
         for model in models:
-            for attempt in range(3):
+            for attempt in range(2):
                 try:
+                    elapsed = time.monotonic() - self._last_request_at
+                    if elapsed < MIN_REQUEST_INTERVAL_SECONDS:
+                        time.sleep(MIN_REQUEST_INTERVAL_SECONDS - elapsed)
                     response = requests.post(
                         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                         headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
@@ -138,15 +143,25 @@ class GeminiVisualQualityGate:
                         },
                         timeout=60,
                     )
+                    self._last_request_at = time.monotonic()
                     if response.status_code == 404:
                         LOGGER.warning("Gemini 화면 검수 모델 미지원, 무료 대체 모델 시도: %s", model)
                         break
                     if response.status_code in {500, 502, 503, 504}:
-                        if attempt < 2:
+                        if attempt < 1:
                             LOGGER.warning("Gemini 일시 장애, 화면 검수 재시도: %s", model)
                             time.sleep(2 ** attempt)
                             continue
                         LOGGER.warning("Gemini 모델 일시 장애 지속, 무료 대체 모델 시도: %s", model)
+                        break
+                    if response.status_code == 429:
+                        if attempt < 1:
+                            retry_after = float(response.headers.get("Retry-After", 20) or 20)
+                            wait_seconds = min(45.0, max(15.0, retry_after))
+                            LOGGER.warning("Gemini 무료 호출 한도 대기 후 재시도: %.0f초", wait_seconds)
+                            time.sleep(wait_seconds)
+                            continue
+                        LOGGER.warning("Gemini 무료 호출 한도, 무료 대체 모델 시도: %s", model)
                         break
                     response.raise_for_status()
                     return response.json(), model
@@ -180,6 +195,7 @@ class GeminiVisualQualityGate:
                 }
             )
         payload, selected_model = self._generate(parts)
+        self.model = selected_model
         try:
             raw = payload["candidates"][0]["content"]["parts"][0]["text"]
             result = json.loads(raw)

@@ -7,15 +7,15 @@ from pilates_catalog import ROUTINES, Routine, routine_exercises
 
 
 EXERCISE_VIDEO_SEARCH: Dict[str, str] = {
-    "dead-bug": "woman dead bug core workout yoga mat fitted activewear",
+    "dead-bug": "woman lying dead bug exercise arms legs yoga mat",
     "glute-bridge": "woman glute bridge workout yoga mat fitted activewear",
-    "bird-dog": "woman bird dog core workout yoga mat",
-    "side-leg-lift": "woman side leg lift pilates workout",
+    "bird-dog": "woman quadruped bird dog exercise opposite arm leg mat",
+    "side-leg-lift": "woman side lying leg lift exercise stacked hips mat",
     "spine-twist": "woman seated pilates twist studio",
     "ring-side-bend": "woman pilates ring exercise studio",
-    "modified-plank": "woman knee plank workout yoga mat",
-    "kneeling-push-up": "woman kneeling push up workout mat",
-    "inner-thigh-lift": "woman inner thigh leg lift pilates",
+    "modified-plank": "woman forearm plank on knees side view exercise mat",
+    "kneeling-push-up": "woman kneeling push up side view exercise mat",
+    "inner-thigh-lift": "woman side lying inner thigh leg lift exercise mat",
 }
 
 # 0은 상체, 1은 하체 쪽으로 확대 중심을 이동한다.
