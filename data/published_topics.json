@@ -617,6 +617,27 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-21T02:03:05.026794+00:00",
+      "content_format": "pilates-hana-motion-v3",
+      "routine_id": "inner-thigh-control",
+      "topic": "힙과 안쪽 허벅지",
+      "title": "힙과 안쪽 허벅지 3동작 | HIPS & INNER THIGHS",
+      "instructor_id": "hana-v1",
+      "video_id": "7_PpByV3q34",
+      "video_url": "https://www.youtube.com/shorts/7_PpByV3q34",
+      "exercise_slugs": [
+        "inner-thigh-lift",
+        "glute-bridge",
+        "side-leg-lift"
+      ],
+      "engagement_comment": "💬 안쪽 허벅지와 엉덩이 중 어느 부위가 더 잘 느껴졌나요?\n무리하지 않은 범위에서 알려주세요.",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
