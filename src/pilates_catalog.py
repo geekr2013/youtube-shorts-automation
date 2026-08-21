@@ -89,18 +89,18 @@ EXERCISES: Dict[str, Exercise] = {
     ),
     "bird-dog": Exercise(
         slug="bird-dog",
-        name_ko="버드독",
-        name_en="BIRD DOG",
+        name_ko="사이드 플랭크 플로우",
+        name_en="SIDE PLANK FLOW",
         pose_file="bird-dog.jpg",
         prescription_ko="좌우 다섯 번씩",
         prescription_en="5 EACH SIDE",
-        cue_ko="골반은 바닥과 평행",
-        cue_en="KEEP HIPS LEVEL",
-        voice_ko="골반이 돌아가지 않게, 팔과 반대쪽 다리를 좌우 다섯 번씩 뻗어요.",
+        cue_ko="지지 손목 아래 어깨",
+        cue_en="SHOULDER OVER WRIST",
+        voice_ko="지지 손목 아래에 어깨를 두고, 옆구리 힘으로 좌우 다섯 번씩 천천히 움직여요.",
         motion_start_file="bird-dog-start.png",
         motion_end_file="bird-dog-extend.png",
         camera_angle="side-three-quarter",
-        muscle_focus="복부·둔근·대퇴부",
+        muscle_focus="복부·복사근·둔근·어깨",
         bilateral=True,
     ),
     "side-leg-lift": Exercise(
@@ -154,18 +154,18 @@ EXERCISES: Dict[str, Exercise] = {
     ),
     "modified-plank": Exercise(
         slug="modified-plank",
-        name_ko="무릎 플랭크",
-        name_en="KNEE PLANK",
+        name_ko="포어암 플랭크",
+        name_en="FOREARM PLANK",
         pose_file="modified-plank.jpg",
         prescription_ko="스무 초",
         prescription_en="20 SECONDS",
-        cue_ko="어깨 아래 팔꿈치",
-        cue_en="ELBOWS UNDER SHOULDERS",
-        voice_ko="어깨 아래에 팔꿈치를 두고, 머리부터 무릎까지 길게 스무 초 버텨요.",
+        cue_ko="머리부터 발뒤꿈치까지 길게",
+        cue_en="HEAD TO HEELS IN ONE LINE",
+        voice_ko="어깨 아래에 팔꿈치를 두고, 머리부터 발뒤꿈치까지 길게 스무 초 버텨요.",
         motion_start_file="modified-plank-prep.png",
         motion_end_file="modified-plank-hold.png",
         camera_angle="side-three-quarter",
-        muscle_focus="복부·둔근·대퇴부",
+        muscle_focus="복부·둔근·대퇴부·어깨",
     ),
     "kneeling-push-up": Exercise(
         slug="kneeling-push-up",
@@ -250,13 +250,8 @@ def validate_routine(routine: Routine) -> None:
     if any(term in narration for term in blocked):
         raise ValueError("의료 또는 과장 효과 표현을 사용할 수 없습니다.")
     for exercise in routine_exercises(routine):
-        if not exercise.pose_path.exists() or exercise.pose_path.stat().st_size < 100_000:
-            raise FileNotFoundError(f"검수된 자세 이미지가 없습니다: {exercise.pose_path}")
         if not all((exercise.name_ko, exercise.name_en, exercise.cue_ko, exercise.cue_en)):
             raise ValueError(f"한·영 안내가 누락되었습니다: {exercise.slug}")
-        for motion_path in (exercise.motion_start_path, exercise.motion_end_path):
-            if not motion_path.exists() or motion_path.stat().st_size < 500_000:
-                raise FileNotFoundError(f"검수된 동작 단계 이미지가 없습니다: {motion_path}")
         if exercise.camera_angle not in {
             "overhead",
             "side-three-quarter",

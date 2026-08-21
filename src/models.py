@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -43,4 +43,10 @@ class StockClip:
     provider: str
     source_url: str
     creator: str = ""
+    query: str = ""
+    source_id: str = ""
+    width: int = 0
+    height: int = 0
+    duration: float = 0.0
+    visual_quality: Dict[str, Any] = field(default_factory=dict)
 

@@ -14,20 +14,27 @@ LOGGER = logging.getLogger("publish-preview")
 
 
 def build_preview_description(metadata: Dict[str, Any]) -> str:
-    if str(metadata.get("content_format") or "").startswith("pilates-hana-"):
+    if str(metadata.get("content_format") or "").startswith("pilates-"):
         exercises = metadata.get("exercises") or []
         lines = [
             f"{index}. {item.get('name_ko', '')} / {item.get('name_en', '')} — {item.get('prescription_ko', '')}"
             for index, item in enumerate(exercises, start=1)
         ]
         engagement = str(metadata.get("engagement_comment") or "").strip()
+        credits = [
+            f"- {item.get('source_provider', '영상 자료')}: {item.get('source_creator', '')} — {item.get('source_url', '')}"
+            for item in exercises
+            if item.get("source_url")
+        ]
         return (
             f"{metadata.get('title', '하나 필라테스')}\n\n"
             + "\n".join(lines)
             + "\n\n통증, 어지러움 또는 불편함이 느껴지면 즉시 중단하세요. "
             "개인 건강 상태에 따라 의료진 또는 자격을 갖춘 지도자와 상담하세요.\n\n"
-            "영상 속 인물은 AI로 만든 가상 성인 강사이며 실제 인물이 아닙니다. "
-            "검수된 동일 인물 자세 자산과 한국어 여성 안내 음성, 한·영 자막으로 제작했습니다.\n\n"
+            "Pexels 또는 Pixabay에서 사용이 허용된 실제 사람의 연속 운동 영상을 "
+            "전신 구도와 목표 근육 클로즈업으로 재편집했습니다. 출연자는 영상마다 달라질 수 있습니다.\n"
+            "AI 한국어 여성 안내 음성과 한·영 자막을 사용했습니다.\n\n"
+            + (("영상 출처\n" + "\n".join(credits) + "\n\n") if credits else "")
             + (f"{engagement}\n\n" if engagement else "")
             + "#shorts #필라테스 #홈트 #Pilates #Workout"
         )
@@ -97,7 +104,7 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         description=build_preview_description(metadata),
         tags=["shorts", *metadata.get("tags", [])],
         privacy="public",
-        category_id="26" if str(metadata.get("content_format") or "").startswith("pilates-hana-") else "27",
+        category_id="26" if str(metadata.get("content_format") or "").startswith("pilates-") else "27",
     )
 
     record = {

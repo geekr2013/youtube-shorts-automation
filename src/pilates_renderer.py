@@ -15,6 +15,7 @@ from typing import Dict, List, Sequence, Tuple
 import edge_tts
 import requests
 
+from models import StockClip
 from pilates_catalog import (
     INSTRUCTOR_NAME_EN,
     INSTRUCTOR_NAME_KO,
@@ -24,6 +25,7 @@ from pilates_catalog import (
     routine_exercises,
     validate_routine,
 )
+from pilates_video_strategy import closeup_focus_y
 
 
 LOGGER = logging.getLogger(__name__)
@@ -38,7 +40,7 @@ EDGE_TTS_VOICES = (
 )
 AUDIO_MIX_MODE = "voice_only"
 REFERENCE_IMAGE = ROOT / "assets" / "instructor" / "hana-alignment-reference.png"
-MOTION_MODE = "reviewed-keyframe-sequence"
+MOTION_MODE = "licensed-real-video-with-form-closeups"
 FFMPEG_BINARY = os.getenv("FFMPEG_BINARY", "ffmpeg")
 FFPROBE_BINARY = os.getenv("FFPROBE_BINARY", "ffprobe")
 
@@ -405,21 +407,101 @@ def _render_motion_segment(exercise, output: Path, duration: float) -> None:
     finally:
         start_clip.unlink(missing_ok=True)
         end_clip.unlink(missing_ok=True)
-def render_pilates_short(routine: Routine, output_dir: Path, output_name: str = "final_short.mp4") -> Path:
+
+
+def _natural_grade_filter() -> str:
+    """피부 질감을 지우지 않고 과한 광택과 스톡 영상 편차만 완화한다."""
+    return (
+        "eq=contrast=1.02:saturation=0.96:brightness=-0.012:gamma=0.99,"
+        "colorlevels=romax=0.97:gomax=0.97:bomax=0.97,"
+        "hqdn3d=0.8:0.8:2:2,unsharp=5:5:0.12:3:3:0,format=yuv420p"
+    )
+
+
+def _render_real_video_segment(exercise, clip: StockClip, output: Path, duration: float) -> None:
+    """실제 연속 동작을 전신 구도에서 목표 근육 클로즈업으로 연결한다."""
+    source_duration = clip.duration or media_duration(clip.path)
+    if source_duration < 4.0:
+        raise PilatesRenderError(f"실제 동영상 길이가 부족합니다: {clip.path}")
+    transition = min(0.28, max(0.18, duration * 0.018))
+    full_duration = duration * 0.44
+    close_duration = duration - full_duration + transition
+    full_seek = min(0.7, max(0.0, source_duration - 1.0))
+    close_seek = full_seek + full_duration - transition
+    focus_y = closeup_focus_y(exercise.slug)
+    grade = _natural_grade_filter()
+    full_filter = (
+        "fps=30,scale=1080:1920:force_original_aspect_ratio=increase,"
+        "crop=1080:1920:x=(iw-1080)/2:y=(ih-1920)/2,setsar=1," + grade
+    )
+    close_filter = (
+        "fps=30,scale=1458:2592:force_original_aspect_ratio=increase,"
+        f"crop=1080:1920:x=(iw-1080)/2:y='min(max((ih-1920)*{focus_y:.3f},0),ih-1920)',"
+        "setsar=1," + grade
+    )
+    _run(
+        [
+            FFMPEG_BINARY,
+            "-y",
+            "-stream_loop",
+            "-1",
+            "-i",
+            str(clip.path),
+            "-filter_complex",
+            f"[0:v]split=2[fullraw][closeraw];"
+            f"[fullraw]trim=start={full_seek:.3f}:duration={full_duration:.3f},"
+            f"setpts=PTS-STARTPTS,{full_filter}[full];"
+            f"[closeraw]trim=start={close_seek:.3f}:duration={close_duration:.3f},"
+            f"setpts=PTS-STARTPTS,{close_filter}[close];"
+            f"[full][close]xfade=transition=fade:duration={transition:.3f}:"
+            f"offset={full_duration - transition:.3f}[outv]",
+            "-map",
+            "[outv]",
+            "-t",
+            f"{duration:.3f}",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-r",
+            "30",
+            "-fps_mode",
+            "cfr",
+            "-video_track_timescale",
+            "30000",
+            str(output),
+        ]
+    )
+
+
+def render_pilates_short(
+    routine: Routine,
+    output_dir: Path,
+    clips: Sequence[StockClip],
+    output_name: str = "final_short.mp4",
+) -> Path:
     if not shutil.which(FFMPEG_BINARY):
         raise PilatesRenderError("FFmpeg가 설치되어 있지 않습니다.")
-    if not REFERENCE_IMAGE.exists():
-        raise PilatesRenderError("하나 강사 기준 이미지가 없습니다.")
     validate_routine(routine)
+    if len(clips) != 3:
+        raise PilatesRenderError("각 동작에 대응하는 실제 동영상 세 개가 필요합니다.")
+    for clip in clips:
+        if not clip.path.exists() or clip.path.suffix.lower() != ".mp4":
+            raise PilatesRenderError(f"실제 동영상 파일이 없습니다: {clip.path}")
     output_dir.mkdir(parents=True, exist_ok=True)
     narration = build_narration(routine)
     narration_path, duration, audio_metadata = create_narration(narration, output_dir)
     lengths = segment_plan(duration)
     exercises = routine_exercises(routine)
     segments: List[Path] = []
-    for index, (exercise, length) in enumerate(zip(exercises, lengths), start=1):
+    for index, (exercise, clip, length) in enumerate(zip(exercises, clips, lengths), start=1):
         segment = output_dir / f"segment_{index}.mp4"
-        _render_motion_segment(exercise, segment, length)
+        _render_real_video_segment(exercise, clip, segment, length)
         segments.append(segment)
 
     visual = output_dir / "visual.mp4"
@@ -497,6 +579,25 @@ def render_pilates_short(routine: Routine, output_dir: Path, output_name: str = 
     )
     if not final_path.exists() or final_path.stat().st_size < 500_000:
         raise PilatesRenderError("최종 필라테스 영상 파일이 생성되지 않았습니다.")
+    contact_sheet = output_dir / "contact-sheet.jpg"
+    _run(
+        [
+            FFMPEG_BINARY,
+            "-y",
+            "-i",
+            str(final_path),
+            "-vf",
+            (
+                "fps=1/4,scale=270:480:force_original_aspect_ratio=decrease,"
+                "pad=270:480:(ow-iw)/2:(oh-ih)/2:black,tile=3x3"
+            ),
+            "-frames:v",
+            "1",
+            "-q:v",
+            "3",
+            str(contact_sheet),
+        ]
+    )
     (output_dir / "audio_metadata.json").write_text(
         json.dumps(audio_metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -508,12 +609,28 @@ def render_pilates_short(routine: Routine, output_dir: Path, output_name: str = 
             {
                 "motion_mode": MOTION_MODE,
                 "paid_video_generation": False,
-                "identity_locked": True,
-                "wardrobe": "sage longline training top and slate alignment shorts",
-                "lighting": "diffused matte skin with compressed highlights and gentle side definition",
-                "sequence": "start-contraction-return-opposite-side",
+                "real_human_footage": True,
+                "identity_locked": False,
+                "wardrobe_target": "professional fitted activewear with minimal visual distraction",
+                "lighting": "source-preserving natural grade with reduced highlight glare",
+                "sequence": "continuous full-body movement to muscle-focused close-up",
+                "closeup_focus_y": [closeup_focus_y(item.slug) for item in exercises],
                 "camera_angles": [item.camera_angle for item in exercises],
                 "muscle_focus": [item.muscle_focus for item in exercises],
+                "sources": [
+                    {
+                        "provider": clip.provider,
+                        "creator": clip.creator,
+                        "source_url": clip.source_url,
+                        "source_id": clip.source_id,
+                        "query": clip.query,
+                        "resolution": f"{clip.width}x{clip.height}",
+                        "duration": round(clip.duration, 2),
+                        "visual_quality": clip.visual_quality,
+                    }
+                    for clip in clips
+                ],
+                "contact_sheet": contact_sheet.name,
             },
             ensure_ascii=False,
             indent=2,
