@@ -14,7 +14,7 @@ EXERCISE_VIDEO_SEARCH: Dict[str, str] = {
     "spine-twist": "woman seated pilates twist studio",
     "ring-side-bend": "woman pilates ring exercise studio",
     "modified-plank": "woman forearm plank side view exercise mat",
-    "kneeling-push-up": "woman kneeling push up side view exercise mat",
+    "kneeling-push-up": "woman knee push ups workout mat",
     "inner-thigh-lift": "woman side lying inner thigh leg lift exercise mat",
 }
 
@@ -51,10 +51,17 @@ REAL_VIDEO_ROUTINE_IDS: Tuple[str, ...] = (
 # 화면표로 초·중·후반을 사람이 직접 확인한 공개 Pexels 소스다.
 # API 검색 결과에 남아 있는 동안 우선 사용하며, 사라지면 일반 검색과 AI 검수로 돌아간다.
 PREFERRED_SOURCE_IDS: Dict[str, Tuple[str, ...]] = {
+    "dead-bug": ("7590852",),
     "bird-dog": ("6437919",),
     "glute-bridge": ("6525525",),
     "modified-plank": ("7589753",),
+    "kneeling-push-up": ("8233048",),
 }
+
+
+def is_human_reviewed_source(exercise_slug: str, provider: str, source_id: str) -> bool:
+    """Return true only for an exact public source checked from three sampled frames."""
+    return provider == "Pexels" and source_id in PREFERRED_SOURCE_IDS.get(exercise_slug, ())
 
 
 def build_clip_queries(routine: Routine) -> List[str]:

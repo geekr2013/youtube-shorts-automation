@@ -46,6 +46,7 @@ from pilates_video_strategy import (
     REAL_VIDEO_ROUTINE_IDS,
     SOURCE_REQUIREMENTS,
     build_clip_queries,
+    is_human_reviewed_source,
     real_video_routine_candidates,
 )
 from publish_preview import build_preview_description, resolve_preview_dir
@@ -138,6 +139,16 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertTrue(all(item.routine_id in REAL_VIDEO_ROUTINE_IDS for item in candidates))
         self.assertTrue(all("ring-side-bend" not in item.exercise_slugs for item in candidates))
         self.assertTrue(all("side-leg-lift" not in item.exercise_slugs for item in candidates))
+
+    def test_every_scheduled_routine_has_exact_human_reviewed_sources(self):
+        by_id = {item.routine_id: item for item in ROUTINES}
+        for routine_id in REAL_VIDEO_ROUTINE_IDS:
+            for slug in by_id[routine_id].exercise_slugs:
+                self.assertIn(slug, PREFERRED_SOURCE_IDS)
+                source_id = PREFERRED_SOURCE_IDS[slug][0]
+                self.assertTrue(is_human_reviewed_source(slug, "Pexels", source_id))
+                self.assertFalse(is_human_reviewed_source(slug, "Pixabay", source_id))
+                self.assertFalse(is_human_reviewed_source(slug, "Pexels", "unreviewed"))
 
     def test_routine_selection_is_stable_for_the_same_day(self):
         first = select_routine([], today=date(2026, 8, 19))
