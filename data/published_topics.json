@@ -657,6 +657,32 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-24T01:18:24.689560+00:00",
+      "content_format": "pilates-real-video-v1",
+      "routine_id": "morning-core",
+      "topic": "아침 코어 깨우기",
+      "title": "저장하고 따라 하는 아침 코어 깨우기 3동작 | MORNING CORE",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "NTw0Qnp6Usw",
+      "video_url": "https://www.youtube.com/shorts/NTw0Qnp6Usw",
+      "exercise_slugs": [
+        "dead-bug",
+        "bird-dog",
+        "glute-bridge"
+      ],
+      "source_ids": [
+        "7590852",
+        "6437919",
+        "6525525"
+      ],
+      "engagement_comment": "💬 아침 운동과 저녁 운동 중 언제가 더 편한가요?\n무리하지 않은 범위에서 알려주세요.",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
