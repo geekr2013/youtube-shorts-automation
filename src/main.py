@@ -27,6 +27,7 @@ from pilates_video_strategy import (
     PREFERRED_SOURCE_IDS,
     SOURCE_REQUIREMENTS,
     build_clip_queries,
+    is_human_reviewed_source,
     real_video_routine_candidates,
 )
 from trend_scout import editing_profile, fetch_pilates_short_benchmarks
@@ -147,20 +148,29 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
                     review_dir = WORK_DIR / "visual-review" / exercise.slug / (
                         f"{clip.provider.lower()}-{clip.source_id or 'unknown'}"
                     )
-                    preferred_ids = PREFERRED_SOURCE_IDS.get(exercise.slug, ())
-                    if curated_preview:
-                        passed = clip.provider == "Pexels" and clip.source_id in preferred_ids
+                    human_reviewed = is_human_reviewed_source(
+                        exercise.slug, clip.provider, clip.source_id
+                    )
+                    if human_reviewed:
                         result = {
-                            "passed": passed,
-                            "approved": passed,
-                            "exercise_match": 1.0 if passed else 0.0,
-                            "realism": 1.0 if passed else 0.0,
-                            "visibility": 1.0 if passed else 0.0,
-                            "professional_attire": 1.0 if passed else 0.0,
-                            "safe_framing": passed,
+                            "passed": True,
+                            "approved": True,
+                            "exercise_match": 1.0,
+                            "realism": 1.0,
+                            "visibility": 1.0,
+                            "professional_attire": 1.0,
+                            "safe_framing": True,
                             "reason": "사람이 초·중·후반 화면표를 직접 검수한 공개 소스",
                             "model": "human-contact-sheet-review",
                             "sample_count": 3,
+                        }
+                    elif curated_preview:
+                        result = {
+                            "passed": False,
+                            "approved": False,
+                            "reason": "사람 검수 목록에 없는 소스",
+                            "model": "human-contact-sheet-review",
+                            "sample_count": 0,
                         }
                     else:
                         result = quality_gate.review(clip, exercise, review_dir)
