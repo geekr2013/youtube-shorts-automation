@@ -31,8 +31,8 @@ def build_preview_description(metadata: Dict[str, Any]) -> str:
             + "\n".join(lines)
             + "\n\n통증, 어지러움 또는 불편함이 느껴지면 즉시 중단하세요. "
             "개인 건강 상태에 따라 의료진 또는 자격을 갖춘 지도자와 상담하세요.\n\n"
-            "Pexels 또는 Pixabay에서 사용이 허용된 실제 사람의 연속 운동 영상을 "
-            "전신 구도와 목표 근육 클로즈업으로 재편집했습니다. 출연자는 영상마다 달라질 수 있습니다.\n"
+            "사람이 동작을 검수한 Pexels 원본 중 같은 성인 운동 모델이 출연하는 실제 사람의 연속 운동 영상만 사용해 "
+            "전신 구도와 목표 근육 클로즈업으로 재편집했습니다. 의상은 합성 변경하지 않았습니다.\n"
             "AI 한국어 여성 안내 음성과 한·영 자막을 사용했습니다.\n\n"
             + (("영상 출처\n" + "\n".join(credits) + "\n\n") if credits else "")
             + (f"{engagement}\n\n" if engagement else "")

@@ -25,7 +25,7 @@ from pilates_catalog import (
     routine_exercises,
     validate_routine,
 )
-from pilates_video_strategy import closeup_focus_y
+from pilates_video_strategy import FIXED_MODEL_ID, closeup_focus_y
 
 
 LOGGER = logging.getLogger(__name__)
@@ -424,7 +424,8 @@ def _render_real_video_segment(exercise, clip: StockClip, output: Path, duration
     if source_duration < 4.0:
         raise PilatesRenderError(f"실제 동영상 길이가 부족합니다: {clip.path}")
     transition = min(0.28, max(0.18, duration * 0.018))
-    full_duration = duration * 0.44
+    # 자세 전체를 먼저 확인한 뒤, 첫 검수 영상처럼 대부분을 코어 클로즈업에 쓴다.
+    full_duration = duration * 0.32
     close_duration = duration - full_duration + transition
     full_seek = min(0.7, max(0.0, source_duration - 1.0))
     close_seek = full_seek + full_duration - transition
@@ -610,10 +611,11 @@ def render_pilates_short(
                 "motion_mode": MOTION_MODE,
                 "paid_video_generation": False,
                 "real_human_footage": True,
-                "identity_locked": False,
-                "wardrobe_target": "professional fitted activewear with minimal visual distraction",
+                "identity_locked": True,
+                "identity_id": FIXED_MODEL_ID,
+                "wardrobe_target": "reviewed fitted crop activewear with the abdomen line unobstructed",
                 "lighting": "source-preserving natural grade with reduced highlight glare",
-                "sequence": "continuous full-body movement to muscle-focused close-up",
+                "sequence": "brief full-body orientation followed by sustained muscle-focused close-up",
                 "closeup_focus_y": [closeup_focus_y(item.slug) for item in exercises],
                 "camera_angles": [item.camera_angle for item in exercises],
                 "muscle_focus": [item.muscle_focus for item in exercises],
