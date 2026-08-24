@@ -16,6 +16,11 @@ EXERCISE_VIDEO_SEARCH: Dict[str, str] = {
     "modified-plank": "woman forearm plank side view exercise mat",
     "kneeling-push-up": "woman knee push ups workout mat",
     "inner-thigh-lift": "woman side lying inner thigh leg lift exercise mat",
+    "plank-control": "woman forearm plank core control side view exercise mat",
+    "plank-reset": "woman plank to child pose exercise mat side view",
+    "knee-fold": "woman supine knee fold core exercise close up",
+    "supine-leg-flow": "woman supine alternating leg core flow exercise mat",
+    "single-knee-stretch": "woman single knee stretch supine exercise mat",
 }
 
 # 0은 상체, 1은 하체 쪽으로 확대 중심을 이동한다.
@@ -29,11 +34,16 @@ MUSCLE_CLOSEUP_Y: Dict[str, float] = {
     "modified-plank": 0.48,
     "kneeling-push-up": 0.34,
     "inner-thigh-lift": 0.69,
+    "plank-control": 0.48,
+    "plank-reset": 0.48,
+    "knee-fold": 0.52,
+    "supine-leg-flow": 0.58,
+    "single-knee-stretch": 0.52,
 }
 
 SOURCE_REQUIREMENTS: Tuple[str, ...] = (
     "real continuous human movement",
-    "professional fitted activewear",
+    "professional fitted crop activewear with the abdomen line unobstructed",
     "uncluttered workout area",
     "major joints and target muscle line visible",
     "no medical or body-transformation claim",
@@ -42,26 +52,41 @@ SOURCE_REQUIREMENTS: Tuple[str, ...] = (
 # 무료 스톡 검색에서 비교적 반복 확보가 가능한 맨몸 동작 중심 루틴이다.
 # 링·세부 회전처럼 검색 결과 오차가 큰 루틴은 자동 공개 대상에서 제외한다.
 REAL_VIDEO_ROUTINE_IDS: Tuple[str, ...] = (
-    "no-jump",
-    "morning-core",
-    "beginner-core",
-    "upper-body-core",
+    "fixed-plank-core",
+    "fixed-supine-core",
+    "fixed-core-mix",
 )
+
+FIXED_MODEL_ID = "miriam-alonso-core-v1"
+FIXED_MODEL_CREATOR = "Miriam Alonso"
+FIXED_MODEL_SOURCES: Dict[str, str] = {
+    "modified-plank": "7589746",
+    "plank-control": "7589748",
+    "plank-reset": "7590458",
+    "knee-fold": "7590852",
+    "supine-leg-flow": "7590846",
+    "single-knee-stretch": "7590845",
+}
 
 # 화면표로 초·중·후반을 사람이 직접 확인한 공개 Pexels 소스다.
 # API 검색 결과에 남아 있는 동안 우선 사용하며, 사라지면 일반 검색과 AI 검수로 돌아간다.
 PREFERRED_SOURCE_IDS: Dict[str, Tuple[str, ...]] = {
-    "dead-bug": ("7590852",),
-    "bird-dog": ("6437919",),
-    "glute-bridge": ("6525525",),
-    "modified-plank": ("7589753",),
-    "kneeling-push-up": ("8233048",),
+    slug: (source_id,) for slug, source_id in FIXED_MODEL_SOURCES.items()
 }
 
 
 def is_human_reviewed_source(exercise_slug: str, provider: str, source_id: str) -> bool:
     """Return true only for an exact public source checked from three sampled frames."""
     return provider == "Pexels" and source_id in PREFERRED_SOURCE_IDS.get(exercise_slug, ())
+
+
+def is_fixed_model_source(
+    exercise_slug: str, provider: str, source_id: str, creator: str = ""
+) -> bool:
+    """Accept only the exact adult model/session sources reviewed from motion frames."""
+    if not is_human_reviewed_source(exercise_slug, provider, source_id):
+        return False
+    return not creator or creator.strip() == FIXED_MODEL_CREATOR
 
 
 def build_clip_queries(routine: Routine) -> List[str]:
@@ -77,8 +102,12 @@ def real_video_routine_candidates(
     records: Iterable[Dict[str, Any]], today: date | None = None, limit: int = 3
 ) -> List[Routine]:
     """최근 반복을 피하면서, 검수 실패 시 시도할 무료 실제 영상 루틴을 정한다."""
-    recent = {str(item.get("routine_id") or "") for item in list(records)[-5:]}
+    recent = {str(item.get("routine_id") or "") for item in list(records)[-1:]}
     by_id = {item.routine_id: item for item in ROUTINES}
     supported = [by_id[routine_id] for routine_id in REAL_VIDEO_ROUTINE_IDS]
-    available = [item for item in supported if item.routine_id not in recent] or supported
-    return available[: max(1, limit)]
+    day = today or date.today()
+    start = day.toordinal() % len(supported)
+    rotated = supported[start:] + supported[:start]
+    available = [item for item in rotated if item.routine_id not in recent]
+    fallback = [item for item in rotated if item.routine_id in recent]
+    return (available + fallback)[: max(1, limit)]

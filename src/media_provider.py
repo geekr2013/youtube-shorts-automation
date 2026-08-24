@@ -89,6 +89,47 @@ class StockMediaProvider:
             )
         return results
 
+    def _get_pexels_by_id(self, source_id: str, query: str = "") -> Dict[str, Any]:
+        """Retrieve one exact Pexels video so search ranking cannot swap the model."""
+        if not self.pexels_key:
+            raise MediaError("고정 모델 영상을 받으려면 PEXELS_API_KEY가 필요합니다.")
+        response = self.session.get(
+            f"https://api.pexels.com/v1/videos/videos/{source_id}",
+            headers={"Authorization": self.pexels_key},
+            timeout=30,
+        )
+        response.raise_for_status()
+        video = response.json()
+        media_file = self._best_pexels_file(video)
+        if not media_file:
+            raise MediaError(f"고정 모델 원본에 MP4 파일이 없습니다: {source_id}")
+        user = video.get("user", {})
+        return {
+            "download_url": media_file["link"],
+            "source_url": video.get("url", f"https://www.pexels.com/video/{source_id}/"),
+            "creator": user.get("name", "Pexels creator"),
+            "provider": "Pexels",
+            "query": query,
+            "source_id": str(video.get("id") or source_id),
+            "width": int(media_file.get("width", 0) or 0),
+            "height": int(media_file.get("height", 0) or 0),
+            "duration": float(video.get("duration", 0) or 0),
+        }
+
+    def fetch_pexels_source(
+        self,
+        source_id: str,
+        output_path: Path,
+        query: str = "",
+        visual_quality: Optional[Dict[str, Any]] = None,
+    ) -> StockClip:
+        """Download one reviewed Pexels ID without any search fallback."""
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        candidate = self._get_pexels_by_id(str(source_id), query=query)
+        clip = self._download(candidate, output_path)
+        clip.visual_quality = dict(visual_quality or {})
+        return clip
+
     def _search_pixabay(self, query: str) -> List[Dict[str, Any]]:
         if not self.pixabay_key:
             return []

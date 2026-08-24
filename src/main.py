@@ -24,14 +24,16 @@ from pilates_catalog import (
 )
 from pilates_renderer import media_duration, render_pilates_short
 from pilates_video_strategy import (
+    FIXED_MODEL_CREATOR,
+    FIXED_MODEL_ID,
+    FIXED_MODEL_SOURCES,
     PREFERRED_SOURCE_IDS,
     SOURCE_REQUIREMENTS,
     build_clip_queries,
-    is_human_reviewed_source,
+    is_fixed_model_source,
     real_video_routine_candidates,
 )
 from trend_scout import editing_profile, fetch_pilates_short_benchmarks
-from visual_quality import GeminiVisualQualityGate, VisualQualityError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,8 +65,8 @@ def save_state(state: Dict[str, Any]) -> None:
 
 def check_configuration(for_upload: bool) -> List[str]:
     missing: List[str] = []
-    if not (os.getenv("PEXELS_API_KEY") or os.getenv("PIXABAY_API_KEY")):
-        missing.append("PEXELS_API_KEY 또는 PIXABAY_API_KEY")
+    if not os.getenv("PEXELS_API_KEY"):
+        missing.append("PEXELS_API_KEY")
     if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
         missing.append("GEMINI_API_KEY 또는 GOOGLE_API_KEY")
     if for_upload:
@@ -100,8 +102,8 @@ def build_description(routine, clips: Sequence[StockClip] = ()) -> str:
         + "\n\n호흡을 멈추지 말고 천천히 진행하세요. 통증, 어지러움 또는 불편함이 느껴지면 즉시 중단하세요. "
         "부상, 질환, 임신 등 개인 상황이 있다면 운동 전에 의료진 또는 자격을 갖춘 지도자와 상담하세요.\n\n"
         f"안내 브랜드: {INSTRUCTOR_NAME_KO} / {INSTRUCTOR_NAME_EN}\n"
-        "Pexels 또는 Pixabay에서 사용이 허용된 실제 사람의 연속 운동 영상을 가져와 "
-        "전신 구도와 목표 근육 클로즈업으로 재편집했습니다. 출연자는 영상마다 달라질 수 있습니다.\n"
+        "사람이 동작을 검수한 Pexels 원본 중 같은 성인 운동 모델이 출연하는 실제 사람의 연속 운동 영상만 사용해 "
+        "전신 구도와 목표 근육 클로즈업으로 재편집했습니다. 의상은 합성 변경하지 않았습니다.\n"
         "배경음악 없이 AI 한국어 여성 안내 음성과 한·영 자막으로 제작했습니다.\n\n"
         + (("영상 출처\n" + "\n".join(_source_credit_lines(clips)) + "\n\n") if clips else "")
         + f"댓글 질문: {routine.engagement_question}\n\n"
@@ -124,12 +126,10 @@ def _refresh_metrics(records: List[Dict[str, Any]]) -> None:
 
 
 def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: bool = False):
-    """무료 스톡 루틴을 순서대로 시도하고 AI 검수를 모두 통과한 한 세트만 반환한다."""
+    """검수된 동일 모델의 정확한 Pexels ID만 내려받아 한 세트를 반환한다."""
     provider = StockMediaProvider()
-    quality_gate = GeminiVisualQualityGate()
     failures: List[str] = []
     approved_by_exercise: Dict[str, StockClip] = {}
-    used_sources = set()
     for routine in real_video_routine_candidates(records, limit=3):
         validate_routine(routine)
         exercises = routine_exercises(routine)
@@ -140,60 +140,43 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
                 if exercise.slug in approved_by_exercise:
                     clips.append(approved_by_exercise[exercise.slug])
                     continue
-
-                def review(clip: StockClip) -> Dict[str, Any]:
-                    identity = (clip.provider, clip.source_id or clip.source_url)
-                    if identity in used_sources:
-                        return {"passed": False, "reason": "다른 동작에 이미 사용한 영상"}
-                    review_dir = WORK_DIR / "visual-review" / exercise.slug / (
-                        f"{clip.provider.lower()}-{clip.source_id or 'unknown'}"
-                    )
-                    human_reviewed = is_human_reviewed_source(
-                        exercise.slug, clip.provider, clip.source_id
-                    )
-                    if human_reviewed:
-                        result = {
-                            "passed": True,
-                            "approved": True,
-                            "exercise_match": 1.0,
-                            "realism": 1.0,
-                            "visibility": 1.0,
-                            "professional_attire": 1.0,
-                            "safe_framing": True,
-                            "reason": "사람이 초·중·후반 화면표를 직접 검수한 공개 소스",
-                            "model": "human-contact-sheet-review",
-                            "sample_count": 3,
-                        }
-                    elif curated_preview:
-                        result = {
-                            "passed": False,
-                            "approved": False,
-                            "reason": "사람 검수 목록에 없는 소스",
-                            "model": "human-contact-sheet-review",
-                            "sample_count": 0,
-                        }
-                    else:
-                        result = quality_gate.review(clip, exercise, review_dir)
-                    if result.get("passed"):
-                        used_sources.add(identity)
-                    return result
-
-                fetched = provider.fetch_clips(
-                    [query],
-                    WORK_DIR / "licensed-source" / exercise.slug,
-                    limit=1,
-                    min_required=1,
-                    one_per_query=True,
-                    visual_validator=review,
-                    preferred_source_ids=PREFERRED_SOURCE_IDS.get(exercise.slug, ()),
+                source_id = FIXED_MODEL_SOURCES.get(exercise.slug, "")
+                if not source_id or source_id not in PREFERRED_SOURCE_IDS.get(exercise.slug, ()):
+                    raise RuntimeError(f"고정 모델 검수 소스가 없습니다: {exercise.slug}")
+                review = {
+                    "passed": True,
+                    "approved": True,
+                    "exercise_match": 1.0,
+                    "realism": 1.0,
+                    "visibility": 1.0,
+                    "professional_attire": 1.0,
+                    "safe_framing": True,
+                    "identity_locked": True,
+                    "identity_id": FIXED_MODEL_ID,
+                    "reason": "사람이 초·중·후반 동작과 동일 인물을 직접 검수한 공개 소스",
+                    "model": "human-motion-contact-sheet-review",
+                    "sample_count": 3,
+                }
+                clip = provider.fetch_pexels_source(
+                    source_id,
+                    WORK_DIR / "licensed-source" / exercise.slug / f"{source_id}.mp4",
+                    query=query,
+                    visual_quality=review,
                 )
-                approved_by_exercise[exercise.slug] = fetched[0]
-                clips.append(fetched[0])
+                if not is_fixed_model_source(
+                    exercise.slug, clip.provider, clip.source_id, clip.creator
+                ):
+                    clip.path.unlink(missing_ok=True)
+                    raise RuntimeError(
+                        f"고정 모델 출처가 바뀌어 업로드를 중단했습니다: {exercise.slug}"
+                    )
+                approved_by_exercise[exercise.slug] = clip
+                clips.append(clip)
             if len(clips) != len(routine.exercise_slugs):
                 raise RuntimeError("세 동작과 실제 영상 소스의 수가 일치하지 않습니다.")
+            if len({clip.source_id for clip in clips}) != len(clips):
+                raise RuntimeError("한 영상 안에서 같은 원본이 중복되었습니다.")
             return routine, clips
-        except VisualQualityError:
-            raise
         except Exception as exc:
             failures.append(f"{routine.routine_id}: {exc}")
             LOGGER.warning("루틴 영상 세트 검수 실패(%s): %s", routine.routine_id, exc)
@@ -234,7 +217,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     visual_metadata = json.loads((render_dir / "visual_metadata.json").read_text(encoding="utf-8"))
     exercises = routine_exercises(routine)
     metadata: Dict[str, Any] = {
-        "content_format": "pilates-real-video-v1",
+        "content_format": "pilates-fixed-model-real-video-v2",
         "routine_id": routine.routine_id,
         "topic": routine.title_ko,
         "title": build_title(routine),
@@ -242,7 +225,9 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
             "id": f"{INSTRUCTOR_ID}-voice",
             "name_ko": INSTRUCTOR_NAME_KO,
             "name_en": INSTRUCTOR_NAME_EN,
-            "identity_locked": False,
+            "identity_locked": True,
+            "visual_model_id": FIXED_MODEL_ID,
+            "visual_source_creator": FIXED_MODEL_CREATOR,
             "adult_age": 25,
             "synthetic_voice": True,
             "real_human_footage": True,
@@ -300,7 +285,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     )
     record = {
         "published_at": datetime.now(timezone.utc).isoformat(),
-        "content_format": "pilates-real-video-v1",
+        "content_format": "pilates-fixed-model-real-video-v2",
         "routine_id": routine.routine_id,
         "topic": routine.title_ko,
         "title": build_title(routine),
