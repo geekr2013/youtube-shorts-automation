@@ -679,7 +679,33 @@
       ],
       "engagement_comment": "💬 아침 운동과 저녁 운동 중 언제가 더 편한가요?\n무리하지 않은 범위에서 알려주세요.",
       "metrics": {
-        "views": 1,
+        "views": 2,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-24T11:07:05.761315+00:00",
+      "content_format": "pilates-fixed-model-real-video-v2",
+      "routine_id": "fixed-supine-core",
+      "topic": "누워서 코어 컨트롤",
+      "title": "저장하고 따라 하는 누워서 코어 컨트롤 3동작 | SUPINE CORE CONTROL",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "9PT8stGdHbc",
+      "video_url": "https://www.youtube.com/shorts/9PT8stGdHbc",
+      "exercise_slugs": [
+        "knee-fold",
+        "supine-leg-flow",
+        "single-knee-stretch"
+      ],
+      "source_ids": [
+        "7590852",
+        "7590846",
+        "7590845"
+      ],
+      "engagement_comment": "💬 오른쪽과 왼쪽 중 어느 쪽이 더 안정적이었나요?\n무리하지 않은 범위에서 알려주세요.",
+      "metrics": {
+        "views": 0,
         "likes": 0,
         "comments": 0
       }
