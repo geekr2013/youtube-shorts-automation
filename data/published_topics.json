@@ -705,6 +705,32 @@
       ],
       "engagement_comment": "💬 오른쪽과 왼쪽 중 어느 쪽이 더 안정적이었나요?\n무리하지 않은 범위에서 알려주세요.",
       "metrics": {
+        "views": 4,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-25T11:04:47.365232+00:00",
+      "content_format": "pilates-fixed-model-real-video-v2",
+      "routine_id": "fixed-core-mix",
+      "topic": "복부 집중 코어 플로우",
+      "title": "저장하고 따라 하는 복부 집중 코어 플로우 3동작 | CORE CLOSE-UP FLOW",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "p5pBTmNjMGs",
+      "video_url": "https://www.youtube.com/shorts/p5pBTmNjMGs",
+      "exercise_slugs": [
+        "knee-fold",
+        "plank-control",
+        "supine-leg-flow"
+      ],
+      "source_ids": [
+        "7590852",
+        "7589748",
+        "7590846"
+      ],
+      "engagement_comment": "💬 누운 동작과 플랭크 중 어느 쪽이 더 어려웠나요?\n무리하지 않은 범위에서 알려주세요.",
+      "metrics": {
         "views": 0,
         "likes": 0,
         "comments": 0
