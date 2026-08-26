@@ -85,7 +85,7 @@ def check_configuration(for_upload: bool) -> List[str]:
 
 
 def build_title(routine) -> str:
-    return f"Save This {routine.title_en.title()} | 3-Move Pilates Flow"
+    return f"{routine.title_en.title()} | 3-Move Pilates Routine"
 
 
 def build_engagement_comment(routine) -> str:

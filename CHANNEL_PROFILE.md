@@ -14,7 +14,7 @@ HANA PILATES uses licensed, human-reviewed footage featuring the same adult Pila
 
 ## Video Packaging
 
-- Title: `Save This [ROUTINE] | 3-Move Pilates Flow #shorts`
+- Title: `[ROUTINE] | 3-Move Pilates Routine #shorts`
 - Opening: movement begins on frame one; no static intro card
 - On-screen copy: movement name, one form cue, and one count in English only
 - Closing: `SAVE THIS ROUTINE / TRY ONE ROUND TODAY`

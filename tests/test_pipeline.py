@@ -254,7 +254,7 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("English AI voiceover", description)
         self.assertIn("Stop if you feel pain", description)
         self.assertIn("#Pilates", description)
-        self.assertTrue(build_title(self.routine).startswith("Save This"))
+        self.assertTrue(build_title(self.routine).endswith("| 3-Move Pilates Routine"))
         self.assertNotRegex(description + build_title(self.routine), r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
 
     def test_comment_uses_routine_question(self):
