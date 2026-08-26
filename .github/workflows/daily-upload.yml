@@ -62,12 +62,12 @@ jobs:
 
     steps:
       - name: 저장소 준비
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Python 준비
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: pip
@@ -80,7 +80,7 @@ jobs:
 
       - name: 검증 영상 받기
         if: ${{ steps.preview.outcome == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: short-preview-${{ steps.preview.outputs.run_id }}
           path: data/preview-promotion
@@ -151,7 +151,7 @@ jobs:
 
       - name: 확인용 결과 보관
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: short-preview-${{ github.run_id }}
           path: |
