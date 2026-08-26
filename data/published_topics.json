@@ -735,6 +735,35 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-26T04:17:24.647104+00:00",
+      "topic": "Plank Transitions",
+      "title": "Plank Transitions | 3-Move Pilates Routine",
+      "content_format": "pilates-fixed-model-real-video-v2",
+      "routine_id": "fixed-plank-transition",
+      "exercise_slugs": [
+        "modified-plank",
+        "plank-reset",
+        "forearm-plank-flow"
+      ],
+      "source_ids": [
+        "7589746",
+        "7590458",
+        "7589753"
+      ],
+      "instructor_id": "hana-v1-voice",
+      "video_id": "RAw_UBmwY_E",
+      "video_url": "https://www.youtube.com/shorts/RAw_UBmwY_E",
+      "source_url": "",
+      "asset_urls": [],
+      "engagement_comment": "YOUR TURN: Which plank transition challenged your control the most?\nMove within a comfortable range and tell us below.",
+      "preview_run_id": "32929146463",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
