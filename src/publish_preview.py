@@ -17,26 +17,28 @@ def build_preview_description(metadata: Dict[str, Any]) -> str:
     if str(metadata.get("content_format") or "").startswith("pilates-"):
         exercises = metadata.get("exercises") or []
         lines = [
-            f"{index}. {item.get('name_ko', '')} / {item.get('name_en', '')} — {item.get('prescription_ko', '')}"
+            f"{index:02d} — {str(item.get('name_en', '')).title()} · {item.get('prescription_en', '')}"
             for index, item in enumerate(exercises, start=1)
         ]
         engagement = str(metadata.get("engagement_comment") or "").strip()
         credits = [
-            f"- {item.get('source_provider', '영상 자료')}: {item.get('source_creator', '')} — {item.get('source_url', '')}"
+            f"- {item.get('source_provider', 'Footage')}: {item.get('source_creator', '')} — {item.get('source_url', '')}"
             for item in exercises
             if item.get("source_url")
         ]
         return (
-            f"{metadata.get('title', '하나 필라테스')}\n\n"
+            f"{metadata.get('title', 'HANA Pilates')}\n\n"
             + "\n".join(lines)
-            + "\n\n통증, 어지러움 또는 불편함이 느껴지면 즉시 중단하세요. "
-            "개인 건강 상태에 따라 의료진 또는 자격을 갖춘 지도자와 상담하세요.\n\n"
-            "사람이 동작을 검수한 Pexels 원본 중 같은 성인 운동 모델이 출연하는 실제 사람의 연속 운동 영상만 사용해 "
-            "전신 구도와 목표 근육 클로즈업으로 재편집했습니다. 의상은 합성 변경하지 않았습니다.\n"
-            "AI 한국어 여성 안내 음성과 한·영 자막을 사용했습니다.\n\n"
-            + (("영상 출처\n" + "\n".join(credits) + "\n\n") if credits else "")
+            + "\n\nMove slowly, keep breathing, and stay within a comfortable range. "
+            "Stop if you feel pain, dizziness, or discomfort. Consult a qualified "
+            "professional when personal health circumstances require it.\n\n"
+            "This edit uses human-reviewed, licensed Pexels footage featuring the same "
+            "adult Pilates model. Full-body form views and targeted close-ups preserve "
+            "the original movement, wardrobe, and body appearance.\n"
+            "English AI voiceover and English on-screen captions. No background music.\n\n"
+            + (("Footage credits\n" + "\n".join(credits) + "\n\n") if credits else "")
             + (f"{engagement}\n\n" if engagement else "")
-            + "#shorts #필라테스 #홈트 #Pilates #Workout"
+            + "#Shorts #Pilates #PilatesWorkout #HomeWorkout #Mobility"
         )
     source = metadata.get("source") or {}
     credits = []
@@ -117,11 +119,12 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
     from youtube_uploader import YouTubeUploader
 
     uploader = YouTubeUploader()
+    public_tags = list(dict.fromkeys(["shorts", *metadata.get("tags", [])]))
     result = uploader.upload_video(
         video_path,
         title=f"{metadata['title']} #shorts",
         description=build_preview_description(metadata),
-        tags=["shorts", *metadata.get("tags", [])],
+        tags=public_tags,
         privacy="public",
         category_id="26" if str(metadata.get("content_format") or "").startswith("pilates-") else "27",
     )
@@ -132,6 +135,8 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         "title": metadata.get("title", ""),
         "content_format": metadata.get("content_format", ""),
         "routine_id": metadata.get("routine_id", ""),
+        "exercise_slugs": [item.get("slug", "") for item in metadata.get("exercises") or []],
+        "source_ids": [item.get("source_id", "") for item in metadata.get("exercises") or []],
         "instructor_id": (metadata.get("instructor") or {}).get("id", ""),
         "video_id": result["video_id"],
         "video_url": result["video_url"],
@@ -153,9 +158,9 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         encoding="utf-8",
     )
     send_notification(
-        f"[쇼츠] 테스트 영상 공개 완료 - {metadata.get('title', '')}",
-        f"영상: {result['video_url']}\n\n"
-        f"고정 댓글 추천 문구:\n{metadata.get('engagement_comment', '')}",
+        f"[Shorts] Preview published — {metadata.get('title', '')}",
+        f"Video: {result['video_url']}\n\n"
+        f"Suggested pinned comment:\n{metadata.get('engagement_comment', '')}",
     )
     return completed
 

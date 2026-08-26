@@ -1,4 +1,4 @@
-"""YouTube의 한국 인기 신호를 저비용으로 수집한다."""
+"""Collect public US YouTube performance signals without copying creators."""
 
 import logging
 import re
@@ -16,7 +16,7 @@ YOUTUBE_SEARCH_ENDPOINT = "https://www.googleapis.com/youtube/v3/search"
 EVERGREEN_SEEDS = [plan.topic for plan in VERIFIED_TOPICS]
 
 
-def fetch_youtube_trends(api_key: str, region: str = "KR") -> List[Dict[str, Any]]:
+def fetch_youtube_trends(api_key: str, region: str = "US") -> List[Dict[str, Any]]:
     if not api_key:
         return []
     results: List[Dict[str, Any]] = []
@@ -78,7 +78,7 @@ def _iso8601_seconds(value: str) -> int:
 
 def fetch_pilates_short_benchmarks(
     api_key: str,
-    region: str = "KR",
+    region: str = "US",
     now: datetime | None = None,
 ) -> List[Dict[str, Any]]:
     """최근 필라테스 쇼츠의 공개 성과 신호만 읽고 원본 영상은 사용하지 않는다."""
@@ -98,6 +98,7 @@ def fetch_pilates_short_benchmarks(
                 "order": "viewCount",
                 "publishedAfter": published_after,
                 "regionCode": region,
+                "relevanceLanguage": "en",
                 "safeSearch": "strict",
                 "maxResults": 25,
             },

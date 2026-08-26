@@ -1,4 +1,4 @@
-"""고정된 하나 강사 자산으로 한·영 필라테스 쇼츠를 렌더링한다."""
+"""고정 모델의 실제 운동 영상으로 영어권 필라테스 쇼츠를 렌더링한다."""
 
 import asyncio
 import base64
@@ -17,8 +17,6 @@ import requests
 
 from models import StockClip
 from pilates_catalog import (
-    INSTRUCTOR_NAME_EN,
-    INSTRUCTOR_NAME_KO,
     ROOT,
     Routine,
     build_narration,
@@ -34,9 +32,9 @@ HEIGHT = 1920
 GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
 GEMINI_TTS_VOICE = "Aoede"
 EDGE_TTS_VOICES = (
-    "ko-KR-SunHiNeural",
-    "ko-KR-HyunsuMultilingualNeural",
-    "ko-KR-InJoonNeural",
+    "en-US-AvaMultilingualNeural",
+    "en-US-AriaNeural",
+    "en-US-JennyNeural",
 )
 AUDIO_MIX_MODE = "voice_only"
 REFERENCE_IMAGE = ROOT / "assets" / "instructor" / "hana-alignment-reference.png"
@@ -110,11 +108,12 @@ def _write_pcm_wave(path: Path, pcm: bytes, sample_rate: int = 24000) -> None:
 
 def _synthesize_gemini_tts(text: str, output: Path, api_key: str) -> None:
     prompt = (
-        "자연스럽고 편안한 이십 대 한국인 여성 필라테스 강사처럼 읽어주세요. "
-        "홍보 말투나 과장된 AI 억양은 피하고, 동작 이름 뒤에는 짧게 쉬며, "
-        "횟수와 자세 주의점은 또렷하지만 부드럽게 안내하세요. "
-        "한글로 적힌 숫자는 적힌 그대로 자연스럽게 읽고, 대본을 바꾸거나 덧붙이지 마세요.\n\n"
-        f"대본:\n{text}"
+        "Read in natural North American English as a warm, confident Pilates instructor "
+        "in her twenties. Use a neutral General American accent and a calm, conversational "
+        "pace. Avoid promotional energy, exaggerated emphasis, and a synthetic cadence. "
+        "Pause briefly after each movement name, then give the form cue and count clearly. "
+        "Do not rewrite, translate, or add anything to the script.\n\n"
+        f"Script:\n{text}"
     )
     response = requests.post(
         f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_TTS_MODEL}:generateContent",
@@ -156,7 +155,9 @@ async def _synthesize_edge_tts(text: str, output: Path, voice: str) -> None:
 
 def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str, str]]:
     if any(character.isdigit() for character in text):
-        raise PilatesRenderError("내레이션 숫자는 한글로 작성해야 합니다.")
+        raise PilatesRenderError("Narration counts must be written as natural English words.")
+    if re.search(r"[가-힣ㄱ-ㅎㅏ-ㅣ]", text):
+        raise PilatesRenderError("Public narration must be English only.")
     prepared = prepare_narration_text(text)
     raw = output_dir / "narration_raw.wav"
     engine = "Gemini expressive TTS"
@@ -168,7 +169,7 @@ def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str
             _synthesize_gemini_tts(prepared, raw, api_key)
         except Exception as exc:
             last_error = exc
-            LOGGER.warning("Gemini 여성 음성 실패, 무료 한국어 여성 음성으로 전환합니다: %s", exc)
+            LOGGER.warning("Gemini voice failed; trying a free US English neural voice: %s", exc)
     if not raw.exists():
         raw = output_dir / "narration_raw.mp3"
         engine = "Microsoft neural TTS fallback"
@@ -179,9 +180,9 @@ def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str
                 break
             except Exception as exc:
                 last_error = exc
-                LOGGER.warning("대체 음성 실패(%s), 다음 음성을 시도합니다.", candidate)
+                LOGGER.warning("Fallback voice failed (%s); trying the next voice.", candidate)
         else:
-            raise PilatesRenderError(f"한국어 여성 내레이션을 만들지 못했습니다: {last_error}")
+            raise PilatesRenderError(f"Could not create an English female narration: {last_error}")
     raw_duration = media_duration(raw)
     if not 22 <= raw_duration <= 50:
         raise PilatesRenderError(f"내레이션 길이가 기준 밖입니다: {raw_duration:.1f}초")
@@ -207,8 +208,9 @@ def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str
     return normalized, duration, {
         "narration_engine": engine,
         "narration_voice": selected_voice,
-        "voice_character": "young adult Korean female Pilates instructor",
-        "count_style": "native Korean words",
+        "voice_character": "young adult North American English female Pilates instructor",
+        "language": "en-US",
+        "count_style": "natural English words",
         "background_music": "none",
         "mix_mode": AUDIO_MIX_MODE,
     }
@@ -245,12 +247,12 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Hook,NanumGothic,68,&H00FFFFFF,&H00FFFFFF,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,7,82,116,160,1
-Style: Title,NanumGothic,58,&H00FFFFFF,&H00FFFFFF,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,7,82,116,160,1
-Style: Cue,NanumGothic,48,&H00FFFFFF,&H00FFFFFF,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,82,116,300,1
-Style: English,NanumGothic,31,&H00E8E1D8,&H00E8E1D8,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,82,116,370,1
-Style: Reps,NanumGothic,42,&H0000EBD7,&H0000EBD7,&H99000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,82,116,440,1
-Style: Panel,Arial,20,&H66000000,&H66000000,&H66000000,&H66000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Hook,Lato,62,&H00EAF2F6,&H00EAF2F6,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,92,126,158,1
+Style: Eyebrow,Lato,25,&H0074B7D6,&H0074B7D6,&H00000000,&H00000000,-1,0,0,0,100,100,3,0,1,0,0,7,92,126,150,1
+Style: Title,Lato,56,&H00EAF2F6,&H00EAF2F6,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,92,126,198,1
+Style: Cue,Lato,40,&H00B5C1C8,&H00B5C1C8,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,92,126,273,1
+Style: Reps,Lato,34,&H0074B7D6,&H0074B7D6,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,0,0,7,92,126,333,1
+Style: Panel,Lato,20,&H661D252C,&H661D252C,&H661D252C,&H661D252C,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -260,15 +262,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     def dialogue(start: float, end: float, style: str, text: str, layer: int = 2) -> None:
         lines.append(
-            f"Dialogue: {layer},{_ass_time(start)},{_ass_time(end)},{style},,0,0,0,,{{\\fad(140,100)}}{text}\n"
+            f"Dialogue: {layer},{_ass_time(start)},{_ass_time(end)},{style},,0,0,0,,{{\\fad(180,140)}}{text}\n"
         )
 
     hook_end = min(2.2, lengths[0] * 0.36)
-    hook_panel = r"{\p1\1c&H101820&\1a&H48&\pos(48,120)}m 0 0 l 900 0 l 900 310 l 0 310{\p0}"
+    hook_panel = r"{\p1\1c&H1D252C&\1a&H38&\pos(48,120)}m 0 0 l 910 0 l 910 245 l 0 245{\p0}"
     dialogue(0, hook_end, "Panel", hook_panel, 0)
     hook_text = (
-        f"{{\\pos(82,160)}}{_ass_escape(routine.title_ko)}\\N"
-        f"{{\\fs36\\c&H00E8E1D8&}}3 MOVES · {_ass_escape(routine.title_en)}"
+        f"{{\\pos(92,164)}}{_ass_escape(routine.title_en.title())}\\N"
+        f"{{\\fs30\\c&H0074B7D6&\\fsp2}}3-MOVE PILATES FLOW"
     )
     dialogue(0, hook_end, "Hook", hook_text, 3)
 
@@ -276,27 +278,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         end = cursor + length
         text_start = hook_end if index == 1 else cursor
         text_end = end - (1.7 if index == 3 else 0.0)
-        panel = r"{\p1\1c&H101820&\1a&H48&\pos(48,120)}m 0 0 l 900 0 l 900 390 l 0 390{\p0}"
+        panel = r"{\p1\1c&H1D252C&\1a&H38&\pos(48,120)}m 0 0 l 910 0 l 910 292 l 0 292{\p0}"
         dialogue(text_start, text_end, "Panel", panel, 0)
-        dialogue(text_start, text_end, "Title", f"{{\\pos(82,160)}}{index}/3  {_ass_escape(exercise.name_ko)}\\N{{\\fs34\\c&H00E8E1D8&}}{_ass_escape(exercise.name_en)}", 3)
-        dialogue(text_start, text_end, "Cue", f"{{\\pos(82,300)}}{_ass_escape(exercise.cue_ko)}", 3)
-        dialogue(text_start, text_end, "English", f"{{\\pos(82,370)}}{_ass_escape(exercise.cue_en)}", 3)
-        dialogue(text_start, text_end, "Reps", f"{{\\pos(82,440)}}{_ass_escape(exercise.prescription_ko)}  ·  {exercise.prescription_en}", 3)
+        accent = r"{\p1\1c&H74B7D6&\1a&H00&\pos(60,136)}m 0 0 l 8 0 l 8 244 l 0 244{\p0}"
+        dialogue(text_start, text_end, "Panel", accent, 1)
+        dialogue(text_start, text_end, "Eyebrow", f"{{\\pos(92,150)}}FORM FOCUS  ·  {index:02d} / 03", 3)
+        dialogue(text_start, text_end, "Title", f"{{\\pos(92,198)}}{_ass_escape(exercise.name_en.title())}", 3)
+        dialogue(text_start, text_end, "Cue", f"{{\\pos(92,273)}}{_ass_escape(exercise.cue_en.capitalize())}", 3)
+        dialogue(text_start, text_end, "Reps", f"{{\\pos(92,333)}}{_ass_escape(exercise.prescription_en)}", 3)
         cursor = end
 
     outro_start = max(0.0, duration - 1.7)
     dialogue(outro_start, duration, "Panel", hook_panel, 0)
-    outro_text = "{\\pos(82,160)}저장하고 오늘 한 세트\\N{\\fs36\\c&H00E8E1D8&}SAVE & TRY ONE SET TODAY"
+    outro_text = "{\\pos(92,164)}SAVE THIS ROUTINE\\N{\\fs30\\c&H0074B7D6&\\fsp2}TRY ONE ROUND TODAY"
     dialogue(outro_start, duration, "Hook", outro_text, 3)
     path.write_text(header + "".join(lines), encoding="utf-8-sig")
     return {
-        "language_mode": "ko+en",
-        "layout": "YouTube Shorts safe-area panels",
-        "korean_title_font_size": 58,
-        "english_cue_font_size": 31,
+        "language_mode": "en",
+        "locale": "en-US",
+        "font": "Lato",
+        "visual_style": "refined charcoal glass panel with warm gold accent",
+        "layout": "compact top-left YouTube Shorts safe-area panel",
+        "english_title_font_size": 56,
+        "english_cue_font_size": 40,
         "hook": "movement starts on frame one; no static intro card",
-        "wrap_mode": "explicit lines; no automatic Korean syllable splitting",
-        "movement_visibility": "top safe-area panel keeps the torso, hips, legs and major joints visible",
+        "wrap_mode": "single-purpose English lines with explicit hierarchy",
+        "transition": "180 ms fade-in and 140 ms fade-out",
+        "movement_visibility": "compact top panel avoids the bottom and right-side Shorts interface",
         "segment_durations": [round(item, 2) for item in lengths],
     }
 

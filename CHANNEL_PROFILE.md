@@ -1,32 +1,32 @@
-# HANA PILATES 채널 소개 자료
+# HANA PILATES Channel Profile
 
-## 채널 기본값
+## Channel Defaults
 
-- 채널명: `하나 필라테스 | HANA PILATES`
-- 최우선 핸들 후보: `@hanapilatesdaily` 와 `@hanapilateskr` (실제 변경 시 YouTube에서 사용 가능 여부 확인 필요)
-- 한 줄 소개: `오늘의 세 동작·내일의 더 나은 정렬`
+- Channel name: `HANA PILATES`
+- Primary handle candidate: `@hanapilatesdaily` (availability must be checked in YouTube)
+- Tagline: `Three clear moves. Better control, one day at a time.`
 
-## 채널 설명
+## Channel Description
 
-매일 짧고 따라 하기 쉬운 초급 필라테스 세 동작을 소개합니다. 복부·골반·힙·대퇴·내전근·상체 정렬을 보기 쉬운 구도와 한·영 안내로 제작합니다.
+Follow three clear, beginner-friendly Pilates movements in every Short. Each routine combines full-body form views, targeted close-ups, concise English cues, and an easy count so you can move with more control.
 
-영상 속 하나는 AI로 만든 가상 성인 강사이며 실제 인물이 아닙니다. 본 채널은 일반적인 운동 교육을 위한 정보를 제공하며 의료 조언을 대체하지 않습니다. 통증·어지러움·불편함이 느껴지면 즉시 멈추고, 개인 건강 상태에 따라 의료진 또는 자격을 갖춘 지도자와 상담하세요.
+HANA PILATES uses licensed, human-reviewed footage featuring the same adult Pilates model, with an AI-generated English guide voice. This channel provides general exercise education and does not replace medical advice. Stop if you feel pain, dizziness, or discomfort, and consult a qualified professional when your personal health circumstances require it.
 
-## 영상 소개 템플릿
+## Video Packaging
 
-- 제목: `[목표 부위/상황] 3동작 | [ENGLISH TITLE] #shorts`
-- 첫 화면: 정지 인트로 없이 첫 동작을 시작하고, 목표를 두 줄 이내로 표시
-- 중간: 동작명·한 가지 정렬 포인트·횟수만 표시
-- 마무리: `저장하고 오늘 한 세트 / SAVE & TRY ONE SET TODAY`
-- 고정 댓글: `세 동작 중 어느 동작에서 가장 큰 자극이 느껴졌나요? 무리하지 않은 범위에서 알려주세요.`
+- Title: `Save This [ROUTINE] | 3-Move Pilates Flow #shorts`
+- Opening: movement begins on frame one; no static intro card
+- On-screen copy: movement name, one form cue, and one count in English only
+- Closing: `SAVE THIS ROUTINE / TRY ONE ROUND TODAY`
+- Pinned comment: one routine-specific English question, followed by a comfort-range reminder
 
-## 시각 자산
+## Visual Assets
 
-- 배너: `assets/channel/hana-banner-2048x1152.png` (2048×1152, 주요 문구와 얼굴을 중앙 안전 영역에 배치)
-- 프로필: `assets/channel/hana-profile-98.png` (98×98)
-- 강사 기준: `assets/instructor/hana-alignment-reference.png`
+- Banner: `assets/channel/hana-banner-2048x1152.png` (2048×1152; key copy and face inside the central safe area)
+- Profile: `assets/channel/hana-profile-98.png` (98×98)
+- Instructor reference: `assets/instructor/hana-alignment-reference.png`
 
-## 벤치마킹 적용 범위
+## Benchmarking Boundaries
 
-- 적용: 첫 프레임 동작, 세 동작 묶음, 부위별 구도, 큰 자막, 저장·댓글 유도, 일관된 의상 팔레트
-- 미적용: 타 크리에이터의 얼굴·이름·로고·문구·안무·음원의 복제, 효과·감량 보장 표현
+- Applied: movement on frame one, three-move structure, body-area framing, large readable captions, save/comment prompts, and consistent wardrobe tone
+- Excluded: copying another creator's face, name, logo, wording, choreography, or music; medical, weight-loss, or outcome guarantees

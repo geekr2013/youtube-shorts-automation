@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from main import build_description, build_engagement_comment, build_title, check_configuration
+from main import PUBLIC_TAGS, build_description, build_engagement_comment, build_title, check_configuration
 from media_provider import MIN_FRAME_RATE, MIN_VIDEO_EDGE, StockMediaProvider
 from models import StockClip
 from pilates_catalog import (
@@ -58,6 +58,7 @@ from publish_preview import build_preview_description, resolve_preview_dir
 from run_status import build_status
 from secret_utils import clean_secret
 from trend_scout import editing_profile, fetch_pilates_short_benchmarks
+from youtube_uploader import YouTubeUploader
 from visual_quality import (
     GEMINI_VISION_MODEL,
     GeminiVisualQualityGate,
@@ -72,10 +73,10 @@ class PilatesPipelineTests(unittest.TestCase):
     def test_hana_is_the_voice_brand_while_visuals_are_real_people(self):
         self.assertEqual(INSTRUCTOR_ID, "hana-v1")
         description = build_description(self.routine)
-        self.assertIn("안내 브랜드", description)
-        self.assertIn("실제 사람", description)
-        self.assertIn("같은 성인 운동 모델", description)
-        self.assertNotIn("출연자는 영상마다 달라질 수 있습니다", description)
+        self.assertIn("HANA", description)
+        self.assertIn("licensed Pexels footage", description)
+        self.assertIn("same adult Pilates model", description)
+        self.assertNotRegex(description, r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
 
     def test_catalog_has_long_term_rotation(self):
         self.assertGreaterEqual(len(ROUTINES), 10)
@@ -113,33 +114,36 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("내전근", EXERCISES["inner-thigh-lift"].muscle_focus)
         self.assertEqual(EXERCISES["dead-bug"].camera_angle, "overhead")
 
-    def test_every_exercise_has_korean_and_english_guidance(self):
+    def test_every_exercise_has_complete_english_public_guidance(self):
         for exercise in EXERCISES.values():
-            self.assertTrue(exercise.name_ko)
             self.assertRegex(exercise.name_en, r"^[A-Z0-9 &-]+$")
-            self.assertTrue(exercise.cue_ko)
             self.assertRegex(exercise.cue_en, r"^[A-Z0-9 &-]+$")
-            self.assertTrue(exercise.prescription_ko)
-            self.assertTrue(exercise.prescription_en)
+            self.assertRegex(exercise.prescription_en, r"^\d+")
 
-    def test_narration_uses_native_korean_count_words(self):
+    def test_narration_is_english_only_with_natural_count_words(self):
         for routine in ROUTINES:
             narration = build_narration(routine)
             self.assertFalse(any(character.isdigit() for character in narration))
-            self.assertRegex(narration, r"(다섯|여섯|여덟|스무)")
+            self.assertNotRegex(narration, r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
+            self.assertIn("First", narration)
+            self.assertIn("Next", narration)
+            self.assertIn("Finally", narration)
+            self.assertIn("stop if you feel pain", narration)
 
-    def test_visible_prescriptions_use_digits_while_voice_keeps_native_words(self):
+    def test_visible_english_prescriptions_use_digits_while_voice_uses_words(self):
         for exercise in EXERCISES.values():
-            self.assertRegex(exercise.prescription_ko, r"\d+(초|회)")
-            self.assertNotIn("이십 번", exercise.prescription_ko)
-            self.assertFalse(any(character.isdigit() for character in exercise.voice_ko))
-        self.assertEqual(EXERCISES["modified-plank"].prescription_ko, "20초")
-        self.assertIn("스무 초", EXERCISES["modified-plank"].voice_ko)
+            self.assertRegex(exercise.prescription_en, r"^\d+")
+        narration = build_narration(next(item for item in ROUTINES if item.routine_id == "fixed-plank-transition"))
+        self.assertIn("twenty seconds", narration)
+        self.assertNotRegex(narration, r"\d")
 
     def test_routine_validator_blocks_medical_claims(self):
         unsafe = replace(self.routine, intro_ko="통증 치료를 위한 세 동작입니다.")
         with self.assertRaises(ValueError):
             validate_routine(unsafe)
+        unsafe_english = replace(self.routine, title_en="CURE BACK PAIN")
+        with self.assertRaises(ValueError):
+            validate_routine(unsafe_english)
 
     def test_recent_routines_are_not_immediately_repeated(self):
         records = [{"routine_id": item.routine_id} for item in ROUTINES[:5]]
@@ -181,29 +185,35 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertAlmostEqual(sum(lengths), 32.0)
         self.assertTrue(all(item >= 5.5 for item in lengths))
 
-    def test_overlay_is_bilingual_and_inside_shorts_safe_area(self):
+    def test_overlay_is_english_only_premium_and_inside_shorts_safe_area(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "captions.ass"
             metadata = write_overlay_ass(path, self.routine, 32.0)
             content = path.read_text(encoding="utf-8-sig")
         first = routine_exercises(self.routine)[0]
-        self.assertIn(first.name_ko, content)
-        self.assertIn(first.name_en, content)
-        self.assertIn(first.cue_ko, content)
-        self.assertIn(first.cue_en, content)
+        self.assertIn(first.name_en.title(), content)
+        self.assertIn(first.cue_en.capitalize(), content)
+        self.assertIn(first.prescription_en, content)
+        self.assertNotIn(first.name_ko, content)
+        self.assertNotIn(first.cue_ko, content)
+        self.assertNotRegex(content, r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
         self.assertIn(r"\pos(48,120)", content)
-        self.assertIn(r"\pos(82,160)", content)
-        self.assertIn("NanumGothic", content)
+        self.assertIn(r"\pos(92,150)", content)
+        self.assertIn("Style: Title,Lato,56", content)
+        self.assertIn("Style: Cue,Lato,40", content)
+        self.assertIn(r"\fad(180,140)", content)
         self.assertNotRegex(content, r"\\pos\([^,]+,1[5-9]\d{2}\)")
-        self.assertEqual(metadata["language_mode"], "ko+en")
-        self.assertIn("no automatic Korean syllable splitting", metadata["wrap_mode"])
+        self.assertEqual(metadata["language_mode"], "en")
+        self.assertEqual(metadata["locale"], "en-US")
+        self.assertEqual(metadata["font"], "Lato")
         self.assertIn("movement starts on frame one", metadata["hook"])
         self.assertIn("movement_visibility", metadata)
 
     def test_voice_is_young_female_and_voice_only(self):
         self.assertEqual(GEMINI_TTS_MODEL, "gemini-3.1-flash-tts-preview")
         self.assertEqual(GEMINI_TTS_VOICE, "Aoede")
-        self.assertEqual(EDGE_TTS_VOICES[0], "ko-KR-SunHiNeural")
+        self.assertEqual(EDGE_TTS_VOICES[0], "en-US-AvaMultilingualNeural")
+        self.assertTrue(all(voice.startswith("en-US-") for voice in EDGE_TTS_VOICES))
         self.assertEqual(AUDIO_MIX_MODE, "voice_only")
 
     def test_gemini_tts_prompt_requires_natural_female_instruction(self):
@@ -218,18 +228,20 @@ class PilatesPipelineTests(unittest.TestCase):
                         "mimeType": "audio/L16;codec=pcm;rate=24000",
                     }}]}}]
                 }
-                _synthesize_gemini_tts("다섯 번 반복해요.", output, "secret-value")
+                _synthesize_gemini_tts("Complete five controlled repetitions.", output, "secret-value")
             _, kwargs = request.call_args
             prompt_text = kwargs["json"]["contents"][0]["parts"][0]["text"]
-            self.assertIn("이십 대 한국인 여성 필라테스 강사", prompt_text)
-            self.assertIn("한글로 적힌 숫자", prompt_text)
+            self.assertIn("natural North American English", prompt_text)
+            self.assertIn("neutral General American accent", prompt_text)
+            self.assertIn("Do not rewrite", prompt_text)
+            self.assertNotRegex(prompt_text, r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
             self.assertNotIn("params", kwargs)
             with wave.open(str(output), "rb") as audio_file:
                 self.assertEqual(audio_file.getframerate(), 24000)
 
     def test_narration_pacing_is_sentence_aware(self):
-        prepared = prepare_narration_text("첫 동작입니다. 천천히 움직여요.")
-        self.assertEqual(prepared, "첫 동작입니다.\n천천히 움직여요.")
+        prepared = prepare_narration_text("First movement. Move with control.")
+        self.assertEqual(prepared, "First movement.\nMove with control.")
         self.assertIn("loudnorm=I=-16", narration_audio_filter(32.0))
 
     def test_description_discloses_real_licensed_footage_ai_voice_and_safety(self):
@@ -237,36 +249,58 @@ class PilatesPipelineTests(unittest.TestCase):
             Path("sample.mp4"), "Pexels", "https://www.pexels.com/video/123", "Creator"
         )
         description = build_description(self.routine, [clip])
-        self.assertIn("실제 사람의 연속 운동 영상", description)
+        self.assertIn("human-reviewed, licensed Pexels footage", description)
         self.assertIn("Pexels", description)
-        self.assertIn("AI 한국어 여성 안내 음성", description)
-        self.assertIn("통증", description)
+        self.assertIn("English AI voiceover", description)
+        self.assertIn("Stop if you feel pain", description)
         self.assertIn("#Pilates", description)
-        self.assertTrue(build_title(self.routine).startswith("저장하고 따라 하는"))
+        self.assertTrue(build_title(self.routine).startswith("Save This"))
+        self.assertNotRegex(description + build_title(self.routine), r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
 
     def test_comment_uses_routine_question(self):
         comment = build_engagement_comment(self.routine)
-        self.assertIn(self.routine.engagement_question, comment)
+        self.assertIn("YOUR TURN:", comment)
+        self.assertIn("Which of the three movements", comment)
+        self.assertNotRegex(comment, r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
 
     def test_preview_description_matches_pilates_format(self):
         exercise = routine_exercises(self.routine)[0]
         value = build_preview_description({
             "content_format": "pilates-real-video-v1",
-            "title": "아침 코어",
+            "title": "Morning Core",
             "exercises": [{
-                "name_ko": exercise.name_ko,
                 "name_en": exercise.name_en,
-                "prescription_ko": exercise.prescription_ko,
+                "prescription_en": exercise.prescription_en,
                 "source_provider": "Pexels",
                 "source_creator": "Creator",
                 "source_url": "https://www.pexels.com/video/123",
             }],
-            "engagement_comment": "어느 동작이 어려웠나요?",
+            "engagement_comment": "Which move felt best today?",
         })
-        self.assertIn("실제 사람의 연속 운동 영상", value)
+        self.assertIn("human-reviewed, licensed Pexels footage", value)
         self.assertIn("https://www.pexels.com/video/123", value)
-        self.assertIn(exercise.name_en, value)
-        self.assertIn("#필라테스", value)
+        self.assertIn(exercise.name_en.title(), value)
+        self.assertIn("#Pilates", value)
+        self.assertNotRegex(value, r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
+
+    def test_every_scheduled_public_surface_is_english_only(self):
+        by_id = {routine.routine_id: routine for routine in ROUTINES}
+        with tempfile.TemporaryDirectory() as directory:
+            for routine_id in REAL_VIDEO_ROUTINE_IDS:
+                routine = by_id[routine_id]
+                captions = Path(directory) / f"{routine_id}.ass"
+                write_overlay_ass(captions, routine, 36.0)
+                public_copy = "\n".join(
+                    (
+                        build_title(routine),
+                        build_description(routine),
+                        build_engagement_comment(routine),
+                        build_narration(routine),
+                        captions.read_text(encoding="utf-8-sig"),
+                        " ".join(PUBLIC_TAGS),
+                    )
+                )
+                self.assertNotRegex(public_copy, r"[가-힣ㄱ-ㅎㅏ-ㅣ]", routine_id)
 
     def test_preview_artifact_root_accepts_preserved_work_prefix(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -535,31 +569,63 @@ class PilatesPipelineTests(unittest.TestCase):
             response.raise_for_status.return_value = None
             response.json.return_value = payload
             responses.append(response)
-        with patch("trend_scout.requests.get", side_effect=responses, create=True):
+        with patch("trend_scout.requests.get", side_effect=responses, create=True) as request:
             benchmarks = fetch_pilates_short_benchmarks(
                 "key",
                 now=datetime(2026, 8, 21, tzinfo=timezone.utc),
             )
         self.assertEqual(benchmarks[0]["video_id"], "abc")
+        search_params = request.call_args_list[0].kwargs["params"]
+        self.assertEqual(search_params["regionCode"], "US")
+        self.assertEqual(search_params["relevanceLanguage"], "en")
+        self.assertEqual(search_params["q"], "pilates workout shorts")
         profile = editing_profile(benchmarks)
         self.assertTrue(profile["save_cta"])
         self.assertFalse(profile["copied_titles"])
         self.assertFalse(profile["copied_footage"])
 
-    def test_upload_declares_synthetic_media(self):
-        source = (ROOT / "src" / "youtube_uploader.py").read_text(encoding="utf-8")
-        self.assertIn('"containsSyntheticMedia": True', source)
-        self.assertIn('category_id: str = "26"', source)
+    def test_upload_payload_declares_english_and_synthetic_media(self):
+        uploader = YouTubeUploader.__new__(YouTubeUploader)
+        request = Mock()
+        request.next_chunk.return_value = (None, {"id": "video-id"})
+        videos = Mock()
+        videos.insert.return_value = request
+        uploader.youtube = Mock()
+        uploader.youtube.videos.return_value = videos
+        with tempfile.TemporaryDirectory() as directory:
+            video = Path(directory) / "short.mp4"
+            video.write_bytes(b"video")
+            with patch("youtube_uploader.MediaFileUpload", return_value=Mock()):
+                uploader.upload_video(
+                    video,
+                    title=build_title(self.routine),
+                    description=build_description(self.routine),
+                    tags=PUBLIC_TAGS,
+                    privacy="public",
+                )
+        body = videos.insert.call_args.kwargs["body"]
+        self.assertEqual(body["snippet"]["defaultLanguage"], "en")
+        self.assertEqual(body["snippet"]["defaultAudioLanguage"], "en")
+        self.assertEqual(body["snippet"]["categoryId"], "26")
+        self.assertNotRegex(" ".join(body["snippet"]["tags"]), r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
+        self.assertEqual(body["status"]["privacyStatus"], "public")
+        self.assertFalse(body["status"]["selfDeclaredMadeForKids"])
+        self.assertTrue(body["status"]["containsSyntheticMedia"])
 
     def test_workflow_keeps_daily_public_schedule_and_tracks_assets(self):
         source = (ROOT / ".github" / "workflows" / "daily-upload.yml").read_text(encoding="utf-8")
         self.assertIn("Daily Hana Pilates Short", source)
-        self.assertIn("cron: '35 10 * * *'", source)
+        self.assertIn("cron: '35 1 * * *'", source)
         self.assertIn("assets/instructor/**", source)
         self.assertIn("PEXELS_API_KEY", source)
         self.assertIn("PIXABAY_API_KEY", source)
         self.assertIn("contact-sheet.jpg", source)
         self.assertIn("YOUTUBE_PRIVACY: public", source)
+        self.assertIn("CONTENT_LANGUAGE: en", source)
+        self.assertIn("TARGET_REGION: US", source)
+        self.assertIn("TTS_LOCALE: en-US", source)
+        self.assertIn("fonts-lato", source)
+        self.assertIn("fc-match 'Lato'", source)
 
     def test_push_event_is_recorded_as_dry_run(self):
         value = build_status({

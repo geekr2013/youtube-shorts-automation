@@ -93,13 +93,13 @@ class YouTubeUploader:
                 "description": description.encode("utf-8")[:4900].decode("utf-8", errors="ignore"),
                 "tags": tags[:15],
                 "categoryId": category_id,  # Howto & Style for Pilates guidance
-                "defaultLanguage": "ko",
-                "defaultAudioLanguage": "ko",
+                "defaultLanguage": "en",
+                "defaultAudioLanguage": "en",
             },
             "status": {
                 "privacyStatus": privacy,
                 "selfDeclaredMadeForKids": False,
-                # 실제 운동 영상에도 AI 안내 음성이 포함되므로 투명하게 공개한다.
+                # The real workout footage includes a synthetic English guide voice.
                 "containsSyntheticMedia": True,
             },
         }
