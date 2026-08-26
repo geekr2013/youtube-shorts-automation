@@ -17,9 +17,10 @@ from notifier import send_notification
 from pilates_catalog import (
     INSTRUCTOR_ID,
     INSTRUCTOR_NAME_EN,
-    INSTRUCTOR_NAME_KO,
     build_narration,
+    routine_engagement_question_en,
     routine_exercises,
+    routine_intro_en,
     validate_routine,
 )
 from pilates_renderer import media_duration, render_pilates_short
@@ -40,6 +41,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 STATE_PATH = DATA_DIR / "published_topics.json"
 WORK_DIR = DATA_DIR / "work"
+PUBLIC_TAGS = [
+    "shorts",
+    "Pilates",
+    "Pilates Workout",
+    "Home Workout",
+    "Mobility",
+    "Form Tips",
+]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 LOGGER = logging.getLogger("pilates-shorts")
@@ -76,11 +85,14 @@ def check_configuration(for_upload: bool) -> List[str]:
 
 
 def build_title(routine) -> str:
-    return f"저장하고 따라 하는 {routine.title_ko} 3동작 | {routine.title_en}"
+    return f"Save This {routine.title_en.title()} | 3-Move Pilates Flow"
 
 
 def build_engagement_comment(routine) -> str:
-    return f"💬 {routine.engagement_question}\n무리하지 않은 범위에서 알려주세요."
+    return (
+        f"YOUR TURN: {routine_engagement_question_en(routine)}\n"
+        "Move within a comfortable range and tell us below."
+    )
 
 
 def _source_credit_lines(clips: Sequence[StockClip]) -> List[str]:
@@ -93,21 +105,23 @@ def _source_credit_lines(clips: Sequence[StockClip]) -> List[str]:
 def build_description(routine, clips: Sequence[StockClip] = ()) -> str:
     exercises = routine_exercises(routine)
     movement_lines = [
-        f"{index}. {item.name_ko} / {item.name_en} — {item.prescription_ko}"
+        f"{index:02d} — {item.name_en.title()} · {item.prescription_en}"
         for index, item in enumerate(exercises, start=1)
     ]
     return (
-        f"첫 화면부터 바로 따라 하는 {routine.intro_ko}\n\n"
+        f"{routine_intro_en(routine)}\n\n"
         + "\n".join(movement_lines)
-        + "\n\n호흡을 멈추지 말고 천천히 진행하세요. 통증, 어지러움 또는 불편함이 느껴지면 즉시 중단하세요. "
-        "부상, 질환, 임신 등 개인 상황이 있다면 운동 전에 의료진 또는 자격을 갖춘 지도자와 상담하세요.\n\n"
-        f"안내 브랜드: {INSTRUCTOR_NAME_KO} / {INSTRUCTOR_NAME_EN}\n"
-        "사람이 동작을 검수한 Pexels 원본 중 같은 성인 운동 모델이 출연하는 실제 사람의 연속 운동 영상만 사용해 "
-        "전신 구도와 목표 근육 클로즈업으로 재편집했습니다. 의상은 합성 변경하지 않았습니다.\n"
-        "배경음악 없이 AI 한국어 여성 안내 음성과 한·영 자막으로 제작했습니다.\n\n"
-        + (("영상 출처\n" + "\n".join(_source_credit_lines(clips)) + "\n\n") if clips else "")
-        + f"댓글 질문: {routine.engagement_question}\n\n"
-        "#shorts #필라테스 #홈트 #운동자세 #Pilates #Workout"
+        + "\n\nMove slowly, keep breathing, and stay within a comfortable range. "
+        "Stop if you feel pain, dizziness, or discomfort. If you are injured, pregnant, "
+        "or managing a health condition, consult a qualified professional before exercise.\n\n"
+        f"{INSTRUCTOR_NAME_EN} — Pilates, clearly guided.\n"
+        "This edit uses human-reviewed, licensed Pexels footage featuring the same adult "
+        "Pilates model. Full-body form views and targeted close-ups preserve the original "
+        "movement, wardrobe, and body appearance.\n"
+        "English AI voiceover and English on-screen captions. No background music.\n\n"
+        + (("Footage credits\n" + "\n".join(_source_credit_lines(clips)) + "\n\n") if clips else "")
+        + f"Question: {routine_engagement_question_en(routine)}\n\n"
+        "#Shorts #Pilates #PilatesWorkout #HomeWorkout #Mobility"
     )
 
 
@@ -213,7 +227,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     routine, clips = _fetch_validated_routine(records, curated_preview=curated_preview)
     LOGGER.info("선정 루틴: %s / %s", routine.title_ko, routine.title_en)
     api_key = os.getenv("YOUTUBE_DATA_API_KEY", "").strip()
-    benchmarks = fetch_pilates_short_benchmarks(api_key) if api_key else []
+    benchmarks = fetch_pilates_short_benchmarks(api_key, region="US") if api_key else []
     trend_profile = editing_profile(benchmarks)
     LOGGER.info("최근 필라테스 쇼츠 벤치마크: %d개", len(benchmarks))
     final_video = render_pilates_short(routine, render_dir, clips)
@@ -225,11 +239,12 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     metadata: Dict[str, Any] = {
         "content_format": "pilates-fixed-model-real-video-v2",
         "routine_id": routine.routine_id,
-        "topic": routine.title_ko,
+        "topic": routine.title_en.title(),
         "title": build_title(routine),
+        "target_market": "US/global",
+        "content_language": "en",
         "instructor": {
             "id": f"{INSTRUCTOR_ID}-voice",
-            "name_ko": INSTRUCTOR_NAME_KO,
             "name_en": INSTRUCTOR_NAME_EN,
             "identity_locked": True,
             "visual_model_id": FIXED_MODEL_ID,
@@ -269,7 +284,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "trend_profile": trend_profile,
         "trend_benchmarks": benchmarks[:5],
         "safety": {"medical_claims": False, "stop_on_pain": True, "beginner_intensity": True},
-        "tags": ["필라테스", "홈트", "운동자세", "Pilates", "Workout", "FormTips"],
+        "tags": PUBLIC_TAGS,
         "dry_run": dry_run,
     }
     write_metadata(WORK_DIR / "metadata.json", metadata)
@@ -285,7 +300,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         final_video,
         title=f"{build_title(routine)} #shorts",
         description=build_description(routine, clips),
-        tags=["shorts", "필라테스", "홈트", "운동자세", "Pilates", "Workout", "FormTips"],
+        tags=PUBLIC_TAGS,
         privacy=os.getenv("YOUTUBE_PRIVACY", "public"),
         category_id="26",
     )
@@ -293,7 +308,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "published_at": datetime.now(timezone.utc).isoformat(),
         "content_format": "pilates-fixed-model-real-video-v2",
         "routine_id": routine.routine_id,
-        "topic": routine.title_ko,
+        "topic": routine.title_en.title(),
         "title": build_title(routine),
         "instructor_id": f"{INSTRUCTOR_ID}-voice",
         "video_id": result["video_id"],
@@ -310,8 +325,8 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     completed = {**metadata, **result, "dry_run": False}
     write_metadata(WORK_DIR / "metadata.json", completed)
     send_notification(
-        f"[하나 필라테스] 업로드 완료 - {routine.title_ko}",
-        f"영상: {result['video_url']}\n\n고정 댓글 추천 문구:\n{build_engagement_comment(routine)}",
+        f"[HANA Pilates] Upload complete — {routine.title_en.title()}",
+        f"Video: {result['video_url']}\n\nSuggested pinned comment:\n{build_engagement_comment(routine)}",
     )
     return completed
 

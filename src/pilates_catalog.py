@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+import re
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 
@@ -516,13 +517,106 @@ def routine_exercises(routine: Routine) -> List[Exercise]:
     return [EXERCISES[slug] for slug in routine.exercise_slugs]
 
 
+ROUTINE_COPY_EN: Dict[str, Tuple[str, str]] = {
+    "fixed-plank-transition": (
+        "Build steadier core control through three clean plank transitions.",
+        "Which plank transition challenged your control the most?",
+    ),
+    "fixed-lower-body-flow": (
+        "Open the hips and wake up the legs with three controlled standing moves.",
+        "Which felt stronger today: the lateral lunge or the squat to reach?",
+    ),
+    "fixed-spinal-flow": (
+        "Reset a stiff spine with three slow, breath-led movements.",
+        "Would you use this flow in the morning or after a long day?",
+    ),
+    "fixed-shoulder-mobility": (
+        "Release stiff shoulders and side-body tension with three gentle mobility moves.",
+        "Which shoulder felt tighter today: left or right?",
+    ),
+    "fixed-hamstring-release": (
+        "Lengthen the back of the legs with three controlled, no-bounce stretches.",
+        "Which side felt tighter during this hamstring flow?",
+    ),
+    "fixed-gentle-recovery": (
+        "Ease upper-body tension with three calm recovery movements.",
+        "Which move helped you feel the most relaxed?",
+    ),
+    "fixed-standing-posture": (
+        "Stand taller with three simple posture-reset movements.",
+        "Which movement made your posture feel the most open?",
+    ),
+    "fixed-beginner-flow": (
+        "Move through a beginner-friendly, full-body flexibility flow.",
+        "Did the standing move or the seated move feel more comfortable?",
+    ),
+    "fixed-hip-mobility": (
+        "Loosen the hips and ankles with three controlled mobility moves.",
+        "Which felt stiffer today: your hips or your ankles?",
+    ),
+}
+
+
+def routine_intro_en(routine: Routine) -> str:
+    custom = ROUTINE_COPY_EN.get(routine.routine_id)
+    if custom:
+        return custom[0]
+    return f"A focused three-move {routine.title_en.lower()} routine with clear, controlled form."
+
+
+def routine_engagement_question_en(routine: Routine) -> str:
+    custom = ROUTINE_COPY_EN.get(routine.routine_id)
+    if custom:
+        return custom[1]
+    return "Which of the three movements felt best in your body today?"
+
+
+_NUMBER_WORDS = {
+    "1": "one",
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+    "10": "ten",
+    "20": "twenty",
+}
+
+
+def _spoken_prescription(value: str) -> str:
+    text = value.strip().upper()
+    patterns = (
+        (r"^(\d+) SECONDS EACH$", "{count} seconds on each side"),
+        (r"^(\d+) EACH SIDE$", "{count} controlled repetitions on each side"),
+        (r"^(\d+) SECONDS$", "{count} seconds"),
+        (r"^(\d+) REPS$", "{count} controlled repetitions"),
+        (r"^(\d+) ROUNDS$", "{count} smooth rounds"),
+    )
+    for pattern, template in patterns:
+        match = re.fullmatch(pattern, text)
+        if match:
+            count = _NUMBER_WORDS.get(match.group(1), match.group(1))
+            return template.format(count=count)
+    return text.lower()
+
+
 def build_narration(routine: Routine) -> str:
     movements = routine_exercises(routine)
-    order = ("첫 번째", "두 번째", "마지막")
-    sentences = [routine.intro_ko]
+    order = ("First", "Next", "Finally")
+    sentences = [routine_intro_en(routine)]
     for label, exercise in zip(order, movements):
-        sentences.append(f"{label}, {exercise.name_ko}. {exercise.voice_ko}")
-    sentences.append("호흡은 편안하게 이어가고, 통증이 느껴지면 바로 멈추세요.")
+        sentences.append(
+            f"{label}, {exercise.name_en.title()}. "
+            f"{exercise.cue_en.capitalize()}. "
+            f"Complete {_spoken_prescription(exercise.prescription_en)}."
+        )
+    sentences.append(
+        "Breathe steadily, work within a comfortable range, and stop if you feel pain, "
+        "dizziness, or discomfort."
+    )
     return " ".join(sentences)
 
 
@@ -531,13 +625,18 @@ def validate_routine(routine: Routine) -> None:
         raise ValueError("한 루틴에는 서로 다른 동작 세 개가 필요합니다.")
     narration = build_narration(routine)
     if any(character.isdigit() for character in narration):
-        raise ValueError("한국어 내레이션에는 숫자 표기를 사용할 수 없습니다.")
-    blocked = ("치료", "완치", "통증 제거", "살이 빠", "지방 제거")
-    if any(term in narration for term in blocked):
+        raise ValueError("영어 내레이션의 횟수는 자연어로 작성해야 합니다.")
+    if re.search(r"[가-힣ㄱ-ㅎㅏ-ㅣ]", narration):
+        raise ValueError("공개 내레이션에는 영어만 사용할 수 있습니다.")
+    blocked = ("cure", "heal", "pain-free", "spot reduce", "burn fat")
+    legacy_blocked = ("치료", "완치", "통증 제거", "살이 빠", "지방 제거")
+    if any(term in narration.lower() for term in blocked) or any(
+        term in routine.intro_ko for term in legacy_blocked
+    ):
         raise ValueError("의료 또는 과장 효과 표현을 사용할 수 없습니다.")
     for exercise in routine_exercises(routine):
-        if not all((exercise.name_ko, exercise.name_en, exercise.cue_ko, exercise.cue_en)):
-            raise ValueError(f"한·영 안내가 누락되었습니다: {exercise.slug}")
+        if not all((exercise.name_en, exercise.cue_en, exercise.prescription_en)):
+            raise ValueError(f"영어 안내가 누락되었습니다: {exercise.slug}")
         if exercise.camera_angle not in {
             "overhead",
             "side-three-quarter",

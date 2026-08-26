@@ -11,8 +11,8 @@ on:
       - 'assets/instructor/**'
       - 'data/launch_request.json'
   schedule:
-    # 매일 한국 시간 19:35 (UTC 10:35)
-    - cron: '35 10 * * *'
+    # US evening overlap: 20:35-21:35 Eastern / 17:35-18:35 Pacific
+    - cron: '35 1 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -56,6 +56,9 @@ jobs:
       GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
       RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
       YOUTUBE_PRIVACY: public
+      CONTENT_LANGUAGE: en
+      TARGET_REGION: US
+      TTS_LOCALE: en-US
 
     steps:
       - name: 저장소 준비
@@ -87,9 +90,9 @@ jobs:
       - name: 영상 도구 설치
         run: |
           sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg fonts-nanum
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg fonts-lato
           ffmpeg -version | head -n 1
-          fc-match 'NanumGothic'
+          fc-match 'Lato'
 
       - name: Python 패키지 설치
         run: |
