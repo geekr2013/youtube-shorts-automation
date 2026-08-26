@@ -41,6 +41,7 @@ from pilates_renderer import (
 )
 from pilates_video_strategy import (
     EXERCISE_VIDEO_SEARCH,
+    FIXED_CONTENT_FORMAT,
     FIXED_MODEL_CREATOR,
     FIXED_MODEL_ID,
     FIXED_MODEL_SOURCES,
@@ -415,6 +416,41 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn(priority.routine_id, REAL_VIDEO_ROUTINE_IDS)
         self.assertTrue(all(slug in PREFERRED_SOURCE_IDS for slug in priority.exercise_slugs))
         self.assertTrue(all(slug in FIXED_MODEL_SOURCES for slug in priority.exercise_slugs))
+
+    def test_scheduled_fixed_model_routines_use_disjoint_reviewed_sources(self):
+        by_id = {routine.routine_id: routine for routine in ROUTINES}
+        seen = set()
+        for routine_id in REAL_VIDEO_ROUTINE_IDS:
+            routine = by_id[routine_id]
+            source_ids = {FIXED_MODEL_SOURCES[slug] for slug in routine.exercise_slugs}
+            self.assertEqual(len(source_ids), 3)
+            self.assertFalse(seen.intersection(source_ids), routine_id)
+            seen.update(source_ids)
+        self.assertEqual(len(seen), len(REAL_VIDEO_ROUTINE_IDS) * 3)
+
+    def test_published_fixed_model_sources_are_never_reused(self):
+        first = real_video_routine_candidates([], today=date(2026, 8, 26), limit=1)[0]
+        published = [{
+            "content_format": FIXED_CONTENT_FORMAT,
+            "routine_id": first.routine_id,
+            "source_ids": [FIXED_MODEL_SOURCES[slug] for slug in first.exercise_slugs],
+        }]
+        remaining = real_video_routine_candidates(published, today=date(2026, 8, 27), limit=20)
+        self.assertNotIn(first.routine_id, {item.routine_id for item in remaining})
+        used = set(published[0]["source_ids"])
+        self.assertTrue(all(
+            not used.intersection(FIXED_MODEL_SOURCES[slug] for slug in routine.exercise_slugs)
+            for routine in remaining
+        ))
+
+    def test_no_fallback_when_every_new_fixed_model_source_is_used(self):
+        by_id = {routine.routine_id: routine for routine in ROUTINES}
+        records = [{
+            "content_format": FIXED_CONTENT_FORMAT,
+            "routine_id": routine_id,
+            "source_ids": [FIXED_MODEL_SOURCES[slug] for slug in by_id[routine_id].exercise_slugs],
+        } for routine_id in REAL_VIDEO_ROUTINE_IDS]
+        self.assertEqual(real_video_routine_candidates(records, limit=3), [])
 
     def test_exact_pexels_endpoint_prevents_search_from_swapping_the_model(self):
         with patch("media_provider.requests.Session", create=True):
