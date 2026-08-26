@@ -130,7 +130,13 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
     provider = StockMediaProvider()
     failures: List[str] = []
     approved_by_exercise: Dict[str, StockClip] = {}
-    for routine in real_video_routine_candidates(records, limit=3):
+    candidates = real_video_routine_candidates(records, limit=3)
+    if not candidates:
+        raise RuntimeError(
+            "검수된 동일 모델의 새 동작 원본을 모두 사용했습니다. "
+            "같은 내용을 반복하거나 모델을 바꾸지 않고 공개를 중단합니다."
+        )
+    for routine in candidates:
         validate_routine(routine)
         exercises = routine_exercises(routine)
         queries = build_clip_queries(routine)
