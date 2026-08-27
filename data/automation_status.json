@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-08-26T04:26:59.235493+00:00",
-  "mode": "dry-run",
+  "updated_at": "2026-08-27T12:02:31.301612+00:00",
+  "mode": "upload",
   "outcome": "success",
-  "event": "push",
-  "run_id": "32930031572",
-  "commit_sha": "5c584c4c7f991f87795899af384f7ae3e92c1c09"
+  "event": "schedule",
+  "run_id": "33069740124",
+  "commit_sha": "33319a7484d57c26ea78e0bde28655b40317e36a"
 }

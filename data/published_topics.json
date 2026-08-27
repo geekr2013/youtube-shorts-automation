@@ -760,6 +760,32 @@
       "engagement_comment": "YOUR TURN: Which plank transition challenged your control the most?\nMove within a comfortable range and tell us below.",
       "preview_run_id": "32929146463",
       "metrics": {
+        "views": 2,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-27T12:02:29.823660+00:00",
+      "content_format": "pilates-fixed-model-real-video-v2",
+      "routine_id": "fixed-lower-body-flow",
+      "topic": "Lower Body Flow",
+      "title": "Lower Body Flow | 3-Move Pilates Routine",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "WgO0Eq8kqbU",
+      "video_url": "https://www.youtube.com/shorts/WgO0Eq8kqbU",
+      "exercise_slugs": [
+        "lateral-lunge-flow",
+        "squat-reach-flow",
+        "standing-fold"
+      ],
+      "source_ids": [
+        "7590813",
+        "7590815",
+        "7590814"
+      ],
+      "engagement_comment": "YOUR TURN: Which felt stronger today: the lateral lunge or the squat to reach?\nMove within a comfortable range and tell us below.",
+      "metrics": {
         "views": 0,
         "likes": 0,
         "comments": 0
