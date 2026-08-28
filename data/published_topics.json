@@ -786,6 +786,32 @@
       ],
       "engagement_comment": "YOUR TURN: Which felt stronger today: the lateral lunge or the squat to reach?\nMove within a comfortable range and tell us below.",
       "metrics": {
+        "views": 3,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-28T13:25:13.913077+00:00",
+      "content_format": "pilates-fixed-model-real-video-v2",
+      "routine_id": "fixed-spinal-flow",
+      "topic": "Spinal Wake-Up Flow",
+      "title": "Spinal Wake-Up Flow | 3-Move Pilates Routine",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "yEZbcD2Zbjw",
+      "video_url": "https://www.youtube.com/shorts/yEZbcD2Zbjw",
+      "exercise_slugs": [
+        "cat-cow-flow",
+        "sun-salutation-flow",
+        "fold-to-seat"
+      ],
+      "source_ids": [
+        "7590823",
+        "7589751",
+        "7590847"
+      ],
+      "engagement_comment": "YOUR TURN: Would you use this flow in the morning or after a long day?\nMove within a comfortable range and tell us below.",
+      "metrics": {
         "views": 0,
         "likes": 0,
         "comments": 0
