@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-08-29T02:08:50.929916+00:00",
+  "updated_at": "2026-08-29T08:17:33.829912+00:00",
   "mode": "upload",
-  "outcome": "success",
-  "event": "workflow_dispatch",
-  "run_id": "33228044969",
-  "commit_sha": "4683414297a4267d632f09dfe5ad9d08fb1df5d6"
+  "outcome": "failure",
+  "event": "schedule",
+  "run_id": "33242765912",
+  "commit_sha": "5b7ab387a6d8e3b1f3eb970454ecf28294a8bcdd"
 }
