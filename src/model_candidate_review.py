@@ -4,7 +4,7 @@ import json
 import os
 import shutil
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 from candidate_review import _sheet
 from media_provider import StockMediaProvider
@@ -49,7 +49,8 @@ def parse_source_ids(value: str) -> List[str]:
 
 
 def main() -> int:
-    source_ids = parse_source_ids(os.getenv("MODEL_CANDIDATE_SOURCE_IDS", ""))
+    raw_source_ids = os.getenv("MODEL_CANDIDATE_SOURCE_IDS", "").strip()
+    search_query = os.getenv("MODEL_CANDIDATE_QUERY", "").strip()
     expected_creator = os.getenv("MODEL_CANDIDATE_CREATOR", "").strip()
     render = os.getenv("MODEL_CANDIDATE_RENDER", "false").lower() == "true"
     if OUTPUT_DIR.exists():
@@ -57,20 +58,37 @@ def main() -> int:
     OUTPUT_DIR.mkdir(parents=True)
 
     provider = StockMediaProvider()
+    discovered: Dict[str, dict] = {}
+    if raw_source_ids:
+        source_ids = parse_source_ids(raw_source_ids)
+    elif search_query:
+        for page in range(1, 3):
+            for candidate in provider._search_pexels(search_query, per_page=80, page=page):
+                source_id = str(candidate.get("source_id") or "")
+                if source_id:
+                    discovered.setdefault(source_id, candidate)
+        source_ids = list(discovered)[:MAX_SCAN_IDS]
+        if not source_ids:
+            raise RuntimeError("No Pexels candidates matched the search query")
+    else:
+        raise ValueError("MODEL_CANDIDATE_SOURCE_IDS or MODEL_CANDIDATE_QUERY is required")
     report = {
         "scope": "new-fixed-model-candidate-review",
+        "search_query": search_query,
         "expected_creator": expected_creator,
         "rendered_motion_frames": render,
         "sources": [],
     }
-    accepted = 0
+    matched = 0
     rendered = 0
     for source_id in source_ids:
         item = {"source_id": source_id}
         try:
-            metadata = provider._get_pexels_by_id(source_id, query="fixed model review")
+            metadata = discovered.get(source_id) or provider._get_pexels_by_id(
+                source_id, query="fixed model review"
+            )
             item.update({
-                "status": "accepted" if not expected_creator or metadata["creator"] == expected_creator else "creator_mismatch",
+                "status": "metadata_match" if not expected_creator or metadata["creator"] == expected_creator else "creator_mismatch",
                 "provider": metadata["provider"],
                 "creator": metadata["creator"],
                 "source_url": metadata["source_url"],
@@ -78,8 +96,8 @@ def main() -> int:
                 "height": metadata["height"],
                 "duration": metadata["duration"],
             })
-            if item["status"] == "accepted":
-                accepted += 1
+            if item["status"] == "metadata_match":
+                matched += 1
                 if render and rendered < MAX_RENDERED_SOURCES:
                     source_dir = OUTPUT_DIR / source_id
                     clip = provider.fetch_pexels_source(
@@ -97,12 +115,15 @@ def main() -> int:
             item.update({"status": "unavailable", "error": str(exc)[:240]})
         report["sources"].append(item)
 
-    report["accepted_count"] = accepted
+    # This tool verifies source metadata and renders motion frames for a human
+    # editorial decision. It deliberately does not call a metadata match an
+    # approved exercise or an approved recurring identity.
+    report["metadata_match_count"] = matched
     report["rendered_count"] = rendered
     (OUTPUT_DIR / "candidates.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    if not accepted:
+    if not matched:
         raise RuntimeError("No candidate source matched the expected Pexels creator")
     return 0
 

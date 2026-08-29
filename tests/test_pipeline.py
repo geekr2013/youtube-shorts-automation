@@ -183,6 +183,7 @@ class PilatesPipelineTests(unittest.TestCase):
                 self.assertFalse(is_human_reviewed_source(slug, "Pixabay", source_id))
                 self.assertFalse(is_human_reviewed_source(slug, "Pexels", "unreviewed"))
                 self.assertFalse(is_fixed_model_source(slug, "Pexels", source_id, "Other"))
+                self.assertFalse(is_fixed_model_source(slug, "Pexels", source_id, ""))
         self.assertEqual(FIXED_MODEL_ID, "miriam-alonso-core-v1")
 
     def test_routine_selection_is_stable_for_the_same_day(self):
@@ -326,7 +327,7 @@ class PilatesPipelineTests(unittest.TestCase):
         source = (ROOT / "src" / "main.py").read_text(encoding="utf-8")
         self.assertIn("StockMediaProvider", source)
         self.assertIn("build_clip_queries", source)
-        self.assertIn('"pilates-fixed-model-real-video-v2"', source)
+        self.assertIn("FIXED_CONTENT_FORMAT", source)
         self.assertIn("fetch_pexels_source", source)
         self.assertNotIn("research_exact_topic", source)
         self.assertNotIn("GeminiWriter", source)
@@ -637,6 +638,7 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("TTS_LOCALE: en-US", source)
         self.assertIn("inputs.candidate_review != true", source)
         self.assertIn("inputs.model_candidate_source_ids == ''", source)
+        self.assertIn("inputs.model_candidate_query == ''", source)
         self.assertIn("fonts-lato", source)
         self.assertIn("fc-match 'Lato'", source)
 

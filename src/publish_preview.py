@@ -8,6 +8,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
+from pilates_video_strategy import (
+    FIXED_CONTENT_FORMAT,
+    FIXED_MODEL_CREATOR,
+    FIXED_MODEL_ID,
+    FIXED_MODEL_SOURCES,
+    is_fixed_model_source,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 STATE_PATH = ROOT / "data" / "published_topics.json"
 LOGGER = logging.getLogger("publish-preview")
@@ -101,19 +109,73 @@ def resolve_preview_dir(preview_dir: Path) -> Path:
     raise FileNotFoundError("검증 영상 또는 메타데이터를 찾지 못했습니다.")
 
 
+def validate_active_model_preview(metadata: Dict[str, Any]) -> list[Dict[str, Any]]:
+    """Fail closed unless the artifact belongs to the active reviewed model generation."""
+    if metadata.get("content_format") != FIXED_CONTENT_FORMAT:
+        raise ValueError("현재 고정 모델 형식의 검증 영상이 아닙니다.")
+    if metadata.get("dry_run") is not True:
+        raise ValueError("건식 실행으로 생성한 검증 영상만 공개할 수 있습니다.")
+    if metadata.get("content_language") != "en" or metadata.get("target_market") != "US/global":
+        raise ValueError("영어·미국/글로벌용 검증 영상이 아닙니다.")
+    instructor = metadata.get("instructor") or {}
+    if (
+        instructor.get("identity_locked") is not True
+        or instructor.get("visual_model_id") != FIXED_MODEL_ID
+        or instructor.get("visual_source_creator") != FIXED_MODEL_CREATOR
+    ):
+        raise ValueError("현재 고정 모델의 신원 정보가 일치하지 않습니다.")
+
+    exercises = metadata.get("exercises") or []
+    if len(exercises) != 3:
+        raise ValueError("정확히 세 동작으로 검수한 영상만 공개할 수 있습니다.")
+    slugs = [str(item.get("slug") or "") for item in exercises]
+    source_ids = [str(item.get("source_id") or "") for item in exercises]
+    if any(not value for value in slugs) or len(set(slugs)) != 3:
+        raise ValueError("동작 정보가 없거나 중복되었습니다.")
+    if any(not value for value in source_ids) or len(set(source_ids)) != 3:
+        raise ValueError("원본 영상 정보가 없거나 중복되었습니다.")
+
+    for item, slug, source_id in zip(exercises, slugs, source_ids):
+        provider = str(item.get("source_provider") or "")
+        creator = str(item.get("source_creator") or "")
+        source_url = str(item.get("source_url") or "")
+        quality = item.get("visual_quality") or {}
+        if (
+            FIXED_MODEL_SOURCES.get(slug) != source_id
+            or not is_fixed_model_source(slug, provider, source_id, creator)
+            or not source_url.startswith("https://www.pexels.com/video/")
+            or quality.get("passed") is not True
+            or quality.get("identity_locked") is not True
+            or quality.get("identity_id") != FIXED_MODEL_ID
+        ):
+            raise ValueError(f"검수된 고정 모델 원본과 일치하지 않습니다: {slug}")
+    return exercises
+
+
 def publish_preview(preview_dir: Path) -> Dict[str, Any]:
     preview_dir = resolve_preview_dir(preview_dir)
     metadata_path = preview_dir / "metadata.json"
     video_path = preview_dir / "render" / "final_short.mp4"
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    exercises = validate_active_model_preview(metadata)
     preview_run_id = os.getenv("PREVIEW_RUN_ID", "")
+    if not preview_run_id.isdigit():
+        raise ValueError("검증 실행 번호가 없거나 올바르지 않습니다.")
     state = load_state()
     records = state.setdefault("videos", [])
     for record in records:
         if preview_run_id and record.get("preview_run_id") == preview_run_id:
             LOGGER.info("이미 공개한 테스트 영상입니다: %s", record.get("video_url", ""))
             return record
+    source_ids = [str(item.get("source_id") or "") for item in exercises]
+    for record in records:
+        if record.get("content_format") != FIXED_CONTENT_FORMAT:
+            continue
+        if record.get("routine_id") == metadata.get("routine_id"):
+            raise ValueError("이미 공개한 현재 모델 루틴입니다.")
+        if set(source_ids).intersection(str(item) for item in record.get("source_ids") or []):
+            raise ValueError("이미 공개한 현재 모델 원본이 포함되어 있습니다.")
 
     from notifier import send_notification
     from youtube_uploader import YouTubeUploader
@@ -126,7 +188,7 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         description=build_preview_description(metadata),
         tags=public_tags,
         privacy="public",
-        category_id="26" if str(metadata.get("content_format") or "").startswith("pilates-") else "27",
+        category_id="26",
     )
 
     record = {
@@ -134,9 +196,20 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         "topic": metadata.get("topic", ""),
         "title": metadata.get("title", ""),
         "content_format": metadata.get("content_format", ""),
+        "visual_model_id": FIXED_MODEL_ID,
+        "visual_source_creator": FIXED_MODEL_CREATOR,
         "routine_id": metadata.get("routine_id", ""),
-        "exercise_slugs": [item.get("slug", "") for item in metadata.get("exercises") or []],
-        "source_ids": [item.get("source_id", "") for item in metadata.get("exercises") or []],
+        "exercise_slugs": [item.get("slug", "") for item in exercises],
+        "source_ids": source_ids,
+        "sources": [
+            {
+                "source_id": item.get("source_id", ""),
+                "provider": item.get("source_provider", ""),
+                "creator": item.get("source_creator", ""),
+                "source_url": item.get("source_url", ""),
+            }
+            for item in exercises
+        ],
         "instructor_id": (metadata.get("instructor") or {}).get("id", ""),
         "video_id": result["video_id"],
         "video_url": result["video_url"],

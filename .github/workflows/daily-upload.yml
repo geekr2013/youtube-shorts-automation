@@ -35,6 +35,11 @@ on:
         required: false
         default: ''
         type: string
+      model_candidate_query:
+        description: '새 고정 모델 후보 검색어(업로드 없음)'
+        required: false
+        default: ''
+        type: string
       model_candidate_creator:
         description: '검수할 Pexels 업로더 이름'
         required: false
@@ -124,23 +129,24 @@ jobs:
         run: python src/candidate_review.py
 
       - name: 새 고정 모델 후보 검수
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.model_candidate_source_ids != '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.model_candidate_source_ids != '' || inputs.model_candidate_query != '') }}
         env:
           MODEL_CANDIDATE_SOURCE_IDS: ${{ inputs.model_candidate_source_ids }}
+          MODEL_CANDIDATE_QUERY: ${{ inputs.model_candidate_query }}
           MODEL_CANDIDATE_CREATOR: ${{ inputs.model_candidate_creator }}
           MODEL_CANDIDATE_RENDER: ${{ inputs.model_candidate_render }}
         run: python src/model_candidate_review.py
 
       - name: 영상 생성만 테스트
         id: dry_run
-        if: ${{ (github.event_name == 'push' && !contains(github.event.head_commit.message, '[launch-upload]') && !contains(github.event.head_commit.message, '[publish-preview]')) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true && inputs.candidate_review != true && inputs.model_candidate_source_ids == '') }}
+        if: ${{ (github.event_name == 'push' && !contains(github.event.head_commit.message, '[launch-upload]') && !contains(github.event.head_commit.message, '[publish-preview]')) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true && inputs.candidate_review != true && inputs.model_candidate_source_ids == '' && inputs.model_candidate_query == '') }}
         env:
           CURATED_PREVIEW: ${{ inputs.curated_preview }}
         run: python src/main.py --dry-run
 
       - name: 영상 생성 및 공개 업로드
         id: upload
-        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true && inputs.candidate_review != true && inputs.model_candidate_source_ids == '') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[launch-upload]')) }}
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true && inputs.candidate_review != true && inputs.model_candidate_source_ids == '' && inputs.model_candidate_query == '') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[launch-upload]')) }}
         run: python src/main.py
 
       - name: 검증 영상 공개 업로드
