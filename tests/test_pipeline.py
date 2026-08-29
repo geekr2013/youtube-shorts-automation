@@ -10,12 +10,15 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import requests
+
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from main import PUBLIC_TAGS, build_description, build_engagement_comment, build_title, check_configuration
 from media_provider import MIN_FRAME_RATE, MIN_VIDEO_EDGE, StockMediaProvider
+from model_candidate_review import discover_search_sources, parse_source_ids
 from models import StockClip
 from pilates_catalog import (
     EXERCISES,
@@ -70,6 +73,67 @@ class PilatesPipelineTests(unittest.TestCase):
     def setUp(self):
         self.routine = ROUTINES[0]
 
+    def test_model_candidate_ids_support_ranges_and_deduplicate(self):
+        self.assertEqual(
+            parse_source_ids("6437910-6437912, 6437911, 6452931"),
+            ["6437910", "6437911", "6437912", "6452931"],
+        )
+
+    def test_model_candidate_ids_reject_invalid_ranges(self):
+        with self.assertRaises(ValueError):
+            parse_source_ids("6437912-6437910")
+
+    def test_candidate_search_keeps_first_page_when_second_page_times_out(self):
+        provider = Mock()
+        timeout = requests.HTTPError("gateway timeout")
+        timeout.response = Mock(status_code=504)
+        provider._search_pexels.side_effect = [
+            [{"source_id": "101", "creator": "Creator"}],
+            timeout,
+            timeout,
+            timeout,
+        ]
+
+        discovered, errors = discover_search_sources(
+            provider, "Asian Pilates", sleep=lambda _: None
+        )
+
+        self.assertEqual(list(discovered), ["101"])
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["status"], 504)
+        self.assertEqual(errors[0]["attempts"], 3)
+
+    def test_candidate_search_recovers_when_a_transient_retry_succeeds(self):
+        provider = Mock()
+        timeout = requests.HTTPError("gateway timeout")
+        timeout.response = Mock(status_code=504)
+        provider._search_pexels.side_effect = [
+            [{"source_id": "101", "creator": "Creator"}],
+            timeout,
+            [{"source_id": "202", "creator": "Creator"}],
+        ]
+
+        discovered, errors = discover_search_sources(
+            provider, "Asian Pilates", sleep=lambda _: None
+        )
+
+        self.assertEqual(list(discovered), ["101", "202"])
+        self.assertEqual(errors, [])
+        self.assertEqual(provider._search_pexels.call_count, 3)
+
+    def test_candidate_search_does_not_hide_authentication_errors(self):
+        provider = Mock()
+        unauthorized = requests.HTTPError("unauthorized")
+        unauthorized.response = Mock(status_code=401)
+        provider._search_pexels.side_effect = [
+            [{"source_id": "101", "creator": "Creator"}],
+            unauthorized,
+        ]
+
+        with self.assertRaises(requests.HTTPError):
+            discover_search_sources(provider, "Asian Pilates", sleep=lambda _: None)
+        self.assertEqual(provider._search_pexels.call_count, 2)
+
     def test_hana_is_the_voice_brand_while_visuals_are_real_people(self):
         self.assertEqual(INSTRUCTOR_ID, "hana-v1")
         description = build_description(self.routine)
@@ -91,6 +155,14 @@ class PilatesPipelineTests(unittest.TestCase):
             self.assertTrue(exercise.pose_path.exists(), exercise.pose_path)
             self.assertGreater(exercise.pose_path.stat().st_size, 100_000)
             self.assertIn(exercise.pose_path.suffix, {".jpg", ".png"})
+
+    def test_replacement_model_reference_is_original_direction_not_identity_copy(self):
+        reference = ROOT / "assets" / "instructor" / "hana-reference-v2.png"
+        profile = (ROOT / "CHANNEL_PROFILE.md").read_text(encoding="utf-8")
+        self.assertTrue(reference.exists())
+        self.assertGreater(reference.stat().st_size, 100_000)
+        self.assertIn("fictional visual direction only", profile)
+        self.assertIn("Do not match the face", profile)
 
     def test_every_exercise_has_real_video_search_and_closeup_focus(self):
         angles = set()
@@ -172,6 +244,7 @@ class PilatesPipelineTests(unittest.TestCase):
                 self.assertFalse(is_human_reviewed_source(slug, "Pixabay", source_id))
                 self.assertFalse(is_human_reviewed_source(slug, "Pexels", "unreviewed"))
                 self.assertFalse(is_fixed_model_source(slug, "Pexels", source_id, "Other"))
+                self.assertFalse(is_fixed_model_source(slug, "Pexels", source_id, ""))
         self.assertEqual(FIXED_MODEL_ID, "miriam-alonso-core-v1")
 
     def test_routine_selection_is_stable_for_the_same_day(self):
@@ -315,7 +388,7 @@ class PilatesPipelineTests(unittest.TestCase):
         source = (ROOT / "src" / "main.py").read_text(encoding="utf-8")
         self.assertIn("StockMediaProvider", source)
         self.assertIn("build_clip_queries", source)
-        self.assertIn('"pilates-fixed-model-real-video-v2"', source)
+        self.assertIn("FIXED_CONTENT_FORMAT", source)
         self.assertIn("fetch_pexels_source", source)
         self.assertNotIn("research_exact_topic", source)
         self.assertNotIn("GeminiWriter", source)
@@ -624,6 +697,9 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("CONTENT_LANGUAGE: en", source)
         self.assertIn("TARGET_REGION: US", source)
         self.assertIn("TTS_LOCALE: en-US", source)
+        self.assertIn("inputs.candidate_review != true", source)
+        self.assertIn("inputs.model_candidate_source_ids == ''", source)
+        self.assertIn("inputs.model_candidate_query == ''", source)
         self.assertIn("fonts-lato", source)
         self.assertIn("fc-match 'Lato'", source)
 

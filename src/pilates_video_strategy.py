@@ -168,7 +168,7 @@ def is_fixed_model_source(
     """Accept only the exact adult model/session sources reviewed from motion frames."""
     if not is_human_reviewed_source(exercise_slug, provider, source_id):
         return False
-    return not creator or creator.strip() == FIXED_MODEL_CREATOR
+    return bool(creator.strip()) and creator.strip() == FIXED_MODEL_CREATOR
 
 
 def build_clip_queries(routine: Routine) -> List[str]:

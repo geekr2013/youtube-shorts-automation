@@ -52,7 +52,9 @@ class StockMediaProvider:
         files.sort(key=score, reverse=True)
         return files[0]
 
-    def _search_pexels(self, query: str) -> List[Dict[str, Any]]:
+    def _search_pexels(
+        self, query: str, *, per_page: int = 24, page: int = 1
+    ) -> List[Dict[str, Any]]:
         if not self.pexels_key:
             return []
         response = self.session.get(
@@ -60,7 +62,8 @@ class StockMediaProvider:
             headers={"Authorization": self.pexels_key},
             params={
                 "query": query,
-                "per_page": 24,
+                "per_page": max(1, min(int(per_page), 80)),
+                "page": max(1, int(page)),
                 "orientation": "portrait",
                 "size": "medium",
                 "locale": "en-US",

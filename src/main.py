@@ -25,6 +25,7 @@ from pilates_catalog import (
 )
 from pilates_renderer import media_duration, render_pilates_short
 from pilates_video_strategy import (
+    FIXED_CONTENT_FORMAT,
     FIXED_MODEL_CREATOR,
     FIXED_MODEL_ID,
     FIXED_MODEL_SOURCES,
@@ -196,6 +197,22 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
                 raise RuntimeError("세 동작과 실제 영상 소스의 수가 일치하지 않습니다.")
             if len({clip.source_id for clip in clips}) != len(clips):
                 raise RuntimeError("한 영상 안에서 같은 원본이 중복되었습니다.")
+            if len({exercise.slug for exercise in exercises}) != len(exercises):
+                raise RuntimeError("한 영상 안에서 같은 동작이 중복되었습니다.")
+            for exercise, clip in zip(exercises, clips):
+                quality = clip.visual_quality or {}
+                if (
+                    FIXED_MODEL_SOURCES.get(exercise.slug) != clip.source_id
+                    or not is_fixed_model_source(
+                        exercise.slug, clip.provider, clip.source_id, clip.creator
+                    )
+                    or quality.get("passed") is not True
+                    or quality.get("identity_locked") is not True
+                    or quality.get("identity_id") != FIXED_MODEL_ID
+                ):
+                    raise RuntimeError(
+                        f"고정 모델 최종 검증에 실패했습니다: {exercise.slug}"
+                    )
             return routine, clips
         except Exception as exc:
             failures.append(f"{routine.routine_id}: {exc}")
@@ -237,7 +254,8 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     visual_metadata = json.loads((render_dir / "visual_metadata.json").read_text(encoding="utf-8"))
     exercises = routine_exercises(routine)
     metadata: Dict[str, Any] = {
-        "content_format": "pilates-fixed-model-real-video-v2",
+        "content_format": FIXED_CONTENT_FORMAT,
+        "visual_model_id": FIXED_MODEL_ID,
         "routine_id": routine.routine_id,
         "topic": routine.title_en.title(),
         "title": build_title(routine),
@@ -249,7 +267,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
             "identity_locked": True,
             "visual_model_id": FIXED_MODEL_ID,
             "visual_source_creator": FIXED_MODEL_CREATOR,
-            "adult_age": 25,
+            "adult_confirmed": True,
             "synthetic_voice": True,
             "real_human_footage": True,
         },
@@ -306,7 +324,9 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
     )
     record = {
         "published_at": datetime.now(timezone.utc).isoformat(),
-        "content_format": "pilates-fixed-model-real-video-v2",
+        "content_format": FIXED_CONTENT_FORMAT,
+        "visual_model_id": FIXED_MODEL_ID,
+        "visual_source_creator": FIXED_MODEL_CREATOR,
         "routine_id": routine.routine_id,
         "topic": routine.title_en.title(),
         "title": build_title(routine),
@@ -315,6 +335,15 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "video_url": result["video_url"],
         "exercise_slugs": list(routine.exercise_slugs),
         "source_ids": [clip.source_id for clip in clips],
+        "sources": [
+            {
+                "source_id": clip.source_id,
+                "provider": clip.provider,
+                "creator": clip.creator,
+                "source_url": clip.source_url,
+            }
+            for clip in clips
+        ],
         "engagement_comment": build_engagement_comment(routine),
         "metrics": {"views": 0, "likes": 0, "comments": 0},
     }
