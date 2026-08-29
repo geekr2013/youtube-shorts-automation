@@ -635,6 +635,8 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("CONTENT_LANGUAGE: en", source)
         self.assertIn("TARGET_REGION: US", source)
         self.assertIn("TTS_LOCALE: en-US", source)
+        self.assertIn("inputs.candidate_review != true", source)
+        self.assertIn("inputs.model_candidate_source_ids == ''", source)
         self.assertIn("fonts-lato", source)
         self.assertIn("fc-match 'Lato'", source)
 
