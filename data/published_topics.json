@@ -816,6 +816,54 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-29T02:08:49.480357+00:00",
+      "content_format": "pilates-fixed-model-real-video-v2",
+      "visual_model_id": "miriam-alonso-core-v1",
+      "visual_source_creator": "Miriam Alonso",
+      "routine_id": "fixed-shoulder-mobility",
+      "topic": "Shoulder Mobility",
+      "title": "Shoulder Mobility | 3-Move Pilates Routine",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "YINCr09Zk2I",
+      "video_url": "https://www.youtube.com/shorts/YINCr09Zk2I",
+      "exercise_slugs": [
+        "standing-shoulder-open",
+        "overhead-reach",
+        "seated-side-bend"
+      ],
+      "source_ids": [
+        "7590389",
+        "7590390",
+        "7590404"
+      ],
+      "sources": [
+        {
+          "source_id": "7590389",
+          "provider": "Pexels",
+          "creator": "Miriam Alonso",
+          "source_url": "https://www.pexels.com/video/a-woman-doing-yoga-7590389/"
+        },
+        {
+          "source_id": "7590390",
+          "provider": "Pexels",
+          "creator": "Miriam Alonso",
+          "source_url": "https://www.pexels.com/video/a-couple-exercising-at-home-7590390/"
+        },
+        {
+          "source_id": "7590404",
+          "provider": "Pexels",
+          "creator": "Miriam Alonso",
+          "source_url": "https://www.pexels.com/video/a-woman-exercising-indoors-7590404/"
+        }
+      ],
+      "engagement_comment": "YOUR TURN: Which shoulder felt tighter today: left or right?\nMove within a comfortable range and tell us below.",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
