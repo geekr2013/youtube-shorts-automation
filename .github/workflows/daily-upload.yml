@@ -30,6 +30,21 @@ on:
         required: false
         default: false
         type: boolean
+      model_candidate_source_ids:
+        description: '새 고정 모델 검수용 Pexels ID 또는 범위'
+        required: false
+        default: ''
+        type: string
+      model_candidate_creator:
+        description: '검수할 Pexels 업로더 이름'
+        required: false
+        default: ''
+        type: string
+      model_candidate_render:
+        description: '일치 소스의 동작 화면표도 생성'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   actions: read
@@ -108,6 +123,14 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_review == true }}
         run: python src/candidate_review.py
 
+      - name: 새 고정 모델 후보 검수
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.model_candidate_source_ids != '' }}
+        env:
+          MODEL_CANDIDATE_SOURCE_IDS: ${{ inputs.model_candidate_source_ids }}
+          MODEL_CANDIDATE_CREATOR: ${{ inputs.model_candidate_creator }}
+          MODEL_CANDIDATE_RENDER: ${{ inputs.model_candidate_render }}
+        run: python src/model_candidate_review.py
+
       - name: 영상 생성만 테스트
         id: dry_run
         if: ${{ (github.event_name == 'push' && !contains(github.event.head_commit.message, '[launch-upload]') && !contains(github.event.head_commit.message, '[publish-preview]')) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true && inputs.candidate_review != true) }}
@@ -160,6 +183,8 @@ jobs:
             data/work/render/contact-sheet.jpg
             data/candidate-review/candidates.json
             data/candidate-review/**/*.jpg
+            data/model-candidate-review/candidates.json
+            data/model-candidate-review/**/*.jpg
           if-no-files-found: ignore
           retention-days: 3
 

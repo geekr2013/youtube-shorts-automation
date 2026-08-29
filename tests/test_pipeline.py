@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from main import PUBLIC_TAGS, build_description, build_engagement_comment, build_title, check_configuration
 from media_provider import MIN_FRAME_RATE, MIN_VIDEO_EDGE, StockMediaProvider
+from model_candidate_review import parse_source_ids
 from models import StockClip
 from pilates_catalog import (
     EXERCISES,
@@ -69,6 +70,16 @@ from visual_quality import (
 class PilatesPipelineTests(unittest.TestCase):
     def setUp(self):
         self.routine = ROUTINES[0]
+
+    def test_model_candidate_ids_support_ranges_and_deduplicate(self):
+        self.assertEqual(
+            parse_source_ids("6437910-6437912, 6437911, 6452931"),
+            ["6437910", "6437911", "6437912", "6452931"],
+        )
+
+    def test_model_candidate_ids_reject_invalid_ranges(self):
+        with self.assertRaises(ValueError):
+            parse_source_ids("6437912-6437910")
 
     def test_hana_is_the_voice_brand_while_visuals_are_real_people(self):
         self.assertEqual(INSTRUCTOR_ID, "hana-v1")
