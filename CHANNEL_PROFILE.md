@@ -25,6 +25,16 @@ HANA PILATES uses licensed, human-reviewed footage featuring the same adult Pila
 - Banner: `assets/channel/hana-banner-2048x1152.png` (2048×1152; key copy and face inside the central safe area)
 - Profile: `assets/channel/hana-profile-98.png` (98×98)
 - Instructor reference: `assets/instructor/hana-alignment-reference.png`
+- Replacement mood reference: `assets/instructor/hana-reference-v2.png` (fictional visual direction only; never used to copy a real identity)
+
+## Replacement Model Lock
+
+- Adult East Asian/Asian woman with a polished, approachable expression and long dark hair
+- Natural athletic silhouette with realistic skin texture and controlled studio highlights
+- Dusty-blush or warm-taupe opaque crop training tank with a modest neckline
+- Matching high-waisted mid-thigh training shorts or leggings; no lingerie, sheer fabric, micro shorts, or logos
+- The reference fixes only the general visual direction. Scheduled footage must still show one independently licensed real adult across every approved source.
+- Do not match the face of a reference person, celebrity, or influencer. Do not imply that a stock model is HANA or a certified instructor.
 
 ## Benchmarking Boundaries
 

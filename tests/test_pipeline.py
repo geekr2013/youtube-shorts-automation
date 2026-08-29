@@ -10,13 +10,15 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import requests
+
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from main import PUBLIC_TAGS, build_description, build_engagement_comment, build_title, check_configuration
 from media_provider import MIN_FRAME_RATE, MIN_VIDEO_EDGE, StockMediaProvider
-from model_candidate_review import parse_source_ids
+from model_candidate_review import discover_search_sources, parse_source_ids
 from models import StockClip
 from pilates_catalog import (
     EXERCISES,
@@ -81,6 +83,57 @@ class PilatesPipelineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_source_ids("6437912-6437910")
 
+    def test_candidate_search_keeps_first_page_when_second_page_times_out(self):
+        provider = Mock()
+        timeout = requests.HTTPError("gateway timeout")
+        timeout.response = Mock(status_code=504)
+        provider._search_pexels.side_effect = [
+            [{"source_id": "101", "creator": "Creator"}],
+            timeout,
+            timeout,
+            timeout,
+        ]
+
+        discovered, errors = discover_search_sources(
+            provider, "Asian Pilates", sleep=lambda _: None
+        )
+
+        self.assertEqual(list(discovered), ["101"])
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["status"], 504)
+        self.assertEqual(errors[0]["attempts"], 3)
+
+    def test_candidate_search_recovers_when_a_transient_retry_succeeds(self):
+        provider = Mock()
+        timeout = requests.HTTPError("gateway timeout")
+        timeout.response = Mock(status_code=504)
+        provider._search_pexels.side_effect = [
+            [{"source_id": "101", "creator": "Creator"}],
+            timeout,
+            [{"source_id": "202", "creator": "Creator"}],
+        ]
+
+        discovered, errors = discover_search_sources(
+            provider, "Asian Pilates", sleep=lambda _: None
+        )
+
+        self.assertEqual(list(discovered), ["101", "202"])
+        self.assertEqual(errors, [])
+        self.assertEqual(provider._search_pexels.call_count, 3)
+
+    def test_candidate_search_does_not_hide_authentication_errors(self):
+        provider = Mock()
+        unauthorized = requests.HTTPError("unauthorized")
+        unauthorized.response = Mock(status_code=401)
+        provider._search_pexels.side_effect = [
+            [{"source_id": "101", "creator": "Creator"}],
+            unauthorized,
+        ]
+
+        with self.assertRaises(requests.HTTPError):
+            discover_search_sources(provider, "Asian Pilates", sleep=lambda _: None)
+        self.assertEqual(provider._search_pexels.call_count, 2)
+
     def test_hana_is_the_voice_brand_while_visuals_are_real_people(self):
         self.assertEqual(INSTRUCTOR_ID, "hana-v1")
         description = build_description(self.routine)
@@ -102,6 +155,14 @@ class PilatesPipelineTests(unittest.TestCase):
             self.assertTrue(exercise.pose_path.exists(), exercise.pose_path)
             self.assertGreater(exercise.pose_path.stat().st_size, 100_000)
             self.assertIn(exercise.pose_path.suffix, {".jpg", ".png"})
+
+    def test_replacement_model_reference_is_original_direction_not_identity_copy(self):
+        reference = ROOT / "assets" / "instructor" / "hana-reference-v2.png"
+        profile = (ROOT / "CHANNEL_PROFILE.md").read_text(encoding="utf-8")
+        self.assertTrue(reference.exists())
+        self.assertGreater(reference.stat().st_size, 100_000)
+        self.assertIn("fictional visual direction only", profile)
+        self.assertIn("Do not match the face", profile)
 
     def test_every_exercise_has_real_video_search_and_closeup_focus(self):
         angles = set()

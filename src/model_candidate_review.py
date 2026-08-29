@@ -3,8 +3,11 @@
 import json
 import os
 import shutil
+import time
 from pathlib import Path
-from typing import Dict, List
+from typing import Callable, Dict, List, Tuple
+
+import requests
 
 from candidate_review import _sheet
 from media_provider import StockMediaProvider
@@ -15,6 +18,46 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "data" / "model-candidate-review"
 MAX_SCAN_IDS = 150
 MAX_RENDERED_SOURCES = 36
+SEARCH_ATTEMPTS = 3
+TRANSIENT_SEARCH_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def discover_search_sources(
+    provider: StockMediaProvider,
+    search_query: str,
+    pages: int = 2,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Tuple[Dict[str, dict], List[dict]]:
+    """Retry pages independently and keep any safe partial search results."""
+    discovered: Dict[str, dict] = {}
+    errors: List[dict] = []
+    for page in range(1, pages + 1):
+        candidates: List[dict] = []
+        for attempt in range(1, SEARCH_ATTEMPTS + 1):
+            try:
+                candidates = provider._search_pexels(
+                    search_query, per_page=80, page=page
+                )
+                break
+            except requests.RequestException as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                transient = status is None or status in TRANSIENT_SEARCH_STATUS_CODES
+                if not transient:
+                    raise
+                if attempt == SEARCH_ATTEMPTS:
+                    errors.append({
+                        "page": page,
+                        "status": status or "network",
+                        "attempts": attempt,
+                        "error": str(exc)[:180],
+                    })
+                    break
+                sleep(2 ** (attempt - 1))
+        for candidate in candidates:
+            source_id = str(candidate.get("source_id") or "")
+            if source_id:
+                discovered.setdefault(source_id, candidate)
+    return discovered, errors
 
 
 def parse_source_ids(value: str) -> List[str]:
@@ -59,16 +102,26 @@ def main() -> int:
 
     provider = StockMediaProvider()
     discovered: Dict[str, dict] = {}
+    search_errors: List[dict] = []
     if raw_source_ids:
         source_ids = parse_source_ids(raw_source_ids)
     elif search_query:
-        for page in range(1, 3):
-            for candidate in provider._search_pexels(search_query, per_page=80, page=page):
-                source_id = str(candidate.get("source_id") or "")
-                if source_id:
-                    discovered.setdefault(source_id, candidate)
+        discovered, search_errors = discover_search_sources(provider, search_query)
         source_ids = list(discovered)[:MAX_SCAN_IDS]
         if not source_ids:
+            diagnostic = {
+                "scope": "new-fixed-model-candidate-review",
+                "search_query": search_query,
+                "expected_creator": expected_creator,
+                "rendered_motion_frames": render,
+                "partial_results": False,
+                "search_errors": search_errors,
+                "sources": [],
+            }
+            (OUTPUT_DIR / "candidates.json").write_text(
+                json.dumps(diagnostic, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
             raise RuntimeError("No Pexels candidates matched the search query")
     else:
         raise ValueError("MODEL_CANDIDATE_SOURCE_IDS or MODEL_CANDIDATE_QUERY is required")
@@ -77,6 +130,8 @@ def main() -> int:
         "search_query": search_query,
         "expected_creator": expected_creator,
         "rendered_motion_frames": render,
+        "partial_results": bool(search_errors),
+        "search_errors": search_errors,
         "sources": [],
     }
     matched = 0
