@@ -860,6 +860,54 @@
       ],
       "engagement_comment": "YOUR TURN: Which shoulder felt tighter today: left or right?\nMove within a comfortable range and tell us below.",
       "metrics": {
+        "views": 7,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-30T07:22:54.080921+00:00",
+      "content_format": "pilates-fixed-model-real-video-v2",
+      "visual_model_id": "miriam-alonso-core-v1",
+      "visual_source_creator": "Miriam Alonso",
+      "routine_id": "fixed-hamstring-release",
+      "topic": "Hamstring Release",
+      "title": "Hamstring Release | 3-Move Pilates Routine",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "rYGE2uyNuqo",
+      "video_url": "https://www.youtube.com/shorts/rYGE2uyNuqo",
+      "exercise_slugs": [
+        "seated-hamstring",
+        "seated-leg-extension",
+        "supine-leg-stretch"
+      ],
+      "source_ids": [
+        "7590424",
+        "7590436",
+        "7590463"
+      ],
+      "sources": [
+        {
+          "source_id": "7590424",
+          "provider": "Pexels",
+          "creator": "Miriam Alonso",
+          "source_url": "https://www.pexels.com/video/a-woman-stretching-her-legs-7590424/"
+        },
+        {
+          "source_id": "7590436",
+          "provider": "Pexels",
+          "creator": "Miriam Alonso",
+          "source_url": "https://www.pexels.com/video/woman-stretching-her-body-7590436/"
+        },
+        {
+          "source_id": "7590463",
+          "provider": "Pexels",
+          "creator": "Miriam Alonso",
+          "source_url": "https://www.pexels.com/video/a-person-stretching-their-legs-7590463/"
+        }
+      ],
+      "engagement_comment": "YOUR TURN: Which side felt tighter during this hamstring flow?\nMove within a comfortable range and tell us below.",
+      "metrics": {
         "views": 0,
         "likes": 0,
         "comments": 0
