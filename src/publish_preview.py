@@ -10,10 +10,15 @@ from typing import Any, Dict
 
 from pilates_video_strategy import (
     FIXED_CONTENT_FORMAT,
+    FIXED_LICENSE_NAME,
+    FIXED_LICENSE_URL,
     FIXED_MODEL_CREATOR,
     FIXED_MODEL_ID,
+    FIXED_MODEL_PROVIDER,
     FIXED_MODEL_SOURCES,
+    FIXED_SOURCE_DETAILS,
     is_fixed_model_source,
+    require_requested_production_model,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,10 +45,13 @@ def build_preview_description(metadata: Dict[str, Any]) -> str:
             + "\n\nMove slowly, keep breathing, and stay within a comfortable range. "
             "Stop if you feel pain, dizziness, or discomfort. Consult a qualified "
             "professional when personal health circumstances require it.\n\n"
-            "This edit uses human-reviewed, licensed Pexels footage featuring the same "
-            "adult Pilates model. Full-body form views and targeted close-ups preserve "
+            f"This edit uses human-reviewed footage under the {FIXED_LICENSE_NAME}. The same "
+            "primary adult Pilates participant remains the focus across one filmed session; "
+            "a trainer or classmates may appear in the background. Orientation views and "
+            "targeted close-ups preserve "
             "the original movement, wardrobe, and body appearance.\n"
             "English AI voiceover and English on-screen captions. No background music.\n\n"
+            f"Footage license: {FIXED_LICENSE_URL}\n\n"
             + (("Footage credits\n" + "\n".join(credits) + "\n\n") if credits else "")
             + (f"{engagement}\n\n" if engagement else "")
             + "#Shorts #Pilates #PilatesWorkout #HomeWorkout #Mobility"
@@ -121,6 +129,7 @@ def validate_active_model_preview(metadata: Dict[str, Any]) -> list[Dict[str, An
     if (
         instructor.get("identity_locked") is not True
         or instructor.get("visual_model_id") != FIXED_MODEL_ID
+        or instructor.get("visual_source_provider") != FIXED_MODEL_PROVIDER
         or instructor.get("visual_source_creator") != FIXED_MODEL_CREATOR
     ):
         raise ValueError("현재 고정 모델의 신원 정보가 일치하지 않습니다.")
@@ -139,12 +148,15 @@ def validate_active_model_preview(metadata: Dict[str, Any]) -> list[Dict[str, An
         provider = str(item.get("source_provider") or "")
         creator = str(item.get("source_creator") or "")
         source_url = str(item.get("source_url") or "")
+        source = FIXED_SOURCE_DETAILS.get(slug) or {}
         quality = item.get("visual_quality") or {}
         if (
             FIXED_MODEL_SOURCES.get(slug) != source_id
             or not is_fixed_model_source(slug, provider, source_id, creator)
-            or not source_url.startswith("https://www.pexels.com/video/")
+            or source_url != str(source.get("source_url") or "")
             or quality.get("passed") is not True
+            or quality.get("approved") is not True
+            or not str(quality.get("reason") or "").strip()
             or quality.get("identity_locked") is not True
             or quality.get("identity_id") != FIXED_MODEL_ID
         ):
@@ -159,6 +171,7 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     exercises = validate_active_model_preview(metadata)
+    require_requested_production_model()
     preview_run_id = os.getenv("PREVIEW_RUN_ID", "")
     if not preview_run_id.isdigit():
         raise ValueError("검증 실행 번호가 없거나 올바르지 않습니다.")
@@ -197,6 +210,7 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         "title": metadata.get("title", ""),
         "content_format": metadata.get("content_format", ""),
         "visual_model_id": FIXED_MODEL_ID,
+        "visual_source_provider": FIXED_MODEL_PROVIDER,
         "visual_source_creator": FIXED_MODEL_CREATOR,
         "routine_id": metadata.get("routine_id", ""),
         "exercise_slugs": [item.get("slug", "") for item in exercises],

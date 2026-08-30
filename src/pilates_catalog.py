@@ -476,6 +476,102 @@ EXERCISES: Dict[str, Exercise] = {
         motion_start_file="side-leg-lift-down.png", motion_end_file="side-leg-lift-up.png",
         camera_angle="side-front-lower-body", muscle_focus="발바닥·발목·종아리", bilateral=True,
     ),
+    "reformer-leg-press": Exercise(
+        slug="reformer-leg-press", name_ko="리포머 레그 프레스", name_en="REFORMER LEG PRESS",
+        pose_file="glute-bridge.jpg", prescription_ko="6회", prescription_en="6 REPS",
+        cue_ko="골반을 캐리지에 안정적으로", cue_en="KEEP YOUR PELVIS STEADY",
+        voice_ko="골반을 캐리지에 안정적으로 두고 다리를 여섯 번 길게 밀어요.",
+        motion_start_file="glute-bridge-down.png", motion_end_file="glute-bridge-up.png",
+        camera_angle="side-front-lower-body", muscle_focus="복부·둔근·대퇴부", equipment="리포머",
+    ),
+    "reformer-single-leg-control": Exercise(
+        slug="reformer-single-leg-control", name_ko="싱글 레그 컨트롤", name_en="SINGLE LEG CONTROL",
+        pose_file="dead-bug.jpg", prescription_ko="좌우 5회씩", prescription_en="5 EACH SIDE",
+        cue_ko="골반 좌우 높이를 유지", cue_en="KEEP YOUR HIPS LEVEL",
+        voice_ko="골반 높이를 유지하고 한쪽 다리씩 좌우 다섯 번 조절해요.",
+        motion_start_file="dead-bug-start.png", motion_end_file="dead-bug-extend.png",
+        camera_angle="side-front-lower-body", muscle_focus="복부·둔근·고관절", bilateral=True, equipment="리포머",
+    ),
+    "reformer-double-leg-extension": Exercise(
+        slug="reformer-double-leg-extension", name_ko="더블 레그 익스텐션", name_en="DOUBLE LEG EXTENSION",
+        pose_file="dead-bug.jpg", prescription_ko="6회", prescription_en="6 REPS",
+        cue_ko="갈비뼈와 골반을 안정적으로", cue_en="KEEP RIBS AND HIPS STEADY",
+        voice_ko="갈비뼈와 골반을 안정시키고 두 다리를 여섯 번 길게 뻗어요.",
+        motion_start_file="dead-bug-start.png", motion_end_file="dead-bug-extend.png",
+        camera_angle="side-front-lower-body", muscle_focus="복부·고관절·대퇴부", equipment="리포머",
+    ),
+    "reformer-knee-fold-press": Exercise(
+        slug="reformer-knee-fold-press", name_ko="리포머 니 폴드 프레스", name_en="REFORMER KNEE FOLD PRESS",
+        pose_file="dead-bug.jpg", prescription_ko="6회", prescription_en="6 REPS",
+        cue_ko="갈비뼈와 골반을 무겁게", cue_en="KEEP RIBS AND HIPS HEAVY",
+        voice_ko="갈비뼈와 골반을 안정시키고 무릎을 여섯 번 천천히 접었다 밀어요.",
+        motion_start_file="dead-bug-start.png", motion_end_file="dead-bug-extend.png",
+        camera_angle="low-side-core-to-legs", muscle_focus="복부·고관절·대퇴부", equipment="리포머",
+    ),
+    "reformer-chest-lift": Exercise(
+        slug="reformer-chest-lift", name_ko="리포머 체스트 리프트", name_en="REFORMER CHEST LIFT",
+        pose_file="dead-bug.jpg", prescription_ko="5회", prescription_en="5 REPS",
+        cue_ko="목이 아닌 복부로 올라오기", cue_en="LIFT FROM YOUR ABS NOT YOUR NECK",
+        voice_ko="목에 힘을 빼고 복부로 상체를 다섯 번 부드럽게 들어 올려요.",
+        motion_start_file="dead-bug-start.png", motion_end_file="dead-bug-extend.png",
+        camera_angle="low-side-ribcage-closeup", muscle_focus="복부·갈비뼈·목 정렬", equipment="리포머",
+    ),
+    "reformer-strap-crunch": Exercise(
+        slug="reformer-strap-crunch", name_ko="리포머 스트랩 크런치", name_en="REFORMER STRAP CRUNCH",
+        pose_file="dead-bug.jpg", prescription_ko="5회", prescription_en="5 REPS",
+        cue_ko="팔보다 복부의 말림에 집중", cue_en="CURL THROUGH YOUR RIBCAGE",
+        voice_ko="팔로 당기지 말고 갈비뼈를 골반 쪽으로 다섯 번 부드럽게 말아요.",
+        motion_start_file="dead-bug-start.png", motion_end_file="dead-bug-extend.png",
+        camera_angle="low-front-core-closeup", muscle_focus="복직근·갈비뼈·어깨", equipment="리포머",
+    ),
+    "reformer-knee-stretch": Exercise(
+        slug="reformer-knee-stretch", name_ko="리포머 니 스트레치", name_en="REFORMER KNEE STRETCH",
+        pose_file="bird-dog.jpg", prescription_ko="6회", prescription_en="6 REPS",
+        cue_ko="어깨 아래 손목을 유지", cue_en="KEEP SHOULDERS OVER WRISTS",
+        voice_ko="어깨 아래에 손목을 두고 캐리지를 여섯 번 천천히 움직여요.",
+        motion_start_file="bird-dog-start.png", motion_end_file="bird-dog-extend.png",
+        camera_angle="side-three-quarter", muscle_focus="복부·둔근·어깨", equipment="리포머",
+    ),
+    "reformer-long-stretch": Exercise(
+        slug="reformer-long-stretch", name_ko="리포머 롱 스트레치", name_en="REFORMER LONG STRETCH",
+        pose_file="modified-plank.jpg", prescription_ko="20초", prescription_en="20 SECONDS",
+        cue_ko="머리부터 발뒤꿈치까지 길게", cue_en="REACH HEAD TO HEELS",
+        voice_ko="머리부터 발뒤꿈치까지 길게 뻗고 이십 초 동안 중심을 유지해요.",
+        motion_start_file="bird-dog-start.png", motion_end_file="bird-dog-extend.png",
+        camera_angle="side-three-quarter", muscle_focus="복부·둔근·어깨", equipment="리포머",
+    ),
+    "seated-reformer-stretch": Exercise(
+        slug="seated-reformer-stretch", name_ko="시티드 리포머 스트레치", name_en="SEATED REFORMER STRETCH",
+        pose_file="spine-twist.jpg", prescription_ko="20초", prescription_en="20 SECONDS",
+        cue_ko="목과 어깨의 힘을 빼기", cue_en="RELAX YOUR NECK AND SHOULDERS",
+        voice_ko="목과 어깨의 힘을 빼고 이십 초 동안 편안하게 호흡해요.",
+        motion_start_file="spine-twist-center.png", motion_end_file="spine-twist-right.png",
+        camera_angle="front-three-quarter", muscle_focus="복부·등·어깨", equipment="리포머",
+    ),
+    "standing-arm-open": Exercise(
+        slug="standing-arm-open", name_ko="스탠딩 암 오픈", name_en="STANDING ARM OPEN",
+        pose_file="spine-twist.jpg", prescription_ko="8회", prescription_en="8 REPS",
+        cue_ko="갈비뼈 위에 어깨를 정렬", cue_en="STACK SHOULDERS OVER RIBS",
+        voice_ko="갈비뼈 위에 어깨를 정렬하고 팔을 여덟 번 부드럽게 열어요.",
+        motion_start_file="spine-twist-center.png", motion_end_file="spine-twist-right.png",
+        camera_angle="front-alignment", muscle_focus="복부·가슴·어깨", equipment="리포머",
+    ),
+    "standing-side-shift": Exercise(
+        slug="standing-side-shift", name_ko="스탠딩 사이드 시프트", name_en="STANDING SIDE SHIFT",
+        pose_file="side-leg-lift.jpg", prescription_ko="좌우 5회씩", prescription_en="5 EACH SIDE",
+        cue_ko="무릎과 발끝을 같은 방향으로", cue_en="TRACK KNEES OVER TOES",
+        voice_ko="무릎과 발끝을 같은 방향으로 두고 좌우 다섯 번 이동해요.",
+        motion_start_file="side-leg-lift-down.png", motion_end_file="side-leg-lift-up.png",
+        camera_angle="front-alignment", muscle_focus="복부·둔근·내전근", bilateral=True, equipment="리포머",
+    ),
+    "standing-leg-press": Exercise(
+        slug="standing-leg-press", name_ko="스탠딩 레그 프레스", name_en="STANDING LEG PRESS",
+        pose_file="side-leg-lift.jpg", prescription_ko="좌우 6회씩", prescription_en="6 EACH SIDE",
+        cue_ko="지지 다리를 안정적으로", cue_en="STABILIZE YOUR STANDING LEG",
+        voice_ko="지지 다리를 안정시키고 움직이는 다리를 좌우 여섯 번 길게 밀어요.",
+        motion_start_file="side-leg-lift-down.png", motion_end_file="side-leg-lift-up.png",
+        camera_angle="side-front-lower-body", muscle_focus="둔근·내전근·대퇴부", bilateral=True, equipment="리포머",
+    ),
 }
 
 
@@ -501,6 +597,9 @@ ROUTINES: Tuple[Routine, ...] = (
     Routine("fixed-standing-posture", "서서 하는 자세 리셋", "STANDING POSTURE RESET", "서 있는 자세에서 가슴과 옆구리를 길게 여는 세 동작입니다.", ("rear-shoulder-open", "tall-reach", "standing-side-reach"), "세 동작 중 가장 시원했던 움직임은 무엇인가요?"),
     Routine("fixed-beginner-flow", "초보 전신 유연성", "BEGINNER FLEXIBILITY", "반동 없이 전신을 천천히 연결하는 초급 세 동작입니다.", ("forward-fold-flow", "seated-forward-fold", "side-mobility-flow"), "서서 하는 동작과 앉아서 하는 동작 중 어느 쪽이 편했나요?"),
     Routine("fixed-hip-mobility", "고관절과 발목 풀기", "HIP AND ANKLE MOBILITY", "골반부터 발목까지 하체 관절을 천천히 푸는 세 동작입니다.", ("hip-open-flow", "butterfly-stretch", "foot-release"), "고관절과 발목 중 어느 부위가 더 뻣뻣했나요?"),
+    Routine("hana-supine-reformer-core", "누워서 하는 리포머 코어", "SUPINE REFORMER CORE", "누운 자세에서 갈비뼈와 골반을 안정시키는 세 동작입니다.", ("reformer-knee-fold-press", "reformer-chest-lift", "reformer-strap-crunch"), "세 동작 중 어느 동작에서 복부 연결이 가장 잘 느껴졌나요?"),
+    Routine("hana-reformer-core-series", "리포머 코어 컨트롤", "REFORMER CORE CONTROL", "리포머에서 어깨와 골반을 안정시키는 세 동작입니다.", ("reformer-knee-stretch", "reformer-long-stretch", "seated-reformer-stretch"), "니 스트레치와 롱 스트레치 중 어느 동작이 더 어려웠나요?"),
+    Routine("hana-standing-reformer-flow", "스탠딩 리포머 플로우", "STANDING REFORMER FLOW", "서서 균형과 하체 정렬을 연습하는 세 동작입니다.", ("standing-arm-open", "standing-side-shift", "standing-leg-press"), "좌우 중 어느 쪽에서 균형 잡기가 더 어려웠나요?"),
 )
 
 
@@ -553,6 +652,18 @@ ROUTINE_COPY_EN: Dict[str, Tuple[str, str]] = {
     "fixed-hip-mobility": (
         "Loosen the hips and ankles with three controlled mobility moves.",
         "Which felt stiffer today: your hips or your ankles?",
+    ),
+    "hana-supine-reformer-core": (
+        "Three supine reformer moves for deeper rib-to-pelvis control.",
+        "Which move helped you feel your abs connect the most?",
+    ),
+    "hana-reformer-core-series": (
+        "Three reformer moves to practice clean shoulder and core control.",
+        "Which felt harder: the knee stretch or the long stretch?",
+    ),
+    "hana-standing-reformer-flow": (
+        "Three standing reformer moves for balance and leg alignment.",
+        "Which side felt less steady today?",
     ),
 }
 
@@ -610,12 +721,10 @@ def build_narration(routine: Routine) -> str:
     for label, exercise in zip(order, movements):
         sentences.append(
             f"{label}, {exercise.name_en.title()}. "
-            f"{exercise.cue_en.capitalize()}. "
-            f"Complete {_spoken_prescription(exercise.prescription_en)}."
+            f"{exercise.cue_en.capitalize()} for {_spoken_prescription(exercise.prescription_en)}."
         )
     sentences.append(
-        "Breathe steadily, work within a comfortable range, and stop if you feel pain, "
-        "dizziness, or discomfort."
+        "Breathe steadily, stay in a comfortable range, and stop if you feel pain or dizziness."
     )
     return " ".join(sentences)
 
@@ -645,6 +754,9 @@ def validate_routine(routine: Routine) -> None:
             "front-alignment",
             "side-front-three-quarter",
             "side-front-lower-body",
+            "low-side-core-to-legs",
+            "low-side-ribcage-closeup",
+            "low-front-core-closeup",
         }:
             raise ValueError(f"검수되지 않은 카메라 구도입니다: {exercise.camera_angle}")
 

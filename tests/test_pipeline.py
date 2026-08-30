@@ -45,17 +45,23 @@ from pilates_renderer import (
 from pilates_video_strategy import (
     EXERCISE_VIDEO_SEARCH,
     FIXED_CONTENT_FORMAT,
+    FIXED_LICENSE_NAME,
     FIXED_MODEL_CREATOR,
     FIXED_MODEL_ID,
+    FIXED_MODEL_PROVIDER,
     FIXED_MODEL_SOURCES,
+    FIXED_SOURCE_DETAILS,
     MUSCLE_CLOSEUP_Y,
     PREFERRED_SOURCE_IDS,
     REAL_VIDEO_ROUTINE_IDS,
+    REQUESTED_PRODUCTION_MODEL_ID,
     SOURCE_REQUIREMENTS,
     build_clip_queries,
     is_fixed_model_source,
     is_human_reviewed_source,
+    production_model_ready,
     real_video_routine_candidates,
+    require_requested_production_model,
 )
 from publish_preview import build_preview_description, resolve_preview_dir
 from run_status import build_status
@@ -138,8 +144,8 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertEqual(INSTRUCTOR_ID, "hana-v1")
         description = build_description(self.routine)
         self.assertIn("HANA", description)
-        self.assertIn("licensed Pexels footage", description)
-        self.assertIn("same adult Pilates model", description)
+        self.assertIn(FIXED_LICENSE_NAME, description)
+        self.assertIn("same primary adult Pilates participant", description)
         self.assertNotRegex(description, r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
 
     def test_catalog_has_long_term_rotation(self):
@@ -237,15 +243,21 @@ class PilatesPipelineTests(unittest.TestCase):
                 self.assertIn(slug, PREFERRED_SOURCE_IDS)
                 source_id = PREFERRED_SOURCE_IDS[slug][0]
                 self.assertEqual(source_id, FIXED_MODEL_SOURCES[slug])
-                self.assertTrue(is_human_reviewed_source(slug, "Pexels", source_id))
+                self.assertTrue(is_human_reviewed_source(slug, "Mixkit", source_id))
                 self.assertTrue(
-                    is_fixed_model_source(slug, "Pexels", source_id, FIXED_MODEL_CREATOR)
+                    is_fixed_model_source(slug, "Mixkit", source_id, FIXED_MODEL_CREATOR)
                 )
                 self.assertFalse(is_human_reviewed_source(slug, "Pixabay", source_id))
-                self.assertFalse(is_human_reviewed_source(slug, "Pexels", "unreviewed"))
-                self.assertFalse(is_fixed_model_source(slug, "Pexels", source_id, "Other"))
-                self.assertFalse(is_fixed_model_source(slug, "Pexels", source_id, ""))
-        self.assertEqual(FIXED_MODEL_ID, "miriam-alonso-core-v1")
+                self.assertFalse(is_human_reviewed_source(slug, "Mixkit", "unreviewed"))
+                self.assertFalse(is_fixed_model_source(slug, "Mixkit", source_id, "Other"))
+                self.assertFalse(is_fixed_model_source(slug, "Mixkit", source_id, ""))
+        self.assertEqual(FIXED_MODEL_PROVIDER, "Mixkit")
+        self.assertEqual(FIXED_MODEL_ID, "mixkit-sports-center-peach-v1")
+
+    def test_requested_motion_model_is_connected_before_publication(self):
+        self.assertEqual(REQUESTED_PRODUCTION_MODEL_ID, FIXED_MODEL_ID)
+        self.assertTrue(production_model_ready())
+        require_requested_production_model()
 
     def test_routine_selection_is_stable_for_the_same_day(self):
         first = select_routine([], today=date(2026, 8, 19))
@@ -270,12 +282,12 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertNotIn(first.name_ko, content)
         self.assertNotIn(first.cue_ko, content)
         self.assertNotRegex(content, r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
-        self.assertIn(r"\pos(48,120)", content)
-        self.assertIn(r"\pos(92,150)", content)
+        self.assertIn(r"\pos(48,80)", content)
+        self.assertIn(r"\pos(92,108)", content)
         self.assertIn("Style: Title,Lato,56", content)
         self.assertIn("Style: Cue,Lato,40", content)
         self.assertIn(r"\fad(180,140)", content)
-        self.assertNotRegex(content, r"\\pos\([^,]+,1[5-9]\d{2}\)")
+        self.assertNotRegex(content, r"\\pos\([^,]+,1[4-9]\d{2}\)")
         self.assertEqual(metadata["language_mode"], "en")
         self.assertEqual(metadata["locale"], "en-US")
         self.assertEqual(metadata["font"], "Lato")
@@ -319,11 +331,11 @@ class PilatesPipelineTests(unittest.TestCase):
 
     def test_description_discloses_real_licensed_footage_ai_voice_and_safety(self):
         clip = StockClip(
-            Path("sample.mp4"), "Pexels", "https://www.pexels.com/video/123", "Creator"
+            Path("sample.mp4"), "Mixkit", FIXED_SOURCE_DETAILS["reformer-knee-fold-press"]["source_url"], "Mixkit"
         )
         description = build_description(self.routine, [clip])
-        self.assertIn("human-reviewed, licensed Pexels footage", description)
-        self.assertIn("Pexels", description)
+        self.assertIn(FIXED_LICENSE_NAME, description)
+        self.assertIn("Mixkit", description)
         self.assertIn("English AI voiceover", description)
         self.assertIn("Stop if you feel pain", description)
         self.assertIn("#Pilates", description)
@@ -339,19 +351,19 @@ class PilatesPipelineTests(unittest.TestCase):
     def test_preview_description_matches_pilates_format(self):
         exercise = routine_exercises(self.routine)[0]
         value = build_preview_description({
-            "content_format": "pilates-real-video-v1",
+            "content_format": FIXED_CONTENT_FORMAT,
             "title": "Morning Core",
             "exercises": [{
                 "name_en": exercise.name_en,
                 "prescription_en": exercise.prescription_en,
-                "source_provider": "Pexels",
-                "source_creator": "Creator",
-                "source_url": "https://www.pexels.com/video/123",
+                "source_provider": "Mixkit",
+                "source_creator": "Mixkit",
+                "source_url": FIXED_SOURCE_DETAILS["reformer-knee-fold-press"]["source_url"],
             }],
             "engagement_comment": "Which move felt best today?",
         })
-        self.assertIn("human-reviewed, licensed Pexels footage", value)
-        self.assertIn("https://www.pexels.com/video/123", value)
+        self.assertIn(FIXED_LICENSE_NAME, value)
+        self.assertIn(FIXED_SOURCE_DETAILS["reformer-knee-fold-press"]["source_url"], value)
         self.assertIn(exercise.name_en.title(), value)
         self.assertIn("#Pilates", value)
         self.assertNotRegex(value, r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
@@ -389,14 +401,15 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertIn("StockMediaProvider", source)
         self.assertIn("build_clip_queries", source)
         self.assertIn("FIXED_CONTENT_FORMAT", source)
-        self.assertIn("fetch_pexels_source", source)
+        self.assertIn("fetch_mixkit_source", source)
         self.assertNotIn("research_exact_topic", source)
         self.assertNotIn("GeminiWriter", source)
 
     def test_renderer_uses_continuous_video_closeups_and_natural_grade(self):
         source = (ROOT / "src" / "pilates_renderer.py").read_text(encoding="utf-8")
         self.assertIn("_render_real_video_segment(exercise, clip", source)
-        self.assertIn("scale=1458:2592", source)
+        self.assertIn("closeup_zoom(exercise.slug)", source)
+        self.assertIn("scale={close_width}:{close_height}", source)
         self.assertIn("xfade=transition=fade", source)
         self.assertIn("colorlevels=romax=0.97", _natural_grade_filter())
         self.assertIn("source-preserving natural grade", source)
@@ -526,6 +539,15 @@ class PilatesPipelineTests(unittest.TestCase):
 
     def test_scheduled_fixed_model_routines_use_disjoint_reviewed_sources(self):
         by_id = {routine.routine_id: routine for routine in ROUTINES}
+        self.assertEqual(
+            REAL_VIDEO_ROUTINE_IDS,
+            (
+                "hana-supine-reformer-core",
+                "hana-standing-reformer-flow",
+                "hana-reformer-core-series",
+            ),
+        )
+        self.assertEqual(len(FIXED_MODEL_SOURCES), 9)
         seen = set()
         for routine_id in REAL_VIDEO_ROUTINE_IDS:
             routine = by_id[routine_id]
@@ -534,6 +556,10 @@ class PilatesPipelineTests(unittest.TestCase):
             self.assertFalse(seen.intersection(source_ids), routine_id)
             seen.update(source_ids)
         self.assertEqual(len(seen), len(REAL_VIDEO_ROUTINE_IDS) * 3)
+        self.assertEqual(
+            seen,
+            {"48546", "48547", "48549", "48556", "48557", "48565", "48561", "48562", "48563"},
+        )
 
     def test_published_fixed_model_sources_are_never_reused(self):
         first = real_video_routine_candidates([], today=date(2026, 8, 26), limit=1)[0]
@@ -568,7 +594,7 @@ class PilatesPipelineTests(unittest.TestCase):
             "id": 7589748,
             "url": "https://www.pexels.com/video/7589748/",
             "duration": 10,
-            "user": {"name": FIXED_MODEL_CREATOR},
+            "user": {"name": "Legacy Pexels Creator"},
             "video_files": [{
                 "link": "https://videos.pexels.com/fixed.mp4",
                 "file_type": "video/mp4",
@@ -579,8 +605,51 @@ class PilatesPipelineTests(unittest.TestCase):
         provider.session.get.return_value = response
         candidate = provider._get_pexels_by_id("7589748", "fixed model plank")
         self.assertEqual(candidate["source_id"], "7589748")
-        self.assertEqual(candidate["creator"], FIXED_MODEL_CREATOR)
+        self.assertEqual(candidate["creator"], "Legacy Pexels Creator")
         self.assertIn("/v1/videos/videos/7589748", provider.session.get.call_args.args[0])
+
+    def test_exact_mixkit_manifest_prevents_source_or_file_swaps(self):
+        source = FIXED_SOURCE_DETAILS["reformer-knee-fold-press"]
+        with patch("media_provider.requests.Session", create=True):
+            provider = StockMediaProvider()
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "48546.mp4"
+            expected_clip = StockClip(
+                output,
+                "Mixkit",
+                source["source_url"],
+                "Mixkit",
+                source_id="48546",
+                width=1280,
+                height=720,
+                duration=20.81,
+            )
+            with patch.object(provider, "_download", return_value=expected_clip) as download:
+                clip = provider.fetch_mixkit_source(
+                    "48546",
+                    output,
+                    source_url=source["source_url"],
+                    download_url=source["download_url"],
+                    expected_sha256=source["sha256"],
+                    expected_width=source["width"],
+                    expected_height=source["height"],
+                    expected_duration=source["duration_seconds"],
+                )
+        candidate = download.call_args.args[0]
+        self.assertEqual(clip.source_id, "48546")
+        self.assertEqual(candidate["expected_sha256"], source["sha256"])
+        self.assertEqual(candidate["download_url"], "https://assets.mixkit.co/videos/48546/48546-720.mp4")
+        with self.assertRaisesRegex(RuntimeError, "Mixkit"):
+            provider.fetch_mixkit_source(
+                "48546",
+                Path("bad.mp4"),
+                source_url=source["source_url"],
+                download_url="https://example.com/48550.mp4",
+                expected_sha256=source["sha256"],
+                expected_width=1280,
+                expected_height=720,
+                expected_duration=18.98,
+            )
 
     def test_media_provider_rejects_mismatch_and_tries_next_candidate(self):
         with patch("media_provider.requests.Session", create=True):
@@ -612,17 +681,18 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertEqual(clips[0].source_id, "good")
         self.assertTrue(clips[0].visual_quality["passed"])
 
-    def test_configuration_requires_one_free_video_provider(self):
+    def test_configuration_uses_fixed_free_video_urls_without_provider_key(self):
         with patch.dict("os.environ", {}, clear=True):
-            self.assertIn("PEXELS_API_KEY", check_configuration(False))
+            self.assertNotIn("PEXELS_API_KEY", check_configuration(False))
+            self.assertIn("GEMINI_API_KEY 또는 GOOGLE_API_KEY", check_configuration(False))
         with patch.dict(
-            "os.environ", {"PEXELS_API_KEY": "key", "GEMINI_API_KEY": "key"}, clear=True
+            "os.environ", {"GEMINI_API_KEY": "key"}, clear=True
         ):
             self.assertEqual(check_configuration(False), [])
         with patch.dict(
             "os.environ", {"PIXABAY_API_KEY": "key", "GEMINI_API_KEY": "key"}, clear=True
         ):
-            self.assertIn("PEXELS_API_KEY", check_configuration(False))
+            self.assertEqual(check_configuration(False), [])
 
     def test_trend_profile_uses_public_short_performance_without_copying(self):
         search_payload = {"items": [{"id": {"videoId": "abc"}}]}
@@ -663,13 +733,19 @@ class PilatesPipelineTests(unittest.TestCase):
         request.next_chunk.return_value = (None, {"id": "video-id"})
         videos = Mock()
         videos.insert.return_value = request
+        videos.list.return_value.execute.return_value = {
+            "items": [{
+                "status": {"privacyStatus": "public", "uploadStatus": "processed"},
+                "processingDetails": {"processingStatus": "succeeded"},
+            }]
+        }
         uploader.youtube = Mock()
         uploader.youtube.videos.return_value = videos
         with tempfile.TemporaryDirectory() as directory:
             video = Path(directory) / "short.mp4"
             video.write_bytes(b"video")
             with patch("youtube_uploader.MediaFileUpload", return_value=Mock()):
-                uploader.upload_video(
+                result = uploader.upload_video(
                     video,
                     title=build_title(self.routine),
                     description=build_description(self.routine),
@@ -684,11 +760,15 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertEqual(body["status"]["privacyStatus"], "public")
         self.assertFalse(body["status"]["selfDeclaredMadeForKids"])
         self.assertTrue(body["status"]["containsSyntheticMedia"])
+        self.assertEqual(result["privacy_status"], "public")
+        self.assertEqual(result["processing_status"], "succeeded")
+        videos.list.assert_called_once_with(part="status,processingDetails", id="video-id")
 
     def test_workflow_keeps_daily_public_schedule_and_tracks_assets(self):
         source = (ROOT / ".github" / "workflows" / "daily-upload.yml").read_text(encoding="utf-8")
         self.assertIn("Daily Hana Pilates Short", source)
         self.assertIn("cron: '35 1 * * *'", source)
+        self.assertNotIn("github.event_name != 'schedule'", source)
         self.assertIn("assets/instructor/**", source)
         self.assertIn("PEXELS_API_KEY", source)
         self.assertIn("PIXABAY_API_KEY", source)

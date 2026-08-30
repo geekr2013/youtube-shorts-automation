@@ -23,7 +23,15 @@ from pilates_catalog import (
     routine_exercises,
     validate_routine,
 )
-from pilates_video_strategy import FIXED_MODEL_ID, closeup_focus_y
+from pilates_video_strategy import (
+    FIXED_MODEL_ID,
+    caption_panel_y,
+    closeup_focus_x,
+    closeup_focus_y,
+    closeup_zoom,
+    full_focus_x,
+    source_start_seconds,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -92,8 +100,8 @@ def prepare_narration_text(text: str) -> str:
 
 def narration_audio_filter(raw_duration: float) -> str:
     filters: List[str] = []
-    if raw_duration > 47:
-        filters.append(f"atempo={min(raw_duration / 46.0, 1.06):.4f}")
+    if raw_duration > 44:
+        filters.append(f"atempo={min(raw_duration / 42.0, 1.40):.4f}")
     filters.extend(("highpass=f=65", "lowpass=f=14500", "loudnorm=I=-16:LRA=9:TP=-1.5"))
     return ",".join(filters)
 
@@ -109,9 +117,9 @@ def _write_pcm_wave(path: Path, pcm: bytes, sample_rate: int = 24000) -> None:
 def _synthesize_gemini_tts(text: str, output: Path, api_key: str) -> None:
     prompt = (
         "Read in natural North American English as a warm, confident Pilates instructor "
-        "in her twenties. Use a neutral General American accent and a calm, conversational "
-        "pace. Avoid promotional energy, exaggerated emphasis, and a synthetic cadence. "
-        "Pause briefly after each movement name, then give the form cue and count clearly. "
+        "in her twenties. Use a neutral General American accent and a smooth, conversational "
+        "instructional pace around 145 words per minute. Avoid promotional energy, exaggerated "
+        "emphasis, and a synthetic cadence. Keep pauses brief and connected. "
         "Do not rewrite, translate, or add anything to the script.\n\n"
         f"Script:\n{text}"
     )
@@ -149,7 +157,7 @@ def _synthesize_gemini_tts(text: str, output: Path, api_key: str) -> None:
 
 
 async def _synthesize_edge_tts(text: str, output: Path, voice: str) -> None:
-    communicator = edge_tts.Communicate(text=text, voice=voice, rate="-4%", volume="+0%", pitch="+0Hz")
+    communicator = edge_tts.Communicate(text=text, voice=voice, rate="+4%", volume="+0%", pitch="+0Hz")
     await communicator.save(str(output))
 
 
@@ -184,7 +192,7 @@ def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str
         else:
             raise PilatesRenderError(f"Could not create an English female narration: {last_error}")
     raw_duration = media_duration(raw)
-    if not 22 <= raw_duration <= 50:
+    if not 20 <= raw_duration <= 65:
         raise PilatesRenderError(f"내레이션 길이가 기준 밖입니다: {raw_duration:.1f}초")
     normalized = output_dir / "narration.m4a"
     _run(
@@ -199,11 +207,13 @@ def create_narration(text: str, output_dir: Path) -> Tuple[Path, float, Dict[str
             "aac",
             "-b:a",
             "160k",
+            "-ar",
+            "48000",
             str(normalized),
         ]
     )
     duration = media_duration(normalized)
-    if not 22 <= duration <= 48:
+    if not 20 <= duration <= 46:
         raise PilatesRenderError(f"정규화 후 내레이션 길이가 기준 밖입니다: {duration:.1f}초")
     return normalized, duration, {
         "narration_engine": engine,
@@ -265,11 +275,28 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"Dialogue: {layer},{_ass_time(start)},{_ass_time(end)},{style},,0,0,0,,{{\\fad(180,140)}}{text}\n"
         )
 
+    panel_x = 48
+    panel_width = 850
+
+    def panel_shape(y: int, height: int) -> str:
+        return (
+            rf"{{\p1\1c&H1D252C&\1a&H38&\pos({panel_x},{y})}}"
+            f"m 0 0 l {panel_width} 0 l {panel_width} {height} l 0 {height}"
+            r"{\p0}"
+        )
+
+    def accent_shape(y: int) -> str:
+        return (
+            rf"{{\p1\1c&H74B7D6&\1a&H00&\pos({panel_x + 12},{y + 16})}}"
+            r"m 0 0 l 8 0 l 8 220 l 0 220{\p0}"
+        )
+
     hook_end = min(2.2, lengths[0] * 0.36)
-    hook_panel = r"{\p1\1c&H1D252C&\1a&H38&\pos(48,120)}m 0 0 l 910 0 l 910 245 l 0 245{\p0}"
+    hook_y = caption_panel_y(exercises[0].slug)
+    hook_panel = panel_shape(hook_y, 210)
     dialogue(0, hook_end, "Panel", hook_panel, 0)
     hook_text = (
-        f"{{\\pos(92,164)}}{_ass_escape(routine.title_en.title())}\\N"
+        f"{{\\pos(92,{hook_y + 44})}}{_ass_escape(routine.title_en.title())}\\N"
         f"{{\\fs30\\c&H0074B7D6&\\fsp2}}3-MOVE PILATES FLOW"
     )
     dialogue(0, hook_end, "Hook", hook_text, 3)
@@ -278,19 +305,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         end = cursor + length
         text_start = hook_end if index == 1 else cursor
         text_end = end - (1.7 if index == 3 else 0.0)
-        panel = r"{\p1\1c&H1D252C&\1a&H38&\pos(48,120)}m 0 0 l 910 0 l 910 292 l 0 292{\p0}"
-        dialogue(text_start, text_end, "Panel", panel, 0)
-        accent = r"{\p1\1c&H74B7D6&\1a&H00&\pos(60,136)}m 0 0 l 8 0 l 8 244 l 0 244{\p0}"
-        dialogue(text_start, text_end, "Panel", accent, 1)
-        dialogue(text_start, text_end, "Eyebrow", f"{{\\pos(92,150)}}FORM FOCUS  ·  {index:02d} / 03", 3)
-        dialogue(text_start, text_end, "Title", f"{{\\pos(92,198)}}{_ass_escape(exercise.name_en.title())}", 3)
-        dialogue(text_start, text_end, "Cue", f"{{\\pos(92,273)}}{_ass_escape(exercise.cue_en.capitalize())}", 3)
-        dialogue(text_start, text_end, "Reps", f"{{\\pos(92,333)}}{_ass_escape(exercise.prescription_en)}", 3)
+        panel_y = caption_panel_y(exercise.slug)
+        dialogue(text_start, text_end, "Panel", panel_shape(panel_y, 260), 0)
+        dialogue(text_start, text_end, "Panel", accent_shape(panel_y), 1)
+        dialogue(text_start, text_end, "Eyebrow", f"{{\\pos(92,{panel_y + 28})}}FORM FOCUS  ·  {index:02d} / 03", 3)
+        dialogue(text_start, text_end, "Title", f"{{\\pos(92,{panel_y + 72})}}{_ass_escape(exercise.name_en.title())}", 3)
+        dialogue(text_start, text_end, "Cue", f"{{\\pos(92,{panel_y + 145})}}{_ass_escape(exercise.cue_en.capitalize())}", 3)
+        dialogue(text_start, text_end, "Reps", f"{{\\pos(92,{panel_y + 204})}}{_ass_escape(exercise.prescription_en)}", 3)
         cursor = end
 
     outro_start = max(0.0, duration - 1.7)
-    dialogue(outro_start, duration, "Panel", hook_panel, 0)
-    outro_text = "{\\pos(92,164)}SAVE THIS ROUTINE\\N{\\fs30\\c&H0074B7D6&\\fsp2}TRY ONE ROUND TODAY"
+    outro_y = caption_panel_y(exercises[-1].slug)
+    dialogue(outro_start, duration, "Panel", panel_shape(outro_y, 210), 0)
+    outro_text = f"{{\\pos(92,{outro_y + 44})}}SAVE THIS ROUTINE\\N{{\\fs30\\c&H0074B7D6&\\fsp2}}TRY ONE ROUND TODAY"
     dialogue(outro_start, duration, "Hook", outro_text, 3)
     path.write_text(header + "".join(lines), encoding="utf-8-sig")
     return {
@@ -298,13 +325,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         "locale": "en-US",
         "font": "Lato",
         "visual_style": "refined charcoal glass panel with warm gold accent",
-        "layout": "compact top-left YouTube Shorts safe-area panel",
+        "layout": "shot-aware compact panel in reviewed top or lower-middle Shorts safe areas",
         "english_title_font_size": 56,
         "english_cue_font_size": 40,
         "hook": "movement starts on frame one; no static intro card",
         "wrap_mode": "single-purpose English lines with explicit hierarchy",
         "transition": "180 ms fade-in and 140 ms fade-out",
-        "movement_visibility": "compact top panel avoids the bottom and right-side Shorts interface",
+        "movement_visibility": "per-shot panel placement avoids faces, the bottom title block, and the right-side Shorts controls",
+        "panel_positions_y": [caption_panel_y(item.slug) for item in exercises],
         "segment_durations": [round(item, 2) for item in lengths],
     }
 
@@ -435,17 +463,24 @@ def _render_real_video_segment(exercise, clip: StockClip, output: Path, duration
     # 자세 전체를 먼저 확인한 뒤, 첫 검수 영상처럼 대부분을 코어 클로즈업에 쓴다.
     full_duration = duration * 0.32
     close_duration = duration - full_duration + transition
-    full_seek = min(0.7, max(0.0, source_duration - 1.0))
+    full_seek = min(source_start_seconds(exercise.slug), max(0.0, source_duration - 1.0))
     close_seek = full_seek + full_duration - transition
+    full_x = full_focus_x(exercise.slug)
+    close_x = closeup_focus_x(exercise.slug)
     focus_y = closeup_focus_y(exercise.slug)
+    zoom = closeup_zoom(exercise.slug)
+    close_width = int(round(WIDTH * zoom))
+    close_height = int(round(HEIGHT * zoom))
     grade = _natural_grade_filter()
     full_filter = (
         "fps=30,scale=1080:1920:force_original_aspect_ratio=increase,"
-        "crop=1080:1920:x=(iw-1080)/2:y=(ih-1920)/2,setsar=1," + grade
+        f"crop=1080:1920:x='min(max((iw-1080)*{full_x:.3f},0),iw-1080)':"
+        "y=(ih-1920)/2,setsar=1," + grade
     )
     close_filter = (
-        "fps=30,scale=1458:2592:force_original_aspect_ratio=increase,"
-        f"crop=1080:1920:x=(iw-1080)/2:y='min(max((ih-1920)*{focus_y:.3f},0),ih-1920)',"
+        f"fps=30,scale={close_width}:{close_height}:force_original_aspect_ratio=increase,"
+        f"crop=1080:1920:x='min(max((iw-1080)*{close_x:.3f},0),iw-1080)':"
+        f"y='min(max((ih-1920)*{focus_y:.3f},0),ih-1920)',"
         "setsar=1," + grade
     )
     _run(
@@ -597,7 +632,7 @@ def render_pilates_short(
             str(final_path),
             "-vf",
             (
-                "fps=1/4,scale=270:480:force_original_aspect_ratio=decrease,"
+                f"fps={9.0 / duration:.6f},scale=270:480:force_original_aspect_ratio=decrease,"
                 "pad=270:480:(ow-iw)/2:(oh-ih)/2:black,tile=3x3"
             ),
             "-frames:v",
@@ -623,8 +658,11 @@ def render_pilates_short(
                 "identity_id": FIXED_MODEL_ID,
                 "wardrobe_target": "reviewed fitted crop activewear with the abdomen line unobstructed",
                 "lighting": "source-preserving natural grade with reduced highlight glare",
-                "sequence": "brief full-body orientation followed by sustained muscle-focused close-up",
+                "sequence": "brief orientation view followed by a sustained muscle-focused close-up",
+                "full_focus_x": [full_focus_x(item.slug) for item in exercises],
+                "closeup_focus_x": [closeup_focus_x(item.slug) for item in exercises],
                 "closeup_focus_y": [closeup_focus_y(item.slug) for item in exercises],
+                "caption_panel_y": [caption_panel_y(item.slug) for item in exercises],
                 "camera_angles": [item.camera_angle for item in exercises],
                 "muscle_focus": [item.muscle_focus for item in exercises],
                 "sources": [

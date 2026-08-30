@@ -26,14 +26,19 @@ from pilates_catalog import (
 from pilates_renderer import media_duration, render_pilates_short
 from pilates_video_strategy import (
     FIXED_CONTENT_FORMAT,
+    FIXED_LICENSE_NAME,
+    FIXED_LICENSE_URL,
     FIXED_MODEL_CREATOR,
     FIXED_MODEL_ID,
+    FIXED_MODEL_PROVIDER,
     FIXED_MODEL_SOURCES,
+    FIXED_SOURCE_DETAILS,
     PREFERRED_SOURCE_IDS,
     SOURCE_REQUIREMENTS,
     build_clip_queries,
     is_fixed_model_source,
     real_video_routine_candidates,
+    require_requested_production_model,
 )
 from trend_scout import editing_profile, fetch_pilates_short_benchmarks
 
@@ -75,8 +80,6 @@ def save_state(state: Dict[str, Any]) -> None:
 
 def check_configuration(for_upload: bool) -> List[str]:
     missing: List[str] = []
-    if not os.getenv("PEXELS_API_KEY"):
-        missing.append("PEXELS_API_KEY")
     if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
         missing.append("GEMINI_API_KEY 또는 GOOGLE_API_KEY")
     if for_upload:
@@ -116,10 +119,13 @@ def build_description(routine, clips: Sequence[StockClip] = ()) -> str:
         "Stop if you feel pain, dizziness, or discomfort. If you are injured, pregnant, "
         "or managing a health condition, consult a qualified professional before exercise.\n\n"
         f"{INSTRUCTOR_NAME_EN} — Pilates, clearly guided.\n"
-        "This edit uses human-reviewed, licensed Pexels footage featuring the same adult "
-        "Pilates model. Full-body form views and targeted close-ups preserve the original "
+        f"This edit uses human-reviewed footage under the {FIXED_LICENSE_NAME}. The same "
+        "primary adult Pilates participant remains the focus across one filmed session; "
+        "a trainer or classmates may appear in the background. Orientation views and "
+        "targeted close-ups preserve the original "
         "movement, wardrobe, and body appearance.\n"
         "English AI voiceover and English on-screen captions. No background music.\n\n"
+        f"Footage license: {FIXED_LICENSE_URL}\n\n"
         + (("Footage credits\n" + "\n".join(_source_credit_lines(clips)) + "\n\n") if clips else "")
         + f"Question: {routine_engagement_question_en(routine)}\n\n"
         "#Shorts #Pilates #PilatesWorkout #HomeWorkout #Mobility"
@@ -141,7 +147,7 @@ def _refresh_metrics(records: List[Dict[str, Any]]) -> None:
 
 
 def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: bool = False):
-    """검수된 동일 모델의 정확한 Pexels ID만 내려받아 한 세트를 반환한다."""
+    """검수된 동일 촬영 세션의 정확한 Mixkit 파일만 내려받아 한 세트를 반환한다."""
     provider = StockMediaProvider()
     failures: List[str] = []
     approved_by_exercise: Dict[str, StockClip] = {}
@@ -164,9 +170,10 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
                 source_id = FIXED_MODEL_SOURCES.get(exercise.slug, "")
                 if not source_id or source_id not in PREFERRED_SOURCE_IDS.get(exercise.slug, ()):
                     raise RuntimeError(f"고정 모델 검수 소스가 없습니다: {exercise.slug}")
+                source = FIXED_SOURCE_DETAILS.get(exercise.slug) or {}
                 review = {
-                    "passed": True,
-                    "approved": True,
+                    "passed": source.get("public_approved") is True,
+                    "approved": source.get("public_approved") is True,
                     "exercise_match": 1.0,
                     "realism": 1.0,
                     "visibility": 1.0,
@@ -174,13 +181,23 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
                     "safe_framing": True,
                     "identity_locked": True,
                     "identity_id": FIXED_MODEL_ID,
-                    "reason": "사람이 초·중·후반 동작과 동일 인물을 직접 검수한 공개 소스",
+                    "reason": str(source.get("review_notes") or ""),
                     "model": "human-motion-contact-sheet-review",
                     "sample_count": 3,
+                    "full_focal_x": float(source.get("full_focal_x", 0.5)),
+                    "closeup_focal_x": float(source.get("closeup_focal_x", 0.5)),
+                    "caption_y": int(source.get("caption_y", 80)),
+                    "start_seconds": float(source.get("start_seconds", 0.7)),
                 }
-                clip = provider.fetch_pexels_source(
+                clip = provider.fetch_mixkit_source(
                     source_id,
                     WORK_DIR / "licensed-source" / exercise.slug / f"{source_id}.mp4",
+                    source_url=str(source.get("source_url") or ""),
+                    download_url=str(source.get("download_url") or ""),
+                    expected_sha256=str(source.get("sha256") or ""),
+                    expected_width=int(source.get("width") or 0),
+                    expected_height=int(source.get("height") or 0),
+                    expected_duration=float(source.get("duration_seconds") or 0),
                     query=query,
                     visual_quality=review,
                 )
@@ -207,6 +224,8 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
                         exercise.slug, clip.provider, clip.source_id, clip.creator
                     )
                     or quality.get("passed") is not True
+                    or quality.get("approved") is not True
+                    or not str(quality.get("reason") or "").strip()
                     or quality.get("identity_locked") is not True
                     or quality.get("identity_id") != FIXED_MODEL_ID
                 ):
@@ -224,6 +243,9 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
 
 
 def run(dry_run: bool = False) -> Dict[str, Any]:
+    if not dry_run:
+        require_requested_production_model()
+
     missing = check_configuration(for_upload=not dry_run)
     if missing:
         raise RuntimeError("GitHub Secrets 누락: " + ", ".join(missing))
@@ -266,6 +288,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
             "name_en": INSTRUCTOR_NAME_EN,
             "identity_locked": True,
             "visual_model_id": FIXED_MODEL_ID,
+            "visual_source_provider": FIXED_MODEL_PROVIDER,
             "visual_source_creator": FIXED_MODEL_CREATOR,
             "adult_confirmed": True,
             "synthetic_voice": True,
@@ -326,6 +349,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "published_at": datetime.now(timezone.utc).isoformat(),
         "content_format": FIXED_CONTENT_FORMAT,
         "visual_model_id": FIXED_MODEL_ID,
+        "visual_source_provider": FIXED_MODEL_PROVIDER,
         "visual_source_creator": FIXED_MODEL_CREATOR,
         "routine_id": routine.routine_id,
         "topic": routine.title_en.title(),

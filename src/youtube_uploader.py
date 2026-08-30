@@ -19,6 +19,8 @@ from secret_utils import clean_secret
 LOGGER = logging.getLogger(__name__)
 UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 RETRIABLE_STATUS_CODES = {500, 502, 503, 504}
+PUBLIC_VERIFY_TIMEOUT_SECONDS = 8 * 60
+PUBLIC_VERIFY_INTERVAL_SECONDS = 15
 
 
 class YouTubeAuthError(RuntimeError):
@@ -76,6 +78,52 @@ class YouTubeUploader:
         LOGGER.info("YouTube OAuth 인증 완료")
         return build("youtube", "v3", credentials=credentials, cache_discovery=False)
 
+    def _wait_until_ready(
+        self,
+        video_id: str,
+        expected_privacy: str,
+        timeout_seconds: int = PUBLIC_VERIFY_TIMEOUT_SECONDS,
+        interval_seconds: int = PUBLIC_VERIFY_INTERVAL_SECONDS,
+    ) -> Dict[str, str]:
+        """Confirm that YouTube finished processing and applied the requested visibility."""
+        deadline = time.monotonic() + timeout_seconds
+        last_state = "not returned"
+        while time.monotonic() < deadline:
+            payload = self.youtube.videos().list(
+                part="status,processingDetails",
+                id=video_id,
+            ).execute()
+            items = payload.get("items") or []
+            if not items:
+                last_state = "video not returned yet"
+            else:
+                item = items[0]
+                status = item.get("status") or {}
+                processing = item.get("processingDetails") or {}
+                privacy = str(status.get("privacyStatus") or "")
+                upload_status = str(status.get("uploadStatus") or "")
+                processing_status = str(processing.get("processingStatus") or "")
+                last_state = (
+                    f"privacy={privacy or 'unknown'}, upload={upload_status or 'unknown'}, "
+                    f"processing={processing_status or 'unknown'}"
+                )
+                if upload_status in {"failed", "rejected", "deleted"} or processing_status == "terminated":
+                    reason = status.get("failureReason") or status.get("rejectionReason") or last_state
+                    raise RuntimeError(f"YouTube 처리 실패: {reason}")
+                processed = upload_status == "processed" or processing_status == "succeeded"
+                if privacy == expected_privacy and processed:
+                    LOGGER.info("YouTube 공개·처리 확인 완료: %s", last_state)
+                    return {
+                        "privacy_status": privacy,
+                        "upload_status": upload_status or "processed",
+                        "processing_status": processing_status or "succeeded",
+                    }
+            time.sleep(interval_seconds)
+        raise RuntimeError(
+            "YouTube 업로드 요청은 완료됐지만 공개·처리 완료를 확인하지 못했습니다: "
+            + last_state
+        )
+
     def upload_video(
         self,
         video_path: Path,
@@ -128,6 +176,7 @@ class YouTubeUploader:
             "video_id": video_id,
             "video_url": f"https://www.youtube.com/shorts/{video_id}",
         }
-        LOGGER.info("YouTube 업로드 완료: %s", result["video_url"])
+        result.update(self._wait_until_ready(video_id, privacy))
+        LOGGER.info("YouTube 공개 업로드 완료: %s", result["video_url"])
         return result
 

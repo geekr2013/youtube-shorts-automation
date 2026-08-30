@@ -1,5 +1,6 @@
-"""Pexels/Pixabay에서 라이선스가 허용된 실제 동영상을 내려받는다."""
+"""검수된 Mixkit 원본과 보조 스톡 제공처에서 실제 동영상을 내려받는다."""
 
+import hashlib
 import json
 import logging
 import os
@@ -7,6 +8,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import requests
 
@@ -133,6 +135,54 @@ class StockMediaProvider:
         clip.visual_quality = dict(visual_quality or {})
         return clip
 
+    def fetch_mixkit_source(
+        self,
+        source_id: str,
+        output_path: Path,
+        *,
+        source_url: str,
+        download_url: str,
+        expected_sha256: str,
+        expected_width: int,
+        expected_height: int,
+        expected_duration: float,
+        query: str = "",
+        visual_quality: Optional[Dict[str, Any]] = None,
+    ) -> StockClip:
+        """Download one reviewed Mixkit asset and fail if its bytes or media facts change."""
+        source_id = str(source_id).strip()
+        expected_source_suffix = f"-{source_id}/"
+        expected_download_path = f"/videos/{source_id}/{source_id}-720.mp4"
+        source_parts = urlparse(source_url)
+        download_parts = urlparse(download_url)
+        if (
+            not source_id.isdigit()
+            or source_parts.scheme != "https"
+            or source_parts.netloc != "mixkit.co"
+            or not source_parts.path.endswith(expected_source_suffix)
+            or download_parts.scheme != "https"
+            or download_parts.netloc != "assets.mixkit.co"
+            or download_parts.path != expected_download_path
+        ):
+            raise MediaError("검수된 Mixkit 원본 주소 형식이 아닙니다.")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        candidate = {
+            "download_url": download_url,
+            "source_url": source_url,
+            "creator": "Mixkit",
+            "provider": "Mixkit",
+            "query": query,
+            "source_id": source_id,
+            "expected_sha256": expected_sha256.lower(),
+            "expected_width": int(expected_width),
+            "expected_height": int(expected_height),
+            "expected_duration": float(expected_duration),
+            "headers": {"Referer": source_url},
+        }
+        clip = self._download(candidate, output_path)
+        clip.visual_quality = dict(visual_quality or {})
+        return clip
+
     def _search_pixabay(self, query: str) -> List[Dict[str, Any]]:
         if not self.pixabay_key:
             return []
@@ -234,7 +284,12 @@ class StockMediaProvider:
         }
 
     def _download(self, candidate: Dict[str, Any], path: Path) -> StockClip:
-        with self.session.get(candidate["download_url"], stream=True, timeout=90) as response:
+        with self.session.get(
+            candidate["download_url"],
+            headers=candidate.get("headers") or None,
+            stream=True,
+            timeout=90,
+        ) as response:
             response.raise_for_status()
             expected = int(response.headers.get("content-length", 0) or 0)
             if expected and expected > MAX_DOWNLOAD_BYTES:
@@ -251,11 +306,32 @@ class StockMediaProvider:
         if path.stat().st_size < 100_000:
             path.unlink(missing_ok=True)
             raise MediaError("스톡 영상 파일이 손상되었습니다.")
+        expected_sha256 = str(candidate.get("expected_sha256") or "").lower()
+        if expected_sha256:
+            digest = hashlib.sha256()
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            if digest.hexdigest() != expected_sha256:
+                path.unlink(missing_ok=True)
+                raise MediaError("검수된 원본의 SHA-256과 내려받은 파일이 다릅니다.")
         try:
             probe = self._probe_video(path)
         except Exception:
             path.unlink(missing_ok=True)
             raise
+        expected_width = int(candidate.get("expected_width") or 0)
+        expected_height = int(candidate.get("expected_height") or 0)
+        expected_duration = float(candidate.get("expected_duration") or 0)
+        if expected_width and int(probe["width"]) != expected_width:
+            path.unlink(missing_ok=True)
+            raise MediaError("검수된 원본과 영상 가로 해상도가 다릅니다.")
+        if expected_height and int(probe["height"]) != expected_height:
+            path.unlink(missing_ok=True)
+            raise MediaError("검수된 원본과 영상 세로 해상도가 다릅니다.")
+        if expected_duration and abs(float(probe["duration"]) - expected_duration) > 0.20:
+            path.unlink(missing_ok=True)
+            raise MediaError("검수된 원본과 영상 길이가 다릅니다.")
         return StockClip(
             path=path,
             provider=candidate["provider"],
