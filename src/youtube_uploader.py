@@ -41,6 +41,10 @@ class YouTubeUploader:
         self.refresh_token = clean_secret(
             refresh_token or os.getenv("YOUTUBE_REFRESH_TOKEN", "")
         )
+        self.public_api_key = clean_secret(
+            os.getenv("YOUTUBE_DATA_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+        )
+        self.public_youtube = None
         self.youtube = self._authenticate()
 
     def _normalize_client(self) -> tuple[str, str, str]:
@@ -78,6 +82,83 @@ class YouTubeUploader:
         LOGGER.info("YouTube OAuth 인증 완료")
         return build("youtube", "v3", credentials=credentials, cache_discovery=False)
 
+    @staticmethod
+    def _is_insufficient_scope(exc: HttpError) -> bool:
+        detail = str(exc).lower()
+        content = getattr(exc, "content", b"")
+        if isinstance(content, bytes):
+            detail += " " + content.decode("utf-8", errors="ignore").lower()
+        return exc.resp.status == 403 and (
+            "insufficientpermissions" in detail
+            or "insufficient permission" in detail
+            or "insufficient authentication scopes" in detail
+        )
+
+    def _public_verifier(self):
+        verifier = getattr(self, "public_youtube", None)
+        if verifier is not None:
+            return verifier
+        api_key = clean_secret(
+            getattr(self, "public_api_key", "")
+            or os.getenv("YOUTUBE_DATA_API_KEY", "")
+            or os.getenv("GOOGLE_API_KEY", "")
+        )
+        if not api_key:
+            raise YouTubeAuthError(
+                "공개 영상 확인에 YOUTUBE_DATA_API_KEY 또는 GOOGLE_API_KEY가 필요합니다."
+            )
+        verifier = build(
+            "youtube", "v3", developerKey=api_key, cache_discovery=False
+        )
+        self.public_youtube = verifier
+        return verifier
+
+    def _wait_until_publicly_available(
+        self,
+        video_id: str,
+        expected_privacy: str,
+        timeout_seconds: int,
+        interval_seconds: int,
+    ) -> Dict[str, str]:
+        """Use the public API key when the upload-only token cannot read video status."""
+        if expected_privacy != "public":
+            raise YouTubeAuthError(
+                "현재 OAuth 토큰으로 비공개 영상 상태를 확인할 권한이 없습니다."
+            )
+        verifier = self._public_verifier()
+        deadline = time.monotonic() + timeout_seconds
+        last_state = "video not returned by the public API yet"
+        while time.monotonic() < deadline:
+            payload = verifier.videos().list(part="status", id=video_id).execute()
+            items = payload.get("items") or []
+            if items:
+                status = items[0].get("status") or {}
+                privacy = str(status.get("privacyStatus") or "")
+                upload_status = str(status.get("uploadStatus") or "")
+                last_state = (
+                    f"privacy={privacy or 'unknown'}, "
+                    f"upload={upload_status or 'publicly available'}"
+                )
+                if upload_status in {"failed", "rejected", "deleted"}:
+                    reason = (
+                        status.get("failureReason")
+                        or status.get("rejectionReason")
+                        or last_state
+                    )
+                    raise RuntimeError(f"YouTube 처리 실패: {reason}")
+                if privacy == "public" and upload_status in {"", "processed"}:
+                    LOGGER.info("YouTube 공개 확인 완료(공개 API): %s", last_state)
+                    return {
+                        "privacy_status": privacy,
+                        "upload_status": upload_status or "processed",
+                        "processing_status": "publicly_available",
+                    }
+            time.sleep(interval_seconds)
+        raise RuntimeError(
+            "YouTube 업로드 요청은 완료됐지만 공개 재생 가능 상태를 확인하지 못했습니다: "
+            + last_state
+        )
+
     def _wait_until_ready(
         self,
         video_id: str,
@@ -89,10 +170,24 @@ class YouTubeUploader:
         deadline = time.monotonic() + timeout_seconds
         last_state = "not returned"
         while time.monotonic() < deadline:
-            payload = self.youtube.videos().list(
-                part="status,processingDetails",
-                id=video_id,
-            ).execute()
+            try:
+                payload = self.youtube.videos().list(
+                    part="status,processingDetails",
+                    id=video_id,
+                ).execute()
+            except HttpError as exc:
+                if not self._is_insufficient_scope(exc):
+                    raise
+                remaining = max(1, int(deadline - time.monotonic()))
+                LOGGER.warning(
+                    "업로드 토큰에 조회 권한이 없어 공개 API 키로 확인합니다."
+                )
+                return self._wait_until_publicly_available(
+                    video_id,
+                    expected_privacy,
+                    timeout_seconds=remaining,
+                    interval_seconds=interval_seconds,
+                )
             items = payload.get("items") or []
             if not items:
                 last_state = "video not returned yet"

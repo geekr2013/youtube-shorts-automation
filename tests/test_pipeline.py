@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import requests
+from googleapiclient.errors import HttpError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -763,6 +764,35 @@ class PilatesPipelineTests(unittest.TestCase):
         self.assertEqual(result["privacy_status"], "public")
         self.assertEqual(result["processing_status"], "succeeded")
         videos.list.assert_called_once_with(part="status,processingDetails", id="video-id")
+
+    def test_public_api_verifies_upload_when_oauth_token_is_upload_only(self):
+        uploader = YouTubeUploader.__new__(YouTubeUploader)
+        response = Mock(status=403, reason="Forbidden")
+        uploader.youtube = Mock()
+        uploader.youtube.videos.return_value.list.return_value.execute.side_effect = HttpError(
+            response,
+            b'{"error":{"errors":[{"reason":"insufficientPermissions"}]}}',
+        )
+        public_videos = Mock()
+        public_videos.list.return_value.execute.return_value = {
+            "items": [{
+                "status": {"privacyStatus": "public", "uploadStatus": "processed"},
+            }]
+        }
+        uploader.public_youtube = Mock()
+        uploader.public_youtube.videos.return_value = public_videos
+
+        result = uploader._wait_until_ready(
+            "video-id",
+            "public",
+            timeout_seconds=1,
+            interval_seconds=0,
+        )
+
+        self.assertEqual(result["privacy_status"], "public")
+        self.assertEqual(result["upload_status"], "processed")
+        self.assertEqual(result["processing_status"], "publicly_available")
+        public_videos.list.assert_called_once_with(part="status", id="video-id")
 
     def test_workflow_keeps_daily_public_schedule_and_tracks_assets(self):
         source = (ROOT / ".github" / "workflows" / "daily-upload.yml").read_text(encoding="utf-8")

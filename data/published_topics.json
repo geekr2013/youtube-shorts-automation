@@ -912,6 +912,61 @@
         "likes": 0,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-08-30T23:58:57.580000+00:00",
+      "content_format": "pilates-fixed-model-real-video-v3",
+      "visual_model_id": "mixkit-sports-center-peach-v1",
+      "visual_source_provider": "Mixkit",
+      "visual_source_creator": "Mixkit",
+      "routine_id": "hana-supine-reformer-core",
+      "topic": "Supine Reformer Core",
+      "title": "Supine Reformer Core | 3-Move Pilates Routine",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "9jWLv93zBGk",
+      "video_url": "https://www.youtube.com/shorts/9jWLv93zBGk",
+      "exercise_slugs": [
+        "reformer-knee-fold-press",
+        "reformer-chest-lift",
+        "reformer-strap-crunch"
+      ],
+      "source_ids": [
+        "48546",
+        "48547",
+        "48549"
+      ],
+      "sources": [
+        {
+          "source_id": "48546",
+          "provider": "Mixkit",
+          "creator": "Mixkit",
+          "source_url": "https://mixkit.co/free-stock-video/young-women-doing-exercise-with-coach-48546/"
+        },
+        {
+          "source_id": "48547",
+          "provider": "Mixkit",
+          "creator": "Mixkit",
+          "source_url": "https://mixkit.co/free-stock-video/exercise-coach-giving-instructions-to-young-woman-48547/"
+        },
+        {
+          "source_id": "48549",
+          "provider": "Mixkit",
+          "creator": "Mixkit",
+          "source_url": "https://mixkit.co/free-stock-video/young-women-doing-exercise-at-the-gym-48549/"
+        }
+      ],
+      "engagement_comment": "YOUR TURN: Which move helped you feel your abs connect the most?\nMove within a comfortable range and tell us below.",
+      "upload_recovery": {
+        "original_run_id": "33343083163",
+        "public_playback_verified": true,
+        "is_unlisted": false,
+        "verification_method": "YouTube oEmbed and public watch page"
+      },
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
