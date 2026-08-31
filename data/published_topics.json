@@ -963,6 +963,55 @@
         "verification_method": "YouTube oEmbed and public watch page"
       },
       "metrics": {
+        "views": 2,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-08-31T07:37:43.913241+00:00",
+      "content_format": "pilates-fixed-model-real-video-v3",
+      "visual_model_id": "mixkit-sports-center-peach-v1",
+      "visual_source_provider": "Mixkit",
+      "visual_source_creator": "Mixkit",
+      "routine_id": "hana-standing-reformer-flow",
+      "topic": "Standing Reformer Flow",
+      "title": "Standing Reformer Flow | 3-Move Pilates Routine",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "99VovQ323fQ",
+      "video_url": "https://www.youtube.com/shorts/99VovQ323fQ",
+      "exercise_slugs": [
+        "standing-arm-open",
+        "standing-side-shift",
+        "standing-leg-press"
+      ],
+      "source_ids": [
+        "48561",
+        "48562",
+        "48563"
+      ],
+      "sources": [
+        {
+          "source_id": "48561",
+          "provider": "Mixkit",
+          "creator": "Mixkit",
+          "source_url": "https://mixkit.co/free-stock-video/young-women-doing-exercise-in-front-of-the-mirror-48561/"
+        },
+        {
+          "source_id": "48562",
+          "provider": "Mixkit",
+          "creator": "Mixkit",
+          "source_url": "https://mixkit.co/free-stock-video/young-women-streching-their-body-48562/"
+        },
+        {
+          "source_id": "48563",
+          "provider": "Mixkit",
+          "creator": "Mixkit",
+          "source_url": "https://mixkit.co/free-stock-video/young-women-do-leg-stretching-48563/"
+        }
+      ],
+      "engagement_comment": "YOUR TURN: Which side felt less steady today?\nMove within a comfortable range and tell us below.",
+      "metrics": {
         "views": 0,
         "likes": 0,
         "comments": 0
