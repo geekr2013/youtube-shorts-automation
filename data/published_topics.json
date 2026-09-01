@@ -963,7 +963,7 @@
         "verification_method": "YouTube oEmbed and public watch page"
       },
       "metrics": {
-        "views": 2,
+        "views": 3,
         "likes": 0,
         "comments": 0
       }
@@ -1011,6 +1011,55 @@
         }
       ],
       "engagement_comment": "YOUR TURN: Which side felt less steady today?\nMove within a comfortable range and tell us below.",
+      "metrics": {
+        "views": 1,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-09-01T06:47:51.465887+00:00",
+      "content_format": "pilates-fixed-model-real-video-v3",
+      "visual_model_id": "mixkit-sports-center-peach-v1",
+      "visual_source_provider": "Mixkit",
+      "visual_source_creator": "Mixkit",
+      "routine_id": "hana-reformer-core-series",
+      "topic": "Reformer Core Control",
+      "title": "Reformer Core Control | 3-Move Pilates Routine",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "oHCUPfMO2j4",
+      "video_url": "https://www.youtube.com/shorts/oHCUPfMO2j4",
+      "exercise_slugs": [
+        "reformer-knee-stretch",
+        "reformer-long-stretch",
+        "seated-reformer-stretch"
+      ],
+      "source_ids": [
+        "48556",
+        "48557",
+        "48565"
+      ],
+      "sources": [
+        {
+          "source_id": "48556",
+          "provider": "Mixkit",
+          "creator": "Mixkit",
+          "source_url": "https://mixkit.co/free-stock-video/young-women-working-out-at-the-sports-center-48556/"
+        },
+        {
+          "source_id": "48557",
+          "provider": "Mixkit",
+          "creator": "Mixkit",
+          "source_url": "https://mixkit.co/free-stock-video/young-fitness-women-working-out-at-the-gym-48557/"
+        },
+        {
+          "source_id": "48565",
+          "provider": "Mixkit",
+          "creator": "Mixkit",
+          "source_url": "https://mixkit.co/free-stock-video/young-woman-working-out-at-the-sports-center-48565/"
+        }
+      ],
+      "engagement_comment": "YOUR TURN: Which felt harder: the knee stretch or the long stretch?\nMove within a comfortable range and tell us below.",
       "metrics": {
         "views": 0,
         "likes": 0,
