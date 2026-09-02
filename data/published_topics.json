@@ -1012,7 +1012,7 @@
       ],
       "engagement_comment": "YOUR TURN: Which side felt less steady today?\nMove within a comfortable range and tell us below.",
       "metrics": {
-        "views": 1,
+        "views": 3,
         "likes": 0,
         "comments": 0
       }
@@ -1061,8 +1061,8 @@
       ],
       "engagement_comment": "YOUR TURN: Which felt harder: the knee stretch or the long stretch?\nMove within a comfortable range and tell us below.",
       "metrics": {
-        "views": 0,
-        "likes": 0,
+        "views": 2,
+        "likes": 1,
         "comments": 0
       }
     }
