@@ -1065,6 +1065,70 @@
         "likes": 1,
         "comments": 0
       }
+    },
+    {
+      "published_at": "2026-09-07T01:02:56.572878+00:00",
+      "topic": "Glute Control",
+      "title": "Glute Control | 3-Move Pilates Routine",
+      "content_format": "pilates-fixed-model-real-video-v4",
+      "visual_model_id": "pexels-white-studio-black-v1",
+      "visual_source_provider": "Pexels",
+      "visual_source_creator": "Polina Tankilevitch",
+      "routine_id": "studio-glute-foundations",
+      "exercise_slugs": [
+        "squat-step-back",
+        "forearm-donkey-kick",
+        "bodyweight-squat"
+      ],
+      "source_ids": [
+        "6525464",
+        "6525511",
+        "6525519"
+      ],
+      "sources": [
+        {
+          "source_id": "6525464",
+          "provider": "Pexels",
+          "creator": "Polina Tankilevitch",
+          "source_url": "https://www.pexels.com/video/side-view-of-woman-exercising-legs-6525464/",
+          "sha256": "9804a32b7ca64ac6df0e83c7f4315d6d252b8c1c3ff86e8d9c3c8ded26c621da",
+          "width": 1920,
+          "height": 1080,
+          "duration_seconds": 4.6067
+        },
+        {
+          "source_id": "6525511",
+          "provider": "Pexels",
+          "creator": "Polina Tankilevitch",
+          "source_url": "https://www.pexels.com/video/woman-doing-ab-workout-6525511/",
+          "sha256": "71a79e862ed0761bd6cb726c4a976286d76dd0323168bc8cdd4b1724976ba2e7",
+          "width": 720,
+          "height": 1280,
+          "duration_seconds": 4.2017
+        },
+        {
+          "source_id": "6525519",
+          "provider": "Pexels",
+          "creator": "Polina Tankilevitch",
+          "source_url": "https://www.pexels.com/video/young-woman-exercising-6525519/",
+          "sha256": "c1b4ce7b4605580c73ecf80dfbde1fffe8b825d04557d125b4b202b0ee760e59",
+          "width": 1080,
+          "height": 1920,
+          "duration_seconds": 6.25
+        }
+      ],
+      "instructor_id": "hana-v1-voice",
+      "video_id": "_SJ_i9-0PaY",
+      "video_url": "https://www.youtube.com/shorts/_SJ_i9-0PaY",
+      "source_url": "",
+      "asset_urls": [],
+      "engagement_comment": "YOUR TURN: Which felt stronger today: the step back or the squat?\nMove within a comfortable range and tell us below.",
+      "preview_run_id": "34071269325",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 0
+      }
     }
   ]
 }
