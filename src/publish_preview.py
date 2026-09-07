@@ -1,5 +1,6 @@
 """검증을 마친 GitHub Actions 미리보기 영상을 그대로 YouTube에 공개한다."""
 
+import hashlib
 import json
 import logging
 import os
@@ -8,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
+from pilates_catalog import ROUTINES, routine_exercises
 from pilates_video_strategy import (
     FIXED_CONTENT_FORMAT,
     FIXED_LICENSE_NAME,
@@ -17,13 +19,23 @@ from pilates_video_strategy import (
     FIXED_MODEL_PROVIDER,
     FIXED_MODEL_SOURCES,
     FIXED_SOURCE_DETAILS,
+    REAL_VIDEO_ROUTINE_IDS,
     is_fixed_model_source,
     require_requested_production_model,
 )
+from source_ledger import load_used_source_ids, save_used_source_ids
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE_PATH = ROOT / "data" / "published_topics.json"
 LOGGER = logging.getLogger("publish-preview")
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def build_preview_description(metadata: Dict[str, Any]) -> str:
@@ -46,10 +58,12 @@ def build_preview_description(metadata: Dict[str, Any]) -> str:
             "Stop if you feel pain, dizziness, or discomfort. Consult a qualified "
             "professional when personal health circumstances require it.\n\n"
             f"This edit uses human-reviewed footage under the {FIXED_LICENSE_NAME}. The same "
-            "primary adult Pilates participant remains the focus across one filmed session; "
-            "a trainer or classmates may appear in the background. Orientation views and "
+            "primary adult workout participant remains the focus across one reviewed production batch. "
+            "Orientation views and "
             "targeted close-ups preserve "
             "the original movement, wardrobe, and body appearance.\n"
+            "HANA is the guide voice and editorial persona; the footage participant does not "
+            "endorse this channel.\n"
             "English AI voiceover and English on-screen captions. No background music.\n\n"
             f"Footage license: {FIXED_LICENSE_URL}\n\n"
             + (("Footage credits\n" + "\n".join(credits) + "\n\n") if credits else "")
@@ -128,6 +142,7 @@ def validate_active_model_preview(metadata: Dict[str, Any]) -> list[Dict[str, An
     instructor = metadata.get("instructor") or {}
     if (
         instructor.get("identity_locked") is not True
+        or instructor.get("adult_confirmed") is not True
         or instructor.get("visual_model_id") != FIXED_MODEL_ID
         or instructor.get("visual_source_provider") != FIXED_MODEL_PROVIDER
         or instructor.get("visual_source_creator") != FIXED_MODEL_CREATOR
@@ -143,6 +158,13 @@ def validate_active_model_preview(metadata: Dict[str, Any]) -> list[Dict[str, An
         raise ValueError("동작 정보가 없거나 중복되었습니다.")
     if any(not value for value in source_ids) or len(set(source_ids)) != 3:
         raise ValueError("원본 영상 정보가 없거나 중복되었습니다.")
+    routine_id = str(metadata.get("routine_id") or "")
+    routine_by_id = {item.routine_id: item for item in ROUTINES}
+    if routine_id not in REAL_VIDEO_ROUTINE_IDS:
+        raise ValueError("현재 공개 승인된 루틴이 아닙니다.")
+    expected_slugs = [item.slug for item in routine_exercises(routine_by_id[routine_id])]
+    if slugs != expected_slugs:
+        raise ValueError("검수한 루틴의 동작 순서와 일치하지 않습니다.")
 
     for item, slug, source_id in zip(exercises, slugs, source_ids):
         provider = str(item.get("source_provider") or "")
@@ -154,8 +176,18 @@ def validate_active_model_preview(metadata: Dict[str, Any]) -> list[Dict[str, An
             FIXED_MODEL_SOURCES.get(slug) != source_id
             or not is_fixed_model_source(slug, provider, source_id, creator)
             or source_url != str(source.get("source_url") or "")
+            or str(item.get("source_download_url") or "") != str(source.get("download_url") or "")
+            or str(item.get("source_sha256") or "") != str(source.get("sha256") or "")
+            or int(item.get("source_width") or 0) != int(source.get("width") or 0)
+            or int(item.get("source_height") or 0) != int(source.get("height") or 0)
+            or abs(float(item.get("source_duration_seconds") or 0) - float(source.get("duration_seconds") or 0)) > 0.001
+            or str(item.get("full_view_mode") or "fill") != str(source.get("full_view_mode") or "fill")
+            or str(item.get("close_view_mode") or "fill") != str(source.get("close_view_mode") or "fill")
             or quality.get("passed") is not True
             or quality.get("approved") is not True
+            or quality.get("joint_context") is not True
+            or quality.get("sexualized_framing") is not False
+            or quality.get("adult_confirmed") is not True
             or not str(quality.get("reason") or "").strip()
             or quality.get("identity_locked") is not True
             or quality.get("identity_id") != FIXED_MODEL_ID
@@ -171,6 +203,9 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     exercises = validate_active_model_preview(metadata)
+    expected_video_sha256 = str(metadata.get("video_sha256") or "")
+    if len(expected_video_sha256) != 64 or file_sha256(video_path) != expected_video_sha256:
+        raise ValueError("검수한 최종 영상 파일의 SHA-256과 일치하지 않습니다.")
     require_requested_production_model()
     preview_run_id = os.getenv("PREVIEW_RUN_ID", "")
     if not preview_run_id.isdigit():
@@ -182,13 +217,16 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
             LOGGER.info("이미 공개한 테스트 영상입니다: %s", record.get("video_url", ""))
             return record
     source_ids = [str(item.get("source_id") or "") for item in exercises]
+    if set(source_ids).intersection(load_used_source_ids(records)):
+        raise ValueError("영구 원본 장부에 이미 사용한 원본이 포함되어 있습니다.")
     for record in records:
-        if record.get("content_format") != FIXED_CONTENT_FORMAT:
-            continue
-        if record.get("routine_id") == metadata.get("routine_id"):
+        is_fixed_generation = str(record.get("content_format") or "").startswith(
+            "pilates-fixed-model-real-video-"
+        )
+        if is_fixed_generation and record.get("routine_id") == metadata.get("routine_id"):
             raise ValueError("이미 공개한 현재 모델 루틴입니다.")
         if set(source_ids).intersection(str(item) for item in record.get("source_ids") or []):
-            raise ValueError("이미 공개한 현재 모델 원본이 포함되어 있습니다.")
+            raise ValueError("과거 공개 영상에서 이미 사용한 원본이 포함되어 있습니다.")
 
     from notifier import send_notification
     from youtube_uploader import YouTubeUploader
@@ -221,6 +259,10 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
                 "provider": item.get("source_provider", ""),
                 "creator": item.get("source_creator", ""),
                 "source_url": item.get("source_url", ""),
+                "sha256": item.get("source_sha256", ""),
+                "width": item.get("source_width", 0),
+                "height": item.get("source_height", 0),
+                "duration_seconds": item.get("source_duration_seconds", 0),
             }
             for item in exercises
         ],
@@ -236,6 +278,7 @@ def publish_preview(preview_dir: Path) -> Dict[str, Any]:
         "metrics": {"views": 0, "likes": 0, "comments": 0},
     }
     records.append(record)
+    save_used_source_ids(load_used_source_ids(records) | set(source_ids))
     state["videos"] = records[-365:]
     save_state(state)
 

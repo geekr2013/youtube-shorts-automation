@@ -1,6 +1,7 @@
 """라이선스 허용 실제 운동 영상으로 필라테스 쇼츠를 매일 제작·업로드한다."""
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -40,6 +41,7 @@ from pilates_video_strategy import (
     real_video_routine_candidates,
     require_requested_production_model,
 )
+from source_ledger import load_used_source_ids, save_used_source_ids
 from trend_scout import editing_profile, fetch_pilates_short_benchmarks
 
 
@@ -120,10 +122,12 @@ def build_description(routine, clips: Sequence[StockClip] = ()) -> str:
         "or managing a health condition, consult a qualified professional before exercise.\n\n"
         f"{INSTRUCTOR_NAME_EN} — Pilates, clearly guided.\n"
         f"This edit uses human-reviewed footage under the {FIXED_LICENSE_NAME}. The same "
-        "primary adult Pilates participant remains the focus across one filmed session; "
-        "a trainer or classmates may appear in the background. Orientation views and "
+        "primary adult workout participant remains the focus across one reviewed production batch. "
+        "Orientation views and "
         "targeted close-ups preserve the original "
         "movement, wardrobe, and body appearance.\n"
+        "HANA is the guide voice and editorial persona; the footage participant does not "
+        "endorse this channel.\n"
         "English AI voiceover and English on-screen captions. No background music.\n\n"
         f"Footage license: {FIXED_LICENSE_URL}\n\n"
         + (("Footage credits\n" + "\n".join(_source_credit_lines(clips)) + "\n\n") if clips else "")
@@ -136,6 +140,14 @@ def write_metadata(path: Path, payload: Dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _refresh_metrics(records: List[Dict[str, Any]]) -> None:
     api_key = os.getenv("YOUTUBE_DATA_API_KEY", "").strip()
     if not api_key:
@@ -146,12 +158,43 @@ def _refresh_metrics(records: List[Dict[str, Any]]) -> None:
         LOGGER.info("기존 영상 성과를 갱신했습니다.")
 
 
+def _fetch_locked_source(provider, exercise, query: str, review: Dict[str, Any]) -> StockClip:
+    """Download the exact reviewed asset for the active licensed provider."""
+    source = FIXED_SOURCE_DETAILS.get(exercise.slug) or {}
+    source_id = FIXED_MODEL_SOURCES.get(exercise.slug, "")
+    output = WORK_DIR / "licensed-source" / exercise.slug / f"{source_id}.mp4"
+    common = {
+        "source_url": str(source.get("source_url") or ""),
+        "download_url": str(source.get("download_url") or ""),
+        "expected_sha256": str(source.get("sha256") or ""),
+        "expected_width": int(source.get("width") or 0),
+        "expected_height": int(source.get("height") or 0),
+        "expected_duration": float(source.get("duration_seconds") or 0),
+        "query": query,
+        "visual_quality": review,
+    }
+    if FIXED_MODEL_PROVIDER == "Pexels":
+        return provider.fetch_pexels_source(
+            source_id,
+            output,
+            expected_creator=FIXED_MODEL_CREATOR,
+            **common,
+        )
+    if FIXED_MODEL_PROVIDER == "Mixkit":
+        return provider.fetch_mixkit_source(source_id, output, **common)
+    raise RuntimeError(f"지원하지 않는 고정 모델 제공처입니다: {FIXED_MODEL_PROVIDER}")
+
+
 def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: bool = False):
-    """검수된 동일 촬영 세션의 정확한 Mixkit 파일만 내려받아 한 세트를 반환한다."""
+    """검수된 동일 촬영 배치의 정확한 파일만 내려받아 한 세트를 반환한다."""
     provider = StockMediaProvider()
     failures: List[str] = []
     approved_by_exercise: Dict[str, StockClip] = {}
-    candidates = real_video_routine_candidates(records, limit=3)
+    candidates = real_video_routine_candidates(
+        records,
+        limit=3,
+        used_source_ids=load_used_source_ids(records),
+    )
     if not candidates:
         raise RuntimeError(
             "검수된 동일 모델의 새 동작 원본을 모두 사용했습니다. "
@@ -179,6 +222,9 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
                     "visibility": 1.0,
                     "professional_attire": 1.0,
                     "safe_framing": True,
+                    "joint_context": source.get("joint_context") is True,
+                    "sexualized_framing": bool(source.get("sexualized_framing", False)),
+                    "adult_confirmed": source.get("adult_confirmed") is True,
                     "identity_locked": True,
                     "identity_id": FIXED_MODEL_ID,
                     "reason": str(source.get("review_notes") or ""),
@@ -189,18 +235,7 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
                     "caption_y": int(source.get("caption_y", 80)),
                     "start_seconds": float(source.get("start_seconds", 0.7)),
                 }
-                clip = provider.fetch_mixkit_source(
-                    source_id,
-                    WORK_DIR / "licensed-source" / exercise.slug / f"{source_id}.mp4",
-                    source_url=str(source.get("source_url") or ""),
-                    download_url=str(source.get("download_url") or ""),
-                    expected_sha256=str(source.get("sha256") or ""),
-                    expected_width=int(source.get("width") or 0),
-                    expected_height=int(source.get("height") or 0),
-                    expected_duration=float(source.get("duration_seconds") or 0),
-                    query=query,
-                    visual_quality=review,
-                )
+                clip = _fetch_locked_source(provider, exercise, query, review)
                 if not is_fixed_model_source(
                     exercise.slug, clip.provider, clip.source_id, clip.creator
                 ):
@@ -225,6 +260,9 @@ def _fetch_validated_routine(records: List[Dict[str, Any]], curated_preview: boo
                     )
                     or quality.get("passed") is not True
                     or quality.get("approved") is not True
+                    or quality.get("joint_context") is not True
+                    or quality.get("sexualized_framing") is not False
+                    or quality.get("adult_confirmed") is not True
                     or not str(quality.get("reason") or "").strip()
                     or quality.get("identity_locked") is not True
                     or quality.get("identity_id") != FIXED_MODEL_ID
@@ -308,6 +346,13 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
                 "source_creator": clip.creator,
                 "source_url": clip.source_url,
                 "source_id": clip.source_id,
+                "source_download_url": FIXED_SOURCE_DETAILS[item.slug]["download_url"],
+                "source_sha256": FIXED_SOURCE_DETAILS[item.slug]["sha256"],
+                "source_width": FIXED_SOURCE_DETAILS[item.slug]["width"],
+                "source_height": FIXED_SOURCE_DETAILS[item.slug]["height"],
+                "source_duration_seconds": FIXED_SOURCE_DETAILS[item.slug]["duration_seconds"],
+                "full_view_mode": FIXED_SOURCE_DETAILS[item.slug].get("full_view_mode", "fill"),
+                "close_view_mode": FIXED_SOURCE_DETAILS[item.slug].get("close_view_mode", "fill"),
                 "search_query": clip.query,
                 "visual_quality": clip.visual_quality,
                 "camera_angle": item.camera_angle,
@@ -318,6 +363,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         "narration": build_narration(routine),
         "engagement_comment": build_engagement_comment(routine),
         "duration_seconds": round(duration, 2),
+        "video_sha256": file_sha256(final_video),
         "audio": audio_metadata,
         "captions": caption_metadata,
         "visuals": visual_metadata,
@@ -365,13 +411,18 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
                 "provider": clip.provider,
                 "creator": clip.creator,
                 "source_url": clip.source_url,
+                "sha256": FIXED_SOURCE_DETAILS[exercise.slug]["sha256"],
+                "width": FIXED_SOURCE_DETAILS[exercise.slug]["width"],
+                "height": FIXED_SOURCE_DETAILS[exercise.slug]["height"],
+                "duration_seconds": FIXED_SOURCE_DETAILS[exercise.slug]["duration_seconds"],
             }
-            for clip in clips
+            for exercise, clip in zip(exercises, clips)
         ],
         "engagement_comment": build_engagement_comment(routine),
         "metrics": {"views": 0, "likes": 0, "comments": 0},
     }
     records.append(record)
+    save_used_source_ids(load_used_source_ids(records) | set(record["source_ids"]))
     state["version"] = 2
     state["videos"] = records[-365:]
     save_state(state)

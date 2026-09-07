@@ -26,10 +26,12 @@ from pilates_catalog import (
 from pilates_video_strategy import (
     FIXED_MODEL_ID,
     caption_panel_y,
+    close_view_mode,
     closeup_focus_x,
     closeup_focus_y,
     closeup_zoom,
     full_focus_x,
+    full_view_mode,
     source_start_seconds,
 )
 
@@ -472,17 +474,29 @@ def _render_real_video_segment(exercise, clip: StockClip, output: Path, duration
     close_width = int(round(WIDTH * zoom))
     close_height = int(round(HEIGHT * zoom))
     grade = _natural_grade_filter()
-    full_filter = (
-        "fps=30,scale=1080:1920:force_original_aspect_ratio=increase,"
-        f"crop=1080:1920:x='min(max((iw-1080)*{full_x:.3f},0),iw-1080)':"
-        "y=(ih-1920)/2,setsar=1," + grade
-    )
-    close_filter = (
-        f"fps=30,scale={close_width}:{close_height}:force_original_aspect_ratio=increase,"
-        f"crop=1080:1920:x='min(max((iw-1080)*{close_x:.3f},0),iw-1080)':"
-        f"y='min(max((ih-1920)*{focus_y:.3f},0),ih-1920)',"
-        "setsar=1," + grade
-    )
+    if full_view_mode(exercise.slug) == "contain":
+        full_filter = (
+            "fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,"
+            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=0x172127,setsar=1," + grade
+        )
+    else:
+        full_filter = (
+            "fps=30,scale=1080:1920:force_original_aspect_ratio=increase,"
+            f"crop=1080:1920:x='min(max((iw-1080)*{full_x:.3f},0),iw-1080)':"
+            "y=(ih-1920)/2,setsar=1," + grade
+        )
+    if close_view_mode(exercise.slug) == "contain":
+        close_filter = (
+            "fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,"
+            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=0x172127,setsar=1," + grade
+        )
+    else:
+        close_filter = (
+            f"fps=30,scale={close_width}:{close_height}:force_original_aspect_ratio=increase,"
+            f"crop=1080:1920:x='min(max((iw-1080)*{close_x:.3f},0),iw-1080)':"
+            f"y='min(max((ih-1920)*{focus_y:.3f},0),ih-1920)',"
+            "setsar=1," + grade
+        )
     _run(
         [
             FFMPEG_BINARY,
@@ -656,12 +670,15 @@ def render_pilates_short(
                 "real_human_footage": True,
                 "identity_locked": True,
                 "identity_id": FIXED_MODEL_ID,
-                "wardrobe_target": "reviewed fitted crop activewear with the abdomen line unobstructed",
+                "wardrobe_target": "reviewed opaque fitted activewear with joint alignment visible",
                 "lighting": "source-preserving natural grade with reduced highlight glare",
-                "sequence": "brief orientation view followed by a sustained muscle-focused close-up",
+                "sequence": "brief orientation view followed by a joint-context muscle-chain close-up",
+                "framing_safety": "chest includes shoulders and elbows; lower body includes pelvis, hips, and knees; no isolated intimate-area crop",
                 "full_focus_x": [full_focus_x(item.slug) for item in exercises],
                 "closeup_focus_x": [closeup_focus_x(item.slug) for item in exercises],
                 "closeup_focus_y": [closeup_focus_y(item.slug) for item in exercises],
+                "full_view_mode": [full_view_mode(item.slug) for item in exercises],
+                "close_view_mode": [close_view_mode(item.slug) for item in exercises],
                 "caption_panel_y": [caption_panel_y(item.slug) for item in exercises],
                 "camera_angles": [item.camera_angle for item in exercises],
                 "muscle_focus": [item.muscle_focus for item in exercises],

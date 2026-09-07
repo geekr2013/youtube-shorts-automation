@@ -11,7 +11,9 @@ from pilates_video_strategy import (
     EXERCISE_VIDEO_SEARCH,
     FIXED_MODEL_CREATOR,
     FIXED_MODEL_ID,
+    FIXED_MODEL_PROVIDER,
     FIXED_MODEL_SOURCES,
+    FIXED_SOURCE_DETAILS,
     is_fixed_model_source,
 )
 from visual_quality import extract_review_frames
@@ -71,11 +73,28 @@ def main() -> int:
         exercise_dir = OUTPUT_DIR / exercise.slug
         exercise_dir.mkdir(parents=True)
         query = EXERCISE_VIDEO_SEARCH[slug]
-        clip = provider.fetch_pexels_source(
-            source_id,
-            exercise_dir / f"source-{source_id}.mp4",
-            query=query,
-        )
+        source = FIXED_SOURCE_DETAILS[slug]
+        output = exercise_dir / f"source-{source_id}.mp4"
+        common = {
+            "source_url": source["source_url"],
+            "download_url": source["download_url"],
+            "expected_sha256": source["sha256"],
+            "expected_width": source["width"],
+            "expected_height": source["height"],
+            "expected_duration": source["duration_seconds"],
+            "query": query,
+        }
+        if FIXED_MODEL_PROVIDER == "Pexels":
+            clip = provider.fetch_pexels_source(
+                source_id,
+                output,
+                expected_creator=FIXED_MODEL_CREATOR,
+                **common,
+            )
+        elif FIXED_MODEL_PROVIDER == "Mixkit":
+            clip = provider.fetch_mixkit_source(source_id, output, **common)
+        else:
+            raise RuntimeError(f"지원하지 않는 고정 모델 제공처입니다: {FIXED_MODEL_PROVIDER}")
         if not is_fixed_model_source(slug, clip.provider, clip.source_id, clip.creator):
             raise RuntimeError(f"고정 모델 검증 실패: {slug} / {clip.source_id} / {clip.creator}")
         frames = extract_review_frames(clip, exercise_dir / "frames")

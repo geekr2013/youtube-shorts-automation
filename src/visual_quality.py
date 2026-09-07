@@ -82,6 +82,8 @@ def _schema() -> Dict[str, Any]:
             "visibility": score,
             "professional_attire": score,
             "safe_framing": {"type": "boolean"},
+            "joint_context": {"type": "boolean"},
+            "sexualized_framing": {"type": "boolean"},
             "reason": {"type": "string"},
         },
         "required": [
@@ -91,6 +93,8 @@ def _schema() -> Dict[str, Any]:
             "visibility",
             "professional_attire",
             "safe_framing",
+            "joint_context",
+            "sexualized_framing",
             "reason",
         ],
     }
@@ -107,6 +111,8 @@ def meets_visual_thresholds(result: Dict[str, Any]) -> bool:
     return bool(
         result.get("approved")
         and result.get("safe_framing")
+        and result.get("joint_context")
+        and result.get("sexualized_framing") is False
         and _score(result.get("exercise_match")) >= MIN_EXERCISE_MATCH
         and _score(result.get("realism")) >= MIN_REALISM
         and _score(result.get("visibility")) >= MIN_VISIBILITY
@@ -201,7 +207,11 @@ class GeminiVisualQualityGate:
             "Approve only when at least two frames clearly demonstrate the expected exercise and the "
             "sequence plausibly shows its movement. The subject must be an adult, look like real camera "
             "footage with natural anatomy and skin/light, wear professional fitted sportswear that does "
-            "not hide joint alignment, and be framed for instruction rather than sexual emphasis. Reject "
+            "not hide joint alignment, and be framed for instruction rather than sexual emphasis. A chest "
+            "view must retain shoulders, ribcage, and elbows; a glute or inner-thigh view must retain the "
+            "pelvis, hips, and knees. Set joint_context false if those connected joints are missing. Set "
+            "sexualized_framing true if breasts, crotch, or buttocks are isolated, centered, or repeatedly "
+            "emphasized. Reject "
             "nudity, underwear-like styling, obstructed limbs, large logos, clutter, heavy beauty filters, "
             "AI/anatomy artifacts, or a different exercise. Scores are 0 to 1. Keep the reason brief."
         )
@@ -229,6 +239,8 @@ class GeminiVisualQualityGate:
             "visibility": _score(result.get("visibility")),
             "professional_attire": _score(result.get("professional_attire")),
             "safe_framing": bool(result.get("safe_framing")),
+            "joint_context": bool(result.get("joint_context")),
+            "sexualized_framing": bool(result.get("sexualized_framing")),
             "reason": str(result.get("reason") or "검수 사유 없음")[:240],
             "model": selected_model,
             "sample_count": len(frames),

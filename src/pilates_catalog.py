@@ -572,6 +572,62 @@ EXERCISES: Dict[str, Exercise] = {
         motion_start_file="side-leg-lift-down.png", motion_end_file="side-leg-lift-up.png",
         camera_angle="side-front-lower-body", muscle_focus="둔근·내전근·대퇴부", bilateral=True, equipment="리포머",
     ),
+    "squat-step-back": Exercise(
+        slug="squat-step-back", name_ko="스쿼트 스텝 백", name_en="SQUAT STEP-BACK",
+        pose_file="glute-bridge.jpg", prescription_ko="좌우 6회씩", prescription_en="6 EACH SIDE",
+        cue_ko="엉덩이를 뒤로 두고 앞 무릎 정렬", cue_en="KEEP HIPS BACK AND FRONT KNEE ALIGNED",
+        voice_ko="엉덩이를 뒤로 두고 앞 무릎을 발끝과 맞추며 좌우 여섯 번씩 내디뎌요.",
+        motion_start_file="side-leg-lift-down.png", motion_end_file="side-leg-lift-up.png",
+        camera_angle="side-front-lower-body", muscle_focus="복부·둔근·대퇴부·햄스트링", bilateral=True,
+    ),
+    "forearm-donkey-kick": Exercise(
+        slug="forearm-donkey-kick", name_ko="포어암 돈키 킥", name_en="FOREARM DONKEY KICK",
+        pose_file="bird-dog.jpg", prescription_ko="좌우 6회씩", prescription_en="6 EACH SIDE",
+        cue_ko="뒤꿈치를 들 때 골반 정면 유지", cue_en="KEEP HIPS SQUARE AS YOUR HEEL LIFTS",
+        voice_ko="골반을 정면으로 유지하고 뒤꿈치를 천장 쪽으로 좌우 여섯 번씩 들어요.",
+        motion_start_file="bird-dog-start.png", motion_end_file="bird-dog-extend.png",
+        camera_angle="side-three-quarter", muscle_focus="복부·둔근·햄스트링", bilateral=True,
+    ),
+    "bodyweight-squat": Exercise(
+        slug="bodyweight-squat", name_ko="바디웨이트 스쿼트", name_en="BODYWEIGHT SQUAT",
+        pose_file="glute-bridge.jpg", prescription_ko="8회", prescription_en="8 REPS",
+        cue_ko="무릎은 발끝 방향으로", cue_en="TRACK KNEES OVER YOUR TOES",
+        voice_ko="무릎과 발끝을 같은 방향으로 두고 엉덩이를 뒤로 보내며 여덟 번 앉아요.",
+        motion_start_file="glute-bridge-down.png", motion_end_file="glute-bridge-up.png",
+        camera_angle="side-front-lower-body", muscle_focus="복부·둔근·내전근·대퇴부",
+    ),
+    "high-plank-leg-lift": Exercise(
+        slug="high-plank-leg-lift", name_ko="하이 플랭크 레그 리프트", name_en="HIGH PLANK LEG LIFT",
+        pose_file="modified-plank.jpg", prescription_ko="좌우 6회씩", prescription_en="6 EACH SIDE",
+        cue_ko="다리를 들 때 골반 수평 유지", cue_en="KEEP HIPS LEVEL AS YOUR LEG LIFTS",
+        voice_ko="어깨 아래에 손목을 두고 골반 높이를 유지하며 다리를 좌우 여섯 번씩 들어요.",
+        motion_start_file="modified-plank-prep.png", motion_end_file="modified-plank-hold.png",
+        camera_angle="side-three-quarter", muscle_focus="가슴·어깨·복부·둔근", bilateral=True,
+    ),
+    "classic-crunch": Exercise(
+        slug="classic-crunch", name_ko="클래식 크런치", name_en="CLASSIC CRUNCH",
+        pose_file="dead-bug.jpg", prescription_ko="8회", prescription_en="8 REPS",
+        cue_ko="목이 아니라 갈비뼈부터 말기", cue_en="CURL THROUGH YOUR RIBCAGE",
+        voice_ko="목에 힘을 빼고 갈비뼈를 골반 쪽으로 여덟 번 부드럽게 말아요.",
+        motion_start_file="dead-bug-start.png", motion_end_file="dead-bug-extend.png",
+        camera_angle="low-side-ribcage-closeup", muscle_focus="복부·갈비뼈·목 정렬",
+    ),
+    "bicycle-crunch": Exercise(
+        slug="bicycle-crunch", name_ko="바이시클 크런치", name_en="BICYCLE CRUNCH",
+        pose_file="dead-bug.jpg", prescription_ko="좌우 6회씩", prescription_en="6 EACH SIDE",
+        cue_ko="골반을 안정시키고 갈비뼈 회전", cue_en="ROTATE RIBS OVER A STEADY PELVIS",
+        voice_ko="골반을 안정시키고 갈비뼈를 회전하며 좌우 여섯 번씩 움직여요.",
+        motion_start_file="dead-bug-start.png", motion_end_file="dead-bug-extend.png",
+        camera_angle="low-side-core-to-legs", muscle_focus="복직근·복사근·고관절", bilateral=True,
+    ),
+    "low-impact-step-back": Exercise(
+        slug="low-impact-step-back", name_ko="로우 임팩트 스텝 백", name_en="LOW IMPACT STEP BACK",
+        pose_file="side-leg-lift.jpg", prescription_ko="좌우 6회씩", prescription_en="6 EACH SIDE",
+        cue_ko="앞 무릎과 발끝 같은 방향", cue_en="TRACK YOUR FRONT KNEE OVER TOES",
+        voice_ko="앞 무릎과 발끝을 같은 방향으로 두고 뒤로 좌우 여섯 번씩 내디뎌요.",
+        motion_start_file="side-leg-lift-down.png", motion_end_file="side-leg-lift-up.png",
+        camera_angle="side-front-lower-body", muscle_focus="둔근·내전근·대퇴부", bilateral=True,
+    ),
 }
 
 
@@ -600,6 +656,9 @@ ROUTINES: Tuple[Routine, ...] = (
     Routine("hana-supine-reformer-core", "누워서 하는 리포머 코어", "SUPINE REFORMER CORE", "누운 자세에서 갈비뼈와 골반을 안정시키는 세 동작입니다.", ("reformer-knee-fold-press", "reformer-chest-lift", "reformer-strap-crunch"), "세 동작 중 어느 동작에서 복부 연결이 가장 잘 느껴졌나요?"),
     Routine("hana-reformer-core-series", "리포머 코어 컨트롤", "REFORMER CORE CONTROL", "리포머에서 어깨와 골반을 안정시키는 세 동작입니다.", ("reformer-knee-stretch", "reformer-long-stretch", "seated-reformer-stretch"), "니 스트레치와 롱 스트레치 중 어느 동작이 더 어려웠나요?"),
     Routine("hana-standing-reformer-flow", "스탠딩 리포머 플로우", "STANDING REFORMER FLOW", "서서 균형과 하체 정렬을 연습하는 세 동작입니다.", ("standing-arm-open", "standing-side-shift", "standing-leg-press"), "좌우 중 어느 쪽에서 균형 잡기가 더 어려웠나요?"),
+    Routine("studio-glute-foundations", "둔근 컨트롤", "GLUTE CONTROL", "허리와 골반, 무릎의 연결을 보며 둔근을 쓰는 세 동작입니다.", ("squat-step-back", "forearm-donkey-kick", "bodyweight-squat"), "스텝 백과 스쿼트 중 어느 동작에서 둔근이 더 잘 느껴졌나요?"),
+    Routine("studio-core-shoulders", "코어 세 동작", "CORE TRIO", "어깨와 흉곽, 골반을 안정시키며 코어를 쓰는 세 동작입니다.", ("high-plank-leg-lift", "classic-crunch", "bicycle-crunch"), "플랭크와 크런치 중 어느 동작이 더 어려웠나요?"),
+    Routine("studio-lower-core-control", "저강도 리셋", "LOW-IMPACT RESET", "어깨를 열고 골반과 하체 정렬을 차분히 연결하는 세 동작입니다.", ("standing-shoulder-open", "glute-bridge", "low-impact-step-back"), "브리지와 스텝 백 중 어느 동작에서 정렬이 더 어려웠나요?"),
 )
 
 
@@ -617,6 +676,18 @@ def routine_exercises(routine: Routine) -> List[Exercise]:
 
 
 ROUTINE_COPY_EN: Dict[str, Tuple[str, str]] = {
+    "studio-glute-foundations": (
+        "Build clear glute control while keeping your spine, hips, and knees aligned.",
+        "Which felt stronger today: the step back or the squat?",
+    ),
+    "studio-core-shoulders": (
+        "Train chest, shoulder, and core stability through three controlled movements.",
+        "Which challenged you more: the plank leg lift or the crunch?",
+    ),
+    "studio-lower-core-control": (
+        "Reset shoulder, hip, and lower-body control with three low-impact movements.",
+        "Which needed more control today: the bridge or the step back?",
+    ),
     "fixed-plank-transition": (
         "Build steadier core control through three clean plank transitions.",
         "Which plank transition challenged your control the most?",

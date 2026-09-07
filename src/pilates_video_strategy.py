@@ -1,4 +1,4 @@
-"""실제 필라테스 영상 검색어와 검수된 고정 세션을 정의한다."""
+"""실제 필라테스 영상 검색어와 검수된 고정 성인 모델 세션을 정의한다."""
 
 import json
 from datetime import date
@@ -60,6 +60,13 @@ EXERCISE_VIDEO_SEARCH: Dict[str, str] = {
     "standing-arm-open": "woman standing pilates arm opening exercise",
     "standing-side-shift": "woman standing pilates side shift exercise",
     "standing-leg-press": "woman standing reformer leg press pilates",
+    "squat-step-back": "woman squat step back exercise side view",
+    "forearm-donkey-kick": "woman forearm donkey kick hip extension exercise mat",
+    "bodyweight-squat": "woman bodyweight squat side view exercise",
+    "high-plank-leg-lift": "woman high plank alternating straight leg lift exercise",
+    "classic-crunch": "woman classic crunch side view exercise mat",
+    "bicycle-crunch": "woman bicycle crunch exercise side view mat",
+    "low-impact-step-back": "woman low impact step back leg exercise side view",
 }
 
 # 0은 상체, 1은 하체 쪽으로 확대 중심을 이동한다.
@@ -115,26 +122,34 @@ MUSCLE_CLOSEUP_Y: Dict[str, float] = {
     "standing-arm-open": 0.42,
     "standing-side-shift": 0.54,
     "standing-leg-press": 0.66,
+    "squat-step-back": 0.50,
+    "forearm-donkey-kick": 0.55,
+    "bodyweight-squat": 0.58,
+    "high-plank-leg-lift": 0.46,
+    "classic-crunch": 0.46,
+    "bicycle-crunch": 0.48,
+    "low-impact-step-back": 0.61,
 }
 
 SOURCE_REQUIREMENTS: Tuple[str, ...] = (
     "real continuous human movement",
-    "professional fitted crop activewear with the abdomen line unobstructed",
+    "opaque professional fitted activewear with joint alignment visible",
     "uncluttered workout area",
-    "major joints and target muscle line visible",
+    "major joints and the target muscle chain visible together",
+    "no isolated breast, crotch, or buttocks framing",
     "no medical or body-transformation claim",
 )
 
-# 같은 실제 성인 주 시연자가 등장하고 개별 Free License가 확인된 세 루틴만 공개한다.
+# 같은 실제 성인 주 시연자가 등장하고 개별 Pexels License가 확인된 세 루틴만 공개한다.
 REAL_VIDEO_ROUTINE_IDS: Tuple[str, ...] = (
-    "hana-supine-reformer-core",
-    "hana-standing-reformer-flow",
-    "hana-reformer-core-series",
+    "studio-glute-foundations",
+    "studio-core-shoulders",
+    "studio-lower-core-control",
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXED_SOURCE_MANIFEST_PATH = (
-    ROOT / "assets" / "instructor" / "mixkit-sports-center-peach-v1.json"
+    ROOT / "assets" / "instructor" / "pexels-white-studio-black-v1.json"
 )
 FIXED_SOURCE_MANIFEST: Dict[str, Any] = json.loads(
     FIXED_SOURCE_MANIFEST_PATH.read_text(encoding="utf-8")
@@ -145,7 +160,7 @@ FIXED_MODEL_CREATOR = str(FIXED_SOURCE_MANIFEST["creator"])
 FIXED_CONTENT_FORMAT = str(FIXED_SOURCE_MANIFEST["content_format"])
 FIXED_LICENSE_NAME = str(FIXED_SOURCE_MANIFEST["license"]["name"])
 FIXED_LICENSE_URL = str(FIXED_SOURCE_MANIFEST["license"]["url"])
-REQUESTED_PRODUCTION_MODEL_ID = "mixkit-sports-center-peach-v1"
+REQUESTED_PRODUCTION_MODEL_ID = "pexels-white-studio-black-v1"
 FIXED_SOURCE_DETAILS: Dict[str, Dict[str, Any]] = {
     str(slug): dict(details)
     for slug, details in FIXED_SOURCE_MANIFEST["sources"].items()
@@ -154,7 +169,7 @@ FIXED_MODEL_SOURCES: Dict[str, str] = {
     slug: str(details["source_id"]) for slug, details in FIXED_SOURCE_DETAILS.items()
 }
 
-# 각 항목 페이지의 Free License 문구와 초·중·후반 실제 동작을 2026-08-31에 확인했다.
+# 각 항목 페이지의 Pexels License와 초·중·후반 실제 동작을 2026-09-07에 확인했다.
 PREFERRED_SOURCE_IDS: Dict[str, Tuple[str, ...]] = {
     slug: (source_id,) for slug, source_id in FIXED_MODEL_SOURCES.items()
 }
@@ -163,11 +178,27 @@ PREFERRED_SOURCE_IDS: Dict[str, Tuple[str, ...]] = {
 def production_model_ready() -> bool:
     """Return true only when every public source and its commercial license are locked."""
     license_record = FIXED_SOURCE_MANIFEST.get("license") or {}
-    sources_ready = bool(FIXED_SOURCE_DETAILS) and all(
+    by_id = {item.routine_id: item for item in ROUTINES}
+    active_slugs = [
+        exercise.slug
+        for routine_id in REAL_VIDEO_ROUTINE_IDS
+        for exercise in routine_exercises(by_id[routine_id])
+    ]
+    source_ids = [str(details.get("source_id") or "") for details in FIXED_SOURCE_DETAILS.values()]
+    sources_ready = (
+        bool(FIXED_SOURCE_DETAILS)
+        and set(FIXED_SOURCE_DETAILS) == set(active_slugs)
+        and len(active_slugs) == len(set(active_slugs))
+        and len(source_ids) == len(set(source_ids))
+        and all(
         details.get("public_approved") is True
+        and details.get("adult_confirmed") is True
+        and details.get("joint_context") is True
+        and details.get("sexualized_framing") is False
         and bool(str(details.get("review_notes") or "").strip())
         and len(str(details.get("sha256") or "")) == 64
         for details in FIXED_SOURCE_DETAILS.values()
+        )
     )
     return (
         FIXED_MODEL_ID == REQUESTED_PRODUCTION_MODEL_ID
@@ -181,7 +212,7 @@ def require_requested_production_model() -> None:
     if production_model_ready():
         return
     raise RuntimeError(
-        "Public upload blocked: the approved Mixkit motion model is not connected. "
+        "Public upload blocked: the approved licensed motion model is not connected. "
         f"Current footage model is {FIXED_MODEL_ID}."
     )
 
@@ -193,6 +224,9 @@ def is_human_reviewed_source(exercise_slug: str, provider: str, source_id: str) 
         provider == FIXED_MODEL_PROVIDER
         and source_id in PREFERRED_SOURCE_IDS.get(exercise_slug, ())
         and details.get("public_approved") is True
+        and details.get("adult_confirmed") is True
+        and details.get("joint_context") is True
+        and details.get("sexualized_framing") is False
         and bool(str(details.get("review_notes") or "").strip())
     )
 
@@ -212,7 +246,9 @@ def build_clip_queries(routine: Routine) -> List[str]:
 
 
 def closeup_focus_y(exercise_slug: str) -> float:
-    return MUSCLE_CLOSEUP_Y.get(exercise_slug, 0.52)
+    details = FIXED_SOURCE_DETAILS.get(exercise_slug, {})
+    fallback = MUSCLE_CLOSEUP_Y.get(exercise_slug, 0.52)
+    return min(0.72, max(0.28, float(details.get("closeup_focal_y", fallback))))
 
 
 def full_focus_x(exercise_slug: str) -> float:
@@ -227,7 +263,20 @@ def closeup_focus_x(exercise_slug: str) -> float:
 
 def closeup_zoom(exercise_slug: str) -> float:
     details = FIXED_SOURCE_DETAILS.get(exercise_slug, {})
-    return min(1.4, max(1.0, float(details.get("closeup_zoom", 1.35))))
+    # 근육 사슬을 읽을 수 있게 확대하되, 특정 민감 부위만 고립될 정도로 확대하지 않는다.
+    return min(1.25, max(1.0, float(details.get("closeup_zoom", 1.18))))
+
+
+def full_view_mode(exercise_slug: str) -> str:
+    """Use a contained orientation view when portrait fill would hide key joints."""
+    details = FIXED_SOURCE_DETAILS.get(exercise_slug, {})
+    return "contain" if details.get("full_view_mode") == "contain" else "fill"
+
+
+def close_view_mode(exercise_slug: str) -> str:
+    """Keep detail shots contained when any technical crop would lose moving joints."""
+    details = FIXED_SOURCE_DETAILS.get(exercise_slug, {})
+    return "contain" if details.get("close_view_mode") == "contain" else "fill"
 
 
 def source_start_seconds(exercise_slug: str) -> float:
@@ -242,18 +291,31 @@ def caption_panel_y(exercise_slug: str) -> int:
 
 
 def real_video_routine_candidates(
-    records: Iterable[Dict[str, Any]], today: date | None = None, limit: int = 3
+    records: Iterable[Dict[str, Any]],
+    today: date | None = None,
+    limit: int = 3,
+    used_source_ids: Iterable[str] = (),
 ) -> List[Routine]:
     """Return only never-published routine/source sets for the locked adult model."""
+    records = list(records)
     fixed_records = [
-        item for item in records if str(item.get("content_format") or "") == FIXED_CONTENT_FORMAT
+        item
+        for item in records
+        if str(item.get("content_format") or "").startswith(
+            "pilates-fixed-model-real-video-"
+        )
     ]
     used_routines = {str(item.get("routine_id") or "") for item in fixed_records}
-    used_sources = {
+    used_sources = {str(value) for value in used_source_ids if str(value)} | {
         str(source_id)
-        for item in fixed_records
+        for item in records
         for source_id in (item.get("source_ids") or [])
         if str(source_id)
+    } | {
+        str(source.get("source_id") or "")
+        for item in records
+        for source in (item.get("sources") or [])
+        if str(source.get("source_id") or "")
     }
     by_id = {item.routine_id: item for item in ROUTINES}
     supported = [by_id[routine_id] for routine_id in REAL_VIDEO_ROUTINE_IDS]

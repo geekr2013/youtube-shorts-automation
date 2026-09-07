@@ -1,4 +1,4 @@
-"""검수된 Mixkit 원본과 보조 스톡 제공처에서 실제 동영상을 내려받는다."""
+"""검수된 Pexels/Mixkit 원본과 보조 스톡 제공처에서 실제 동영상을 내려받는다."""
 
 import hashlib
 import json
@@ -125,12 +125,68 @@ class StockMediaProvider:
         self,
         source_id: str,
         output_path: Path,
+        *,
+        source_url: str = "",
+        download_url: str = "",
+        expected_creator: str = "",
+        expected_sha256: str = "",
+        expected_width: int = 0,
+        expected_height: int = 0,
+        expected_duration: float = 0,
         query: str = "",
         visual_quality: Optional[Dict[str, Any]] = None,
     ) -> StockClip:
-        """Download one reviewed Pexels ID without any search fallback."""
+        """Download one exact Pexels asset; locked manifests never use search fallback."""
+        source_id = str(source_id).strip()
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        candidate = self._get_pexels_by_id(str(source_id), query=query)
+        locked = any(
+            (
+                source_url,
+                download_url,
+                expected_creator,
+                expected_sha256,
+                expected_width,
+                expected_height,
+                expected_duration,
+            )
+        )
+        if locked:
+            source_parts = urlparse(source_url)
+            download_parts = urlparse(download_url)
+            expected_source_suffix = f"-{source_id}/"
+            expected_download_prefix = f"/video-files/{source_id}/{source_id}-"
+            if (
+                not source_id.isdigit()
+                or source_parts.scheme != "https"
+                or source_parts.netloc != "www.pexels.com"
+                or not source_parts.path.startswith("/video/")
+                or not source_parts.path.endswith(expected_source_suffix)
+                or download_parts.scheme != "https"
+                or download_parts.netloc != "videos.pexels.com"
+                or not download_parts.path.startswith(expected_download_prefix)
+                or not download_parts.path.endswith(".mp4")
+                or not expected_creator.strip()
+                or len(expected_sha256.strip()) != 64
+                or int(expected_width) < MIN_VIDEO_EDGE
+                or int(expected_height) < MIN_VIDEO_EDGE
+                or float(expected_duration) < MIN_VIDEO_SECONDS
+            ):
+                raise MediaError("검수된 Pexels 원본 주소 또는 고정 정보 형식이 아닙니다.")
+            candidate = {
+                "download_url": download_url,
+                "source_url": source_url,
+                "creator": expected_creator.strip(),
+                "provider": "Pexels",
+                "query": query,
+                "source_id": source_id,
+                "expected_sha256": expected_sha256.lower(),
+                "expected_width": int(expected_width),
+                "expected_height": int(expected_height),
+                "expected_duration": float(expected_duration),
+                "headers": {"Referer": source_url},
+            }
+        else:
+            candidate = self._get_pexels_by_id(source_id, query=query)
         clip = self._download(candidate, output_path)
         clip.visual_quality = dict(visual_quality or {})
         return clip
