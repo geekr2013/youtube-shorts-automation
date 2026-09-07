@@ -36,6 +36,7 @@ from pilates_renderer import (
     GEMINI_TTS_MODEL,
     GEMINI_TTS_VOICE,
     MOTION_MODE,
+    _contain_filter_graph,
     _natural_grade_filter,
     _synthesize_gemini_tts,
     narration_audio_filter,
@@ -58,6 +59,7 @@ from pilates_video_strategy import (
     REQUESTED_PRODUCTION_MODEL_ID,
     SOURCE_REQUIREMENTS,
     build_clip_queries,
+    caption_panel_y,
     close_view_mode,
     full_view_mode,
     is_fixed_model_source,
@@ -589,6 +591,11 @@ class PilatesPipelineTests(unittest.TestCase):
             self.assertEqual(full_view_mode(slug), "contain")
         self.assertEqual(close_view_mode("low-impact-step-back"), "contain")
         self.assertEqual(close_view_mode("classic-crunch"), "fill")
+        self.assertTrue(all(caption_panel_y(slug) >= 180 for slug in FIXED_SOURCE_DETAILS))
+        contain_graph = _contain_filter_graph("in", "out", "test", "format=yuv420p")
+        self.assertIn("gblur=sigma=32", contain_graph)
+        self.assertIn("overlay=(W-w)/2:(H-h)/2", contain_graph)
+        self.assertNotIn("pad=1080:1920", contain_graph)
 
     def test_preview_requires_exact_routine_order_and_source_fingerprints(self):
         routine = next(item for item in ROUTINES if item.routine_id == REAL_VIDEO_ROUTINE_IDS[0])
@@ -736,7 +743,7 @@ class PilatesPipelineTests(unittest.TestCase):
                 source_id="6525464",
                 width=1920,
                 height=1080,
-                duration=5.0,
+                duration=source["duration_seconds"],
             )
             with patch.object(provider, "_download", return_value=expected_clip) as download:
                 clip = provider.fetch_pexels_source(

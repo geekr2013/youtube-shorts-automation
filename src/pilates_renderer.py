@@ -456,6 +456,22 @@ def _natural_grade_filter() -> str:
     )
 
 
+def _contain_filter_graph(
+    input_label: str, output_label: str, prefix: str, grade: str
+) -> str:
+    """Fill vertical canvas with a quiet blurred copy while keeping every joint visible."""
+    return (
+        f"[{input_label}]split=2[{prefix}bg][{prefix}fg];"
+        f"[{prefix}bg]scale=1080:1920:force_original_aspect_ratio=increase,"
+        f"crop=1080:1920,gblur=sigma=32:steps=2,"
+        f"eq=brightness=-0.12:saturation=0.68[{prefix}back];"
+        f"[{prefix}fg]scale=1080:1920:force_original_aspect_ratio=decrease,"
+        f"setsar=1[{prefix}front];"
+        f"[{prefix}back][{prefix}front]overlay=(W-w)/2:(H-h)/2,setsar=1,"
+        f"{grade}[{output_label}]"
+    )
+
+
 def _render_real_video_segment(exercise, clip: StockClip, output: Path, duration: float) -> None:
     """실제 연속 동작을 전신 구도에서 목표 근육 클로즈업으로 연결한다."""
     source_duration = clip.duration or media_duration(clip.path)
@@ -474,28 +490,30 @@ def _render_real_video_segment(exercise, clip: StockClip, output: Path, duration
     close_width = int(round(WIDTH * zoom))
     close_height = int(round(HEIGHT * zoom))
     grade = _natural_grade_filter()
+    full_trim = (
+        f"[fullraw]trim=start={full_seek:.3f}:duration={full_duration:.3f},"
+        "setpts=PTS-STARTPTS,fps=30[fulltrim]"
+    )
     if full_view_mode(exercise.slug) == "contain":
-        full_filter = (
-            "fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,"
-            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=0x172127,setsar=1," + grade
-        )
+        full_graph = _contain_filter_graph("fulltrim", "full", "full", grade)
     else:
-        full_filter = (
-            "fps=30,scale=1080:1920:force_original_aspect_ratio=increase,"
+        full_graph = (
+            "[fulltrim]scale=1080:1920:force_original_aspect_ratio=increase,"
             f"crop=1080:1920:x='min(max((iw-1080)*{full_x:.3f},0),iw-1080)':"
-            "y=(ih-1920)/2,setsar=1," + grade
+            "y=(ih-1920)/2,setsar=1," + grade + "[full]"
         )
+    close_trim = (
+        f"[closeraw]trim=start={close_seek:.3f}:duration={close_duration:.3f},"
+        "setpts=PTS-STARTPTS,fps=30[closetrim]"
+    )
     if close_view_mode(exercise.slug) == "contain":
-        close_filter = (
-            "fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,"
-            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=0x172127,setsar=1," + grade
-        )
+        close_graph = _contain_filter_graph("closetrim", "close", "close", grade)
     else:
-        close_filter = (
-            f"fps=30,scale={close_width}:{close_height}:force_original_aspect_ratio=increase,"
+        close_graph = (
+            f"[closetrim]scale={close_width}:{close_height}:force_original_aspect_ratio=increase,"
             f"crop=1080:1920:x='min(max((iw-1080)*{close_x:.3f},0),iw-1080)':"
             f"y='min(max((ih-1920)*{focus_y:.3f},0),ih-1920)',"
-            "setsar=1," + grade
+            "setsar=1," + grade + "[close]"
         )
     _run(
         [
@@ -507,10 +525,7 @@ def _render_real_video_segment(exercise, clip: StockClip, output: Path, duration
             str(clip.path),
             "-filter_complex",
             f"[0:v]split=2[fullraw][closeraw];"
-            f"[fullraw]trim=start={full_seek:.3f}:duration={full_duration:.3f},"
-            f"setpts=PTS-STARTPTS,{full_filter}[full];"
-            f"[closeraw]trim=start={close_seek:.3f}:duration={close_duration:.3f},"
-            f"setpts=PTS-STARTPTS,{close_filter}[close];"
+            f"{full_trim};{full_graph};{close_trim};{close_graph};"
             f"[full][close]xfade=transition=fade:duration={transition:.3f}:"
             f"offset={full_duration - transition:.3f}[outv]",
             "-map",
