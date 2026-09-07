@@ -1125,6 +1125,67 @@
       "engagement_comment": "YOUR TURN: Which felt stronger today: the step back or the squat?\nMove within a comfortable range and tell us below.",
       "preview_run_id": "34071269325",
       "metrics": {
+        "views": 1,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-09-07T06:39:24.194522+00:00",
+      "content_format": "pilates-fixed-model-real-video-v4",
+      "visual_model_id": "pexels-white-studio-black-v1",
+      "visual_source_provider": "Pexels",
+      "visual_source_creator": "Polina Tankilevitch",
+      "routine_id": "studio-core-shoulders",
+      "topic": "Core Trio",
+      "title": "Core Trio | 3-Move Pilates Routine",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "nyFfFHHeO78",
+      "video_url": "https://www.youtube.com/shorts/nyFfFHHeO78",
+      "exercise_slugs": [
+        "high-plank-leg-lift",
+        "classic-crunch",
+        "bicycle-crunch"
+      ],
+      "source_ids": [
+        "6525493",
+        "6525485",
+        "6525494"
+      ],
+      "sources": [
+        {
+          "source_id": "6525493",
+          "provider": "Pexels",
+          "creator": "Polina Tankilevitch",
+          "source_url": "https://www.pexels.com/video/woman-exercising-with-an-online-class-6525493/",
+          "sha256": "cd0e721a615343d9b31d50e1f69565868e2f3cb4320e3539bf529559849108f0",
+          "width": 1080,
+          "height": 1920,
+          "duration_seconds": 5.6533
+        },
+        {
+          "source_id": "6525485",
+          "provider": "Pexels",
+          "creator": "Polina Tankilevitch",
+          "source_url": "https://www.pexels.com/video/woman-working-out-on-a-mat-6525485/",
+          "sha256": "4fa923ec193f2ada96ba820c6fc82078491a203462537c237751452f11703acd",
+          "width": 1920,
+          "height": 1080,
+          "duration_seconds": 4.8417
+        },
+        {
+          "source_id": "6525494",
+          "provider": "Pexels",
+          "creator": "Polina Tankilevitch",
+          "source_url": "https://www.pexels.com/video/woman-doing-abs-6525494/",
+          "sha256": "6644d332b47a5034bf5900fc331624595fa17a8a77d380d58e139119020a9bd1",
+          "width": 1920,
+          "height": 1080,
+          "duration_seconds": 6.57
+        }
+      ],
+      "engagement_comment": "YOUR TURN: Which challenged you more: the plank leg lift or the crunch?\nMove within a comfortable range and tell us below.",
+      "metrics": {
         "views": 0,
         "likes": 0,
         "comments": 0
