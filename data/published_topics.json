@@ -1186,6 +1186,67 @@
       ],
       "engagement_comment": "YOUR TURN: Which challenged you more: the plank leg lift or the crunch?\nMove within a comfortable range and tell us below.",
       "metrics": {
+        "views": 3,
+        "likes": 0,
+        "comments": 0
+      }
+    },
+    {
+      "published_at": "2026-09-08T06:33:00.748889+00:00",
+      "content_format": "pilates-fixed-model-real-video-v4",
+      "visual_model_id": "pexels-white-studio-black-v1",
+      "visual_source_provider": "Pexels",
+      "visual_source_creator": "Polina Tankilevitch",
+      "routine_id": "studio-lower-core-control",
+      "topic": "Low-Impact Reset",
+      "title": "Low-Impact Reset | 3-Move Pilates Routine",
+      "instructor_id": "hana-v1-voice",
+      "video_id": "1j8Oq-HpJZE",
+      "video_url": "https://www.youtube.com/shorts/1j8Oq-HpJZE",
+      "exercise_slugs": [
+        "standing-shoulder-open",
+        "glute-bridge",
+        "low-impact-step-back"
+      ],
+      "source_ids": [
+        "6525522",
+        "6525487",
+        "6525473"
+      ],
+      "sources": [
+        {
+          "source_id": "6525522",
+          "provider": "Pexels",
+          "creator": "Polina Tankilevitch",
+          "source_url": "https://www.pexels.com/video/woman-stretching-6525522/",
+          "sha256": "bb5340e7bb99c3b253c5094da4ecc5b12f37f76fbd285739f6d2d2e4dd855bb8",
+          "width": 1080,
+          "height": 1920,
+          "duration_seconds": 4.2017
+        },
+        {
+          "source_id": "6525487",
+          "provider": "Pexels",
+          "creator": "Polina Tankilevitch",
+          "source_url": "https://www.pexels.com/video/woman-doing-glute-bridge-exercise-6525487/",
+          "sha256": "37344012cea0186a2fa076a2f94d1f52a29028cfbea33c2e8a461b60d6cfa94a",
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 6.6983
+        },
+        {
+          "source_id": "6525473",
+          "provider": "Pexels",
+          "creator": "Polina Tankilevitch",
+          "source_url": "https://www.pexels.com/video/side-view-of-woman-exercising-legs-6525473/",
+          "sha256": "7b8b9398adf10aa0c39a7a0beb8c758bdce60b763dcbd7d7ec572fe636583671",
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 4.2867
+        }
+      ],
+      "engagement_comment": "YOUR TURN: Which needed more control today: the bridge or the step back?\nMove within a comfortable range and tell us below.",
+      "metrics": {
         "views": 0,
         "likes": 0,
         "comments": 0
